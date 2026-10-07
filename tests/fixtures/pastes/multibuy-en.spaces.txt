@@ -1,0 +1,5 @@
+Tritanium    4457139
+Pyerite    1114284
+Large Shield Extender II    2
+Cap Booster 800    100
+Navy Cap Booster 800    10

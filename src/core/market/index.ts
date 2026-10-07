@@ -1,0 +1,18 @@
+// core/market 对外的接口：市场注册表、报价服务、成交历史，以及建筑市场接入报价服务用的接口。
+
+export { createMarketRegistry, visibleTo } from './registry'
+export type { ManagedMarketRegistry } from './registry'
+export { createMarketService } from './service'
+export type { ManagedMarketService, MarketServiceOptions } from './service'
+export { createHistoryService, MAX_HISTORY_DAYS, sumByDate, windowStart } from './history'
+export type { HistoryApi, HistoryServiceOptions } from './history'
+export { RegionSource } from './region'
+export type { RegionBook, RegionOrdersApi, RegionRead, RegionSourceOptions } from './region'
+export { pendingStructures } from './structure-source'
+export type { StructureRead, StructureSource } from './structure-source'
+export { summarize } from './summarize'
+export type { MarketOrder, OrderScope, Summary } from './summarize'
+export { recognize, recognitionOf, splitMarket } from './split'
+export type { Recognition, SplitContext } from './split'
+export { compactMarketKey, marketKey } from './keys'
+export { inDowntime } from './downtime'

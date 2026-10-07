@@ -1,0 +1,264 @@
+import { Schema } from 'koishi'
+import type { Clickable, ListPriceDisplayMode, MarketType, NumberStyle, OutputMode, PriceDisplayMode, PriceSide } from '../core/types'
+import { INVALID_ROW_KEY } from './normalize'
+import {
+  DEFAULT_BASE_MARKET, DEFAULT_CALLBACK_URL, DEFAULT_COALITION_MAP_URL, DEFAULT_GLOSSARY_URL, DEFAULT_INFLUENCE_MAP_URL,
+  DEFAULT_MANIFEST_URL, DEFAULT_QUANTITIES, PRESET_MARKETS,
+} from './presets'
+
+// Schema 校验失败会让整个插件加载失败，所以每个字段只做宽松的声明并加 .loose()（类型不对时回到默认值），
+// 具体检查放到 normalize.ts。表格的每一行整体 loose：类型、启用这类选项写错时整行变成 INVALID_ROW，
+// 由 normalize 标成无效并跳过，只影响这一行。
+// 「工业」分组 0.2.0 才加进来；没有这个分组的配置按默认值处理。
+
+export interface GroupRow { groupId: string; note: string; enabled: boolean }
+export interface UserRow { userId: string; note: string; enabled: boolean }
+
+export interface MarketRow {
+  name: string
+  aliases: string
+  type: MarketType
+  location: string
+  system: string
+  enabled: boolean
+  inDefaultList: 'auto' | 'yes' | 'no'
+  sortOrder: number
+  visibility: 'auto' | 'public' | 'allowed'
+  authProfile: string
+  note: string
+}
+
+export interface AliasRow { alias: string; target: string; enabled: boolean; note: string }
+export interface QuantityRow { item: string; quantity: number }
+
+export interface FreightRow {
+  name: string
+  iskPerM3: number
+  collateralPct: number
+  maxVolume: number
+  visibility: 'public' | 'allowed'
+  enabled: boolean
+  note: string
+}
+
+export interface NoticeRow { text: string; visibility: 'all' | 'allowed'; until: string; enabled: boolean }
+
+export interface Config {
+  general: { requireAt: boolean; allowSandbox: boolean }
+  display: {
+    output: OutputMode
+    numberStyle: NumberStyle
+    priceDisplayMode: PriceDisplayMode
+    listPriceDisplayMode: ListPriceDisplayMode
+    compactDecimals: number
+    thousandSeparator: boolean
+    showCurrency: boolean
+    clickable: Clickable
+  }
+  access: { admins: string[]; allowedGroups: GroupRow[]; allowedUsers: UserRow[] }
+  markets: MarketRow[]
+  aliases: AliasRow[]
+  price: { baseMarket: string; defaultQuantities: QuantityRow[] }
+  appraisal: { defaultMarket: string; defaultPriceType: PriceSide; fallbackMarket: string }
+  freight: { routes: FreightRow[] }
+  notices: { list: NoticeRow[] }
+  sso: { clientId: string; clientSecret: string; callbackUrl: string; adminKey: string }
+  render: { influenceMapUrl: string; coalitionMapUrl: string; brAuto: boolean }
+  advanced: { manifestUrl: string; glossaryUrl: string; esiContact: string }
+}
+
+const str = (value = '') => Schema.string().default(value).loose()
+const num = (value: number) => Schema.number().default(value).loose()
+const bool = (value: boolean) => Schema.boolean().default(value).loose()
+const secret = () => Schema.string().role('secret').default('').loose()
+// 表格的行里不加 loose：写错时让整行失败
+const strictBool = (value: boolean) => Schema.boolean().default(value)
+
+function choice<T extends string>(options: Array<[T, string]>) {
+  return Schema.union(options.map(([value, label]) => Schema.const(value).description(label)))
+}
+
+const INVALID_ROW = { [INVALID_ROW_KEY]: true }
+
+function table<T>(row: Schema<any, T>, fallback: T[] = []) {
+  return Schema.array(row.default(INVALID_ROW as T).loose()).role('table').default(fallback).loose()
+}
+
+const priceSide = () => choice<PriceSide>([['sell', '出售价'], ['mid', '中间价'], ['buy', '收购价']])
+
+export const Config: Schema<Config> = Schema.intersect([
+  Schema.object({
+    general: Schema.object({
+      requireAt: bool(true)
+        .description('群里只处理 @机器人 的消息（私聊不受影响）。群主打开「接收群内全部消息」后，这个开关可以避免和群里其他机器人重复回复。'),
+      allowSandbox: bool(false)
+        .description('测试用：也在 Koishi 控制台的「沙盒」里回复（纯文字版本），测完关掉。插件只在 QQ 官方机器人上回复，不会在 LLBot 上回复。'),
+    }).default({} as Config['general']).loose(),
+  }).description('基本'),
+
+  Schema.object({
+    display: Schema.object({
+      output: choice<OutputMode>([['markdown', 'Markdown 卡片'], ['text', '纯文字']]).default('markdown').loose()
+        .description('QQ 上用 Markdown 卡片，被拒绝时自动改发纯文字；选「纯文字」则一律发纯文字。'),
+      numberStyle: choice<NumberStyle>([['code', '灰底等宽'], ['bold', '加粗'], ['plain', '普通']]).default('code').loose()
+        .description('完整价格在卡片里的样式。'),
+      priceDisplayMode: choice<PriceDisplayMode>([
+        ['full_and_compact', '875,700,000 ISK（875.70M）'],
+        ['full_only', '875,700,000 ISK'],
+        ['compact_only', '875.70M'],
+      ]).default('full_and_compact').loose()
+        .description('主要金额的写法：查价的单价和合计，批量查价的合计和运费，工业的成本、费用和利润。'),
+      listPriceDisplayMode: choice<ListPriceDisplayMode>([['compact_only', '只用简写'], ['inherit', '和上一项相同']]).default('compact_only').loose()
+        .description('清单里每一行的价格（批量查价、材料、比价、套装、搜索）。只用简写时消息不会太长。'),
+      compactDecimals: num(2)
+        .description('简写（例如 875.70M）保留几位小数，0–4。'),
+      thousandSeparator: bool(true)
+        .description('完整价格加千位分隔符。'),
+      showCurrency: bool(true)
+        .description('完整价格后面带「ISK」。'),
+      clickable: choice<Clickable>([['buttons', '带按钮'], ['none', '不带']]).default('buttons').loose()
+        .description('消息下面带可以点的按钮；选「不带」时只写编号和完整命令。按钮出问题时可以临时改成「不带」。'),
+    }).default({} as Config['display']).loose(),
+  }).description('显示'),
+
+  Schema.object({
+    access: Schema.object({
+      admins: Schema.array(str()).default([]).loose()
+        .description('管理员的用户 ID。在群里或私聊里 @机器人 发「本群ID」可以看到，前面写不写 `qq:` 都行。群里和私聊的 ID、不同群里的 ID 可能不同，建议填私聊里的。管理员可以用「市场状态」「市场授权」「样式自检」。'),
+      allowedGroups: table(Schema.object({
+        groupId: str().description('群 ID'),
+        note: str().description('备注'),
+        enabled: strictBool(true).description('启用'),
+      }))
+        .description('授权群：能看到「只在授权群」的市场、运费和告示。群 ID 用「本群ID」查看。注意：重新创建 QQ 机器人以后群 ID 会变。'),
+      allowedUsers: table(Schema.object({
+        userId: str().description('用户 ID'),
+        note: str().description('备注'),
+        enabled: strictBool(true).description('启用'),
+      }))
+        .description('私聊时按授权群对待的用户（管理员自动算在内）。'),
+    }).default({} as Config['access']).loose(),
+  }).description('权限'),
+
+  Schema.object({
+    markets: table(Schema.object({
+      name: str().description('名称'),
+      aliases: str().description('别名'),
+      type: choice<MarketType>([
+        ['npc-station', 'NPC 空间站'],
+        ['system', '整个星系'],
+        ['region', '整个星域'],
+        ['structure', '玩家建筑'],
+      ]).default('npc-station').description('类型'),
+      location: str().description('位置'),
+      system: str().description('建筑所在星系'),
+      enabled: strictBool(true).description('启用'),
+      inDefaultList: choice<MarketRow['inDefaultList']>([['auto', '自动'], ['yes', '列出'], ['no', '不列']]).default('auto').description('默认查价'),
+      sortOrder: num(0).description('排序'),
+      visibility: choice<MarketRow['visibility']>([['auto', '自动'], ['public', '所有群'], ['allowed', '只在授权群']]).default('auto').description('谁能看到'),
+      authProfile: str('default').description('授权档案'),
+      note: str().description('备注'),
+    }), PRESET_MARKETS)
+      .description([
+        '一行一个市场。**名称**不能重复，例如「Jita 4-4」。**别名**用逗号分隔，不区分大小写；NPC 空间站和星系类市场自动加上星系的中英文名。',
+        '**位置**：NPC 空间站填空间站 ID；星系填星系名或 ID；星域填星域名或 ID；玩家建筑填建筑 ID（授权页面可以按名字搜）。**建筑所在星系**只用于玩家建筑，授权档案留空时必须填。',
+        '**默认查价**：「查价 物品」不写市场时列不列出；自动 = 玩家建筑和基准市场列出，其他 NPC 市场不列。**谁能看到**：自动 = 玩家建筑只在授权群，其他所有群。',
+        '**授权档案**只用于玩家建筑，留空表示不用授权、只读这个建筑公开的订单（这时要填建筑所在星系）。写错的行会被跳过，并在「市场状态」里标出来。',
+      ].join('\n')),
+  }).description('市场'),
+
+  Schema.object({
+    aliases: table(Schema.object({
+      alias: str().description('别名'),
+      target: str().description('目标物品'),
+      enabled: strictBool(true).description('启用'),
+      note: str().description('备注'),
+    }))
+      .description('物品别名，例如「大鸟」→ Raven。目标物品写英文名、中文名或 typeID，找不到就跳过并在「市场状态」里报告。黑话表里的叫法会自动接入，这里写的优先。别名不能和另一个物品的正式名称相同。'),
+  }).description('物品别名'),
+
+  Schema.object({
+    price: Schema.object({
+      baseMarket: str(DEFAULT_BASE_MARKET)
+        .description('差价基准：其他市场的价格后面显示「▲4.5%」。也是走势、搜索、运费和各种回退的默认市场。填市场表格里的名称或别名；留空 = 不显示差价。'),
+      defaultQuantities: table(Schema.object({
+        item: str().description('物品'),
+        quantity: num(1).description('数量'),
+      }), DEFAULT_QUANTITIES)
+        .description('查价不写数量时，另外给出这个数量的合计。'),
+    }).default({} as Config['price']).loose(),
+  }).description('查价'),
+
+  Schema.object({
+    appraisal: Schema.object({
+      defaultMarket: str(DEFAULT_BASE_MARKET)
+        .description('批量查价不写市场时用哪个（填市场的名称或别名）。本群看不到这个市场时改用基准市场。'),
+      defaultPriceType: priceSide().default('sell').loose()
+        .description('默认按哪个价格估价。'),
+      fallbackMarket: str()
+        .description('某个物品在选的市场没有挂单时改用哪个市场，并用 † 标出；留空 = 不回退，这些物品不计入合计。整个市场不可用时不会回退。'),
+    }).default({} as Config['appraisal']).loose(),
+  }).description('批量查价'),
+
+  Schema.object({
+    freight: Schema.object({
+      routes: table(Schema.object({
+        name: str().description('名称'),
+        iskPerM3: num(0).description('ISK/m³'),
+        collateralPct: num(0).description('押金费率 %'),
+        maxVolume: num(0).description('单单最大体积 m³'),
+        visibility: choice<FreightRow['visibility']>([['public', '所有群'], ['allowed', '只在授权群']]).default('allowed').description('谁能看到'),
+        enabled: strictBool(true).description('启用'),
+        note: str().description('备注'),
+      }))
+        .description('运费路线：卡片上显示成「运到 名称」。押金按 Jita 出售价合计算；单单最大体积填 0 = 不限，超过时按几单计算。只在用基准市场（Jita）估价时显示，最多 2 条。留空 = 不显示运费。'),
+    }).default({} as Config['freight']).loose(),
+  }).description('运费'),
+
+  Schema.object({
+    notices: Schema.object({
+      list: table(Schema.object({
+        text: str().description('内容'),
+        visibility: choice<NoticeRow['visibility']>([['all', '所有群'], ['allowed', '只在授权群']]).default('allowed').description('谁能看到'),
+        until: str().description('截止时间'),
+        enabled: strictBool(true).description('启用'),
+      }))
+        .description('附在查价、批量查价结果下面的告示，最多显示前 2 条。内容一行、不超过 80 字，不能带网址（QQ 群里不允许发网址，带了会跳过）。截止时间写成 `2026-12-31 23:59`（北京时间），留空 = 一直显示。'),
+    }).default({} as Config['notices']).loose(),
+  }).description('查价告示'),
+
+  Schema.object({
+    sso: Schema.object({
+      clientId: str()
+        .description('EVE 开发者网站上应用的 Client ID。'),
+      clientSecret: secret()
+        .description('应用的 Secret Key。只填在这里，不要发给任何人。'),
+      callbackUrl: str(DEFAULT_CALLBACK_URL)
+        .description('回调地址：必须和开发者网站上填的完全一样，并且是你的浏览器能打开的地址。授权页面会显示应该填什么，不一致时标红，照抄即可。'),
+      adminKey: secret()
+        .description('授权页面的口令，可以不填。授权页面只接受本机访问（经 SSH 隧道也算本机）；只有把 Koishi 开放给别的电脑访问时才需要设。'),
+    }).default({} as Config['sso']).loose(),
+  }).description('EVE 授权'),
+
+  Schema.object({
+    render: Schema.object({
+      influenceMapUrl: str(DEFAULT_INFLUENCE_MAP_URL)
+        .description('「势力图」的图片地址。'),
+      coalitionMapUrl: str(DEFAULT_COALITION_MAP_URL)
+        .description('「联盟势力图」的图片地址。'),
+      brAuto: bool(true)
+        .description('@机器人 的消息里带战报链接时自动截图。'),
+    }).default({} as Config['render']).loose(),
+  }).description('图片与截图'),
+
+  Schema.object({
+    advanced: Schema.object({
+      manifestUrl: str(DEFAULT_MANIFEST_URL)
+        .description('物品数据清单的网址，用 `||` 分隔备用网址。留空 = 只用插件自带的数据。'),
+      glossaryUrl: str(DEFAULT_GLOSSARY_URL)
+        .description('黑话表的网址（提供别名和中英对照），用 `||` 分隔备用网址。留空 = 只用插件自带的黑话表。'),
+      esiContact: str()
+        .description('可选：写进 ESI 请求头的联系方式（例如游戏角色名或邮箱），出问题时 CCP 能联系到你。只能用英文字母、数字和常见符号。'),
+    }).collapse().default({} as Config['advanced']).loose(),
+  }).description('高级'),
+]) as Schema<Config>

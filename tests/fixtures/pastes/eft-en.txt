@@ -1,0 +1,39 @@
+[Raven, 刷怪乌鸦]
+Ballistic Control System II
+Ballistic Control System II
+Drone Damage Amplifier II /OFFLINE
+Damage Control II [1]
+[Empty Low slot]
+
+Large Shield Extender II
+Large Shield Extender II
+Multispectrum Shield Hardener II
+Pithum C-Type Multispectrum Shield Hardener
+Large Micro Jump Drive
+
+Cruise Missile Launcher II, Scourge Cruise Missile
+Cruise Missile Launcher II, Scourge Cruise Missile
+Cruise Missile Launcher II, Scourge Cruise Missile
+Cruise Missile Launcher II, Scourge Cruise Missile
+Cruise Missile Launcher II, Scourge Cruise Missile
+Cruise Missile Launcher II, Scourge Cruise Missile
+[Empty High slot]
+
+[Empty Rig slot]
+[Empty Rig slot]
+[Empty Rig slot]
+
+
+Hobgoblin II x5
+Hammerhead II x3
+
+
+Scourge Cruise Missile x2000
+Inferno Cruise Missile x1000
+Nanite Repair Paste x50
+Mobile Tractor Unit x1
+
+
+[1] Damage Control II
+  Unstable Damage Control Mutaplasmid
+  Armor Hitpoint Resistance Bonus 13.1, CPU usage 26.4, Hull Hitpoint Resistance Bonus 33.8, Shield Hitpoint Resistance Bonus 13.4

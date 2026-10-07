@@ -1,0 +1,6 @@
+Raven    1    Battleship    Ship
+Ballistic Control System II    2    Ballistic Control System    Module    Fitted
+Cruise Missile Launcher II    6    Missile Launcher Cruise    Module    Fitted
+Scourge Cruise Missile    2,162    Cruise Missile    Charge    Cargo Hold
+Hobgoblin II    5    Combat Drone    Drone    Drone Bay
+Raven Blueprint (Copy)    1    Battleship Blueprint    Blueprint

@@ -1,0 +1,80 @@
+{
+  "name": "koishi-plugin-eve-market",
+  "version": "0.0.1",
+  "description": "EVE Online 欧服市场助手（QQ 官方机器人）：查价、批量估价、装配估价、价格走势、联盟建筑市场、入侵、势力图、战报截图、工业成本计算",
+  "main": "lib/index.js",
+  "typings": "lib/index.d.ts",
+  "files": [
+    "lib",
+    "data",
+    "README.md",
+    "LICENSE",
+    "NOTICE.md"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yilifaer/koishi-plugin-eve-market.git"
+  },
+  "homepage": "https://github.com/yilifaer/koishi-plugin-eve-market#readme",
+  "bugs": {
+    "url": "https://github.com/yilifaer/koishi-plugin-eve-market/issues"
+  },
+  "keywords": [
+    "chatbot",
+    "koishi",
+    "plugin",
+    "eve",
+    "eve-online",
+    "esi",
+    "market",
+    "appraisal",
+    "industry",
+    "qq"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "snapshot": "node scripts/snapshot.mjs",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
+  },
+  "peerDependencies": {
+    "koishi": "^4.18.0"
+  },
+  "koishi": {
+    "description": {
+      "zh": "EVE Online 欧服市场助手（QQ 官方机器人）：查价、批量估价、走势、联盟建筑市场、入侵、势力图、战报、工业计算",
+      "en": "EVE Online (Tranquility) market helper for the official QQ bot: prices, appraisals, history charts, structure markets, incursions, influence maps, battle reports, industry costs"
+    },
+    "service": {
+      "required": [
+        "database",
+        "http"
+      ],
+      "optional": [
+        "puppeteer",
+        "server"
+      ]
+    }
+  },
+  "devDependencies": {
+    "@koishijs/plugin-database-memory": "^3.7.0",
+    "@koishijs/plugin-help": "^2.4.6",
+    "@koishijs/plugin-http": "^0.6.3",
+    "@satorijs/adapter-qq": "4.14.0",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.20.5",
+    "koishi": "4.18.11",
+    "puppeteer-core": "^24.43.1",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.4",
+    "vitest": "^3.2.7"
+  },
+  "dependencies": {
+    "js-yaml": "^4.3.2"
+  }
+}

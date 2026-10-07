@@ -1,0 +1,6 @@
+Raven Navy Issue Battleship 470,000 m3
+Rifter 3 Frigate 7,500 m3
+Tritanium 250,000 Mineral 2,500 m3
+Mobile Tractor Unit 1 Mobile Tractor Unit 100 m3
+Large Micro Jump Drive 2 Micro Jump Drive 20 m3
+Hammerhead II 10 Combat Drone 100 m3

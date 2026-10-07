@@ -1,0 +1,10 @@
+Dominix Blueprint	999
+Item	Required	Available	Est. Unit price	typeID
+Minerals
+Tritanium	4457139	0	4.06	34
+Pyerite	1114284	0	9.45	35
+Mexallon	278571	0	52.10	36
+Isogen	69643	0	68.20	37
+Nocxium	17410	0	512.00	38
+Zydrine	4352	0	1,050.00	39
+Megacyte	1088	0	2,890.00	40

@@ -1,0 +1,6 @@
+Raven Battleship Ship 470,000 m3 254,300,000.00 ISK
+Tritanium 1,000,000 Mineral Material 10,000 m3 4,060,000.00 ISK
+Large Shield Extender II 2 Shield Extender Module Large Medium 40 m3 5,600,000.00 ISK
+Hobgoblin II 5 Combat Drone Drone Small 25 m3 2,250,000.00 ISK
+Scourge Cruise Missile 2,000 Cruise Missile Charge Large 100 m3 560,000.00 ISK
+Nanite Repair Paste 150 Nanite Repair Paste Charge 1.50 m3 3,150,000.00 ISK

@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [18, 20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      # 出图、截图的测试只在 Node 22 上跑：装一个 Chrome，把路径通过 CHROME_PATH 交给测试；其他版本跳过这些测试
+      - name: 安装 Chrome（渲染测试用）
+        if: matrix.node == 22
+        shell: bash
+        run: |
+          CHROME=$(npx @puppeteer/browsers install chrome@stable --path "$RUNNER_TEMP/browsers" --format '{{path}}' | tail -n 1)
+          if [ ! -x "$CHROME" ]; then
+            echo "::error::Chrome 安装失败"
+            exit 1
+          fi
+          echo "CHROME_PATH=$CHROME" >> "$GITHUB_ENV"
+      - run: npm test
+      - run: npm run build
+      # Koishi Desktop 实际用 CommonJS 加载插件；确认编译结果在这个 Node 版本上能加载
+      - name: 用 CommonJS 加载编译结果
+        run: |
+          node -e "
+            const p = require('./lib')
+            if (p.name !== 'eve-market' || typeof p.apply !== 'function') process.exit(1)
+            p.Config({})
+          "
+      - name: 检查数据快照（不联网，按 manifest 核对 sha256）
+        run: node scripts/snapshot.mjs --check
+      - name: 检查包大小（不超过 3 MB）和 files 里列的文件都在包里
+        run: |
+          npm pack --dry-run --json > "$RUNNER_TEMP/pack.json"
+          node -e "
+            const pack = require(process.argv[1])[0]
+            const packed = pack.files.map((f) => f.path)
+            const missing = require('./package.json').files.filter((f) => !packed.some((p) => p === f || p.startsWith(f + '/')))
+            console.log('npm 包大小：' + pack.size + ' 字节')
+            if (missing.length) {
+              console.log('::error::包里缺少：' + missing.join('、'))
+              process.exit(1)
+            }
+            if (pack.size > 3145728) {
+              console.log('::error::npm 包超过 3 MB（' + pack.size + ' 字节）')
+              process.exit(1)
+            }
+          " "$RUNNER_TEMP/pack.json"
