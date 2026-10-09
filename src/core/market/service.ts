@@ -1,6 +1,7 @@
 // MarketService（§6.3）：按市场取报价。
-// - NPC 空间站、星系、星域、授权档案留空的建筑：星域订单（region.ts）+ 本地按地点过滤；
-// - 有授权档案的建筑：StructureSource（订单簿在内存里，structure.ts 实现；之前一律「需要授权」）；
+// - NPC 空间站、星系、星域、授权档案留空的建筑：星域订单（region.ts）+ 本地按地点过滤
+//   （星域订单里是否包含市场公开的建筑的订单待核实）；
+// - 有授权档案的建筑：StructureSource（structure.ts 整站同步，订单簿在内存里；没接上时一律「需要授权」）；
 // - PLEX 这类全宇宙统一交易的物品：不管问的是哪个市场，都取全局市场星域，不按地点过滤。
 // 每个报价都带明确的状态；一个市场、一个物品失败不影响别的。时限到了先回去，请求在后台做完写进缓存。
 
@@ -268,7 +269,9 @@ class Service implements ManagedMarketService {
       return quote
     }
     if (read.status !== 'ok' && read.status !== 'stale') return extra(emptyQuote(head, read.status))
-    return extra(filledQuote(head, summarize(read.orders, {}, qty), read.status, read.dataTime, this.now()))
+    // 只算挂在这个建筑里的订单
+    const scope: OrderScope = market.locationId === undefined ? {} : { locationId: market.locationId }
+    return extra(filledQuote(head, summarize(read.orders, scope, qty), read.status, read.dataTime, this.now()))
   }
 
   /** 建筑市场：恢复暂停的同步，数据太旧时最多等到 deadlineAt；出错不影响报价（报价看 read 的状态） */

@@ -1,5 +1,7 @@
 // 安全注册：和别的插件重名时跳过（主名重名跳过整个命令，别名重名只跳过别名）并记下来给「市场状态」，
 // 任何异常都不让插件加载失败。每个命令名和别名都挂上和 cmdCtx 一样的过滤器，别的平台根本解析不到本插件的命令。
+// 管理命令再加一层（only）：命令本身和它的名字都只对管理员存在，别人发了、在 plugin-help 里问（help -H、
+// help 命令名、命令 -h）都和命令不存在一样。
 
 import { Command } from 'koishi'
 import type { Context, Session } from 'koishi'
@@ -18,6 +20,8 @@ export interface RegisterOptions {
   aliases?: readonly string[]
   /** 管理命令：帮助列表里不显示 */
   hidden?: boolean
+  /** 只对这些会话存在（管理命令：管理员在单聊或授权群里）；其他人那里和命令不存在一样 */
+  only?: (session: Session) => boolean
 }
 
 export interface CommandConflict {
@@ -43,6 +47,7 @@ export interface RegistryOptions {
 }
 
 type HelpConfig = Command.Config & { hidden?: boolean }
+type Filter = (session: Session) => boolean
 
 const keyOf = (name: string) => Command.normalize(name)
 
@@ -55,6 +60,8 @@ export class CommandRegistry {
   private readonly commands = new Map<CommandId, Command>()
   /** 本插件建出来的 Command（含 eve-market.help 的上一级 eve-market） */
   private readonly own = new Set<Command>()
+  /** 带 only 的命令：名字上挂的过滤器 */
+  private readonly filters = new Map<Command, Filter>()
   private readonly found: CommandConflict[] = []
 
   /** ctx：命令所在的上下文（cmdCtx） */
@@ -72,9 +79,13 @@ export class CommandRegistry {
     const name = id === 'help' ? HELP_COMMAND : COMMAND_NAMES[id]
     if (this.taken(name)) return this.conflict({ id, name, kind: 'name' })
     const before = new Set(this.ctx.$commander._commandList)
+    // only：命令建在多一层过滤的上下文上（plugin-help 按 command.ctx 判断能不能看到），名字上也挂同样的判断
+    const { only } = options
+    const filter: Filter = only ? (session) => this.options.filter(session) && only(session) : this.options.filter
+    const ctx = only ? this.ctx.intersect(only) : this.ctx
     let command: Command
     try {
-      command = this.ctx.command(`${name} ${options.args ?? ''}`.trim(), options.description ?? '', this.configOf(id, options))
+      command = ctx.command(`${name} ${options.args ?? ''}`.trim(), options.description ?? '', this.configOf(id, options))
     } catch (error) {
       this.disposeNew(before)
       return this.conflict({ id, name, kind: 'error' }, error)
@@ -82,10 +93,11 @@ export class CommandRegistry {
     for (const created of this.ctx.$commander._commandList) {
       if (before.has(created)) continue
       this.own.add(created)
+      if (only) this.filters.set(created, filter)
       this.guard(created)
       if (created !== command) Object.assign(created.config, { hidden: true })
     }
-    for (const alias of options.aliases ?? []) this.addAlias(id, name, command, alias)
+    for (const alias of options.aliases ?? []) this.addAlias(id, name, command, alias, filter)
     this.commands.set(id, command)
     return command
   }
@@ -129,6 +141,20 @@ export class CommandRegistry {
     return this.found
   }
 
+  /**
+   * 内容以一个对这个会话不存在的命令（带 only 的管理命令）开头：后置中间件也不回复，
+   * 免得「没看懂「市场状态」」把这个命令名回显出来（「市场状态刷新」这样没空格的也算）
+   */
+  hiddenFrom(session: Session, content: string): boolean {
+    const word = content.trim().split(/\s/, 1)[0].toLowerCase()
+    if (!word) return false
+    for (const [command, filter] of this.filters) {
+      const hit = Object.keys(command._aliases).some((name) => word === name || (command._arguments.length > 0 && word.startsWith(name)))
+      if (hit && !filter(session)) return true
+    }
+    return false
+  }
+
   private configOf(id: CommandId, options: RegisterOptions): HelpConfig {
     // captureQuote：不把引用的消息拼进参数；strictOptions：「批量查价 -5% Jita」里的 -5% 回到文本参数
     const config: HelpConfig = { captureQuote: false }
@@ -156,16 +182,17 @@ export class CommandRegistry {
 
   /** 没有过滤器的名字都挂上 */
   private guard(command: Command) {
-    for (const alias of Object.values(command._aliases)) alias.filter ??= this.options.filter
+    const filter = this.filters.get(command) ?? this.options.filter
+    for (const alias of Object.values(command._aliases)) alias.filter ??= filter
   }
 
-  private addAlias(id: CommandId, name: string, command: Command, alias: string) {
+  private addAlias(id: CommandId, name: string, command: Command, alias: string, filter: Filter) {
     if (this.taken(alias)) {
       this.conflict({ id, name, kind: 'alias', alias })
       return
     }
     try {
-      command.alias(alias, { filter: this.options.filter })
+      command.alias(alias, { filter })
     } catch (error) {
       this.conflict({ id, name, kind: 'alias', alias }, error)
     }

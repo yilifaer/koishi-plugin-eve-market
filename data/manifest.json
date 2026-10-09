@@ -1,13 +1,13 @@
 {
   "schema": 1,
   "dataRevision": 1,
-  "buildNumber": 3579973,
-  "sdeReleaseDate": "2026-10-06T11:08:26Z",
-  "generatedAt": "2026-10-07T08:09:40.607Z",
+  "buildNumber": 3586130,
+  "sdeReleaseDate": "2026-10-07T11:10:05Z",
+  "generatedAt": "2026-10-07T18:57:28.294Z",
   "files": {
     "types.json": {
-      "sha256": "86a6de7acf8339e47419a6be5b88a5d6ad7575ae0f9c095aad54a90fafb469d9",
-      "bytes": 4382199,
+      "sha256": "cb35372484c03d8df162332a13ff4928833325b5ac46775144bb27b37d0a94cd",
+      "bytes": 4396842,
       "rows": 27309
     },
     "industry.json": {
@@ -21,7 +21,7 @@
       "rows": 8490
     }
   },
-  "sourceCommit": "3e8c3563c2fe21f7be223a6c3ff8391f2dfce0f4",
+  "sourceCommit": "1ca04b702f7bfdb6191451df7221985eb6e78a39",
   "glossary": {
     "sha256": "ff348e2b9ffc2553e7995265c393438c81a892bf3f113e3c773b7a980f92ea47",
     "bytes": 59880

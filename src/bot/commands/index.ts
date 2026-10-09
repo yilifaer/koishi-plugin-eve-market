@@ -1,5 +1,6 @@
-// 0.0.1 的命令：查价、批量查价、搜索、本群ID、帮助（隐藏的 eve-market.help），以及后置的兜底中间件。
+// 命令：查价、批量查价、搜索、本群ID、帮助（隐藏的 eve-market.help）、管理员的市场状态和市场授权，以及后置的兜底中间件。
 
+import { registerAdmin } from './admin'
 import { registerBatch } from './batch'
 import type { CommandContext } from './context'
 import { registerGroupId } from './group-id'
@@ -13,6 +14,7 @@ export function registerCommands(commands: CommandContext): void {
   registerBatch(commands)
   registerSearch(commands)
   registerGroupId(commands)
+  registerAdmin(commands)
   registerHelp(commands)
 }
 

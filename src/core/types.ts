@@ -1106,7 +1106,12 @@ export interface StructureProbe {
 
 export type AuthCompletion =
   | { ok: true; profile: string; characterId: string; characterName: string; structures: StructureProbe[] }
-  | { ok: false; reason: 'bad_state' | 'exchange_failed' | 'missing_scopes' | 'not_configured'; message: string }
+  | {
+    ok: false
+    /** exchange_failed：应用本身的问题（Client ID、Secret Key）；code_rejected：授权码失效；unavailable：连不上 EVE；save_failed：没能写进数据库 */
+    reason: 'bad_state' | 'exchange_failed' | 'missing_scopes' | 'not_configured' | 'code_rejected' | 'unavailable' | 'save_failed'
+    message: string
+  }
 
 export interface StructureSearchHit {
   id: string
@@ -1194,7 +1199,7 @@ export interface CoreStatus {
 }
 
 export interface EveCore {
-  /** 首次数据加载完成（快照或缓存） */
+  /** 首次数据加载完成（快照或缓存），授权档案也从数据库读好了 */
   readonly ready: Promise<void>
   data: DataService
   items: ItemResolver

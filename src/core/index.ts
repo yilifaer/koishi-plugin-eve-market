@@ -1,26 +1,27 @@
 // createEveCore：按端口把 core 的各个模块组装成 EveCore 门面（§3.4、§3.7.3）。bot 和以后的其他入口只依赖它。
 // 生命周期：start() 读回 ESI 的暂停窗口 → 读模块级存储、缓存或自带快照 → ready → 后台在线检查；stop() 取消一切。
 // 需要数据的配置检查（市场位置、配置里引用的市场、物品别名、默认数量）每次数据更新后重跑，新出现的问题写一次日志。
-// EVE 授权（0.0.2）和工业（0.2.0）在那之前是占位：授权档案一律「需要授权」，工业回复 NOT_CONFIGURED。
+// EVE 授权档案在 start() 时同时从数据库读入（ready 也等它）；数据和档案都好了以后从缓存恢复建筑市场的订单簿、排上后台同步。
+// 工业在 0.2.0 之前是占位：回复 NOT_CONFIGURED。
 
-import { MAX_NOTICES, SSO_SCOPES } from '../constants'
+import { MAX_NOTICES } from '../constants'
 import { createAppraisalService } from './appraisal'
 import { createDataService } from './data'
 import { createEsi } from './esi'
 import { createPriceFormatter } from './format'
 import { createItemResolver } from './items'
 import type { ManagedItemResolver } from './items'
-import { createHistoryService, createMarketRegistry, createMarketService } from './market'
+import { createHistoryService, createMarketRegistry, createMarketService, createStructureMarkets } from './market'
 import type { ManagedMarketRegistry } from './market'
 import { createQueryParser } from './parse'
 import type { CorePorts, Logger } from './ports'
+import { createAuthService } from './sso'
 import type {
-  Access, AuthProfileStatus, AuthService, ConfigIssue, ConfigSection, CoreFailure, CoreOverrides, CoreStatus, DataService,
+  Access, AuthService, ConfigIssue, ConfigSection, CoreFailure, CoreOverrides, CoreStatus, DataService,
   EveCore, IndustryService, ItemIndexStats, Settings,
 } from './types'
 import { createUniverseService } from './universe'
 
-const NOT_AUTHORIZED_YET = 'EVE 授权在 0.0.2 提供'
 const NO_INDUSTRY_YET = '工业计算在 0.2.0 提供'
 const EMPTY_STATS: ItemIndexStats = { items: 0, marketItems: 0, adminAliases: 0, glossaryAliases: 0, sets: 0 }
 
@@ -48,45 +49,7 @@ export function describeIssue(issue: ConfigIssue): string {
   return `${label}${issue.table ? ` · ${issue.table}` : ''}：${issue.message}`
 }
 
-// ------------------------------------------------------------------ 占位（0.0.2 授权、0.2.0 工业）
-
-/** 用到授权档案的市场：按档案分组，名字按表格顺序 */
-function profileMarkets(settings: Settings): Map<string, string[]> {
-  const out = new Map<string, string[]>()
-  for (const m of settings.markets) {
-    if (m.type !== 'structure' || !m.authProfile) continue
-    out.set(m.authProfile, [...out.get(m.authProfile) ?? [], m.name])
-  }
-  return out
-}
-
-function pendingAuth(settings: Settings): AuthService {
-  const profiles = (): AuthProfileStatus[] => [...profileMarkets(settings)].map(([profile, markets]) => ({
-    profile,
-    status: 'NEEDS_AUTH',
-    characterId: '',
-    characterName: '',
-    scopesGranted: 0,
-    scopesRequired: SSO_SCOPES.length,
-    tokenValid: false,
-    lastRefreshAt: null,
-    lastSuccessAt: null,
-    lastError: '',
-    lastErrorAt: null,
-    markets,
-  }))
-  const notConfigured: CoreFailure = { ok: false, code: 'NOT_CONFIGURED', message: NOT_AUTHORIZED_YET }
-  return {
-    profiles,
-    getAccessToken: async () => ({ ok: false, status: 'NEEDS_AUTH', reason: NOT_AUTHORIZED_YET }),
-    beginAuth: () => {
-      throw new Error(NOT_AUTHORIZED_YET)
-    },
-    completeAuth: async () => ({ ok: false, reason: 'not_configured', message: NOT_AUTHORIZED_YET }),
-    remove: async () => {},
-    searchStructures: async () => notConfigured,
-  }
-}
+// ------------------------------------------------------------------ 占位（0.2.0 工业）
 
 function pendingIndustry(): IndustryService {
   const notConfigured: CoreFailure = { ok: false, code: 'NOT_CONFIGURED', message: NO_INDUSTRY_YET }
@@ -128,10 +91,15 @@ function quantityIssues(settings: Settings, items: ManagedItemResolver): ConfigI
  */
 function authIssues(settings: Settings, auth: Pick<AuthService, 'profiles'>): ConfigIssue[] {
   if (!settings.sso.clientId) return []
-  const waiting = new Set(auth.profiles().filter((p) => p.status === 'NEEDS_AUTH').map((p) => p.profile))
+  // 还没授权时 lastError 是空的；密钥变了、读不出档案这些情况写明原因
+  const waiting = new Map(auth.profiles().filter((p) => p.status === 'NEEDS_AUTH').map((p) => [p.profile, p.lastError]))
   return settings.markets
     .filter((m) => m.type === 'structure' && waiting.has(m.authProfile))
-    .map((m) => ({ section: 'markets', row: m.row, field: 'authProfile', message: `「${m.name}」使用的授权档案 ${m.authProfile} 还没有授权` }))
+    .map((m) => {
+      const reason = waiting.get(m.authProfile)
+      const message = reason ? `「${m.name}」使用的授权档案 ${m.authProfile} 不能用：${reason}` : `「${m.name}」使用的授权档案 ${m.authProfile} 还没有授权`
+      return { section: 'markets', row: m.row, field: 'authProfile', message }
+    })
 }
 
 class ConfigChecks {
@@ -179,14 +147,18 @@ export function createEveCore(ports: CorePorts, settings: Settings, overrides: C
   })
   const items = createItemResolver({ data, store, aliases: settings.aliases, remote: { esi, cache, clock, logger }, logger })
   const markets = createMarketRegistry(settings, data)
-  const prices = createMarketService({ registry: markets, esi, clock, scheduler, logger, store })
-  const auth = pendingAuth(settings)
+  const auth = createAuthService({ ports, settings, esi, ssoBase: overrides.ssoBase })
+  const structures = createStructureMarkets({ esi, auth, registry: markets, cache, clock, scheduler, logger, store, random: overrides.random })
+  const prices = createMarketService({ registry: markets, esi, clock, scheduler, logger, store, structures })
   const checks = new ConfigChecks({ settings, data, items, markets, auth, logger })
   const unsubscribe = data.onUpdate(() => checks.recheck())
   let started: Promise<void> | undefined
+  // ready 等数据和授权档案都读好：刚启动时还没读到的档案不会被当成「需要授权」
+  let authLoaded!: () => void
+  const ready = Promise.all([data.ready, new Promise<void>((resolve) => { authLoaded = resolve })]).then(() => undefined)
 
   return {
-    ready: data.ready,
+    ready,
     data,
     items,
     parse: createQueryParser({ items, markets, scheduler }),
@@ -222,16 +194,18 @@ export function createEveCore(ports: CorePorts, settings: Settings, overrides: C
     },
 
     start(): Promise<void> {
-      started ??= esi.client.start().then(() => data.start())
+      started ??= Promise.all([esi.client.start().then(() => data.start()), auth.start().finally(authLoaded)]).then(() => structures.start())
       return started
     },
 
     async stop(): Promise<void> {
       unsubscribe()
+      structures.stop()
+      auth.stop()
       items.dispose()
       data.stop()
       esi.client.stop()
-      await esi.client.flush().catch(() => undefined)
+      await Promise.all([structures.flush(), esi.client.flush()]).catch(() => undefined)
     },
   }
 }

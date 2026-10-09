@@ -1,13 +1,13 @@
 {
 "schema": 1,
 "dataRevision": 1,
-"buildNumber": 3579973,
-"sdeReleaseDate": "2026-10-06T11:08:26Z",
-"generatedAt": "2026-10-07T08:09:40.607Z",
+"buildNumber": 3586130,
+"sdeReleaseDate": "2026-10-07T11:10:05Z",
+"generatedAt": "2026-10-07T18:57:28.294Z",
 "files": {
-"types.json": {"sha256":"f10bb591fa455323bfd847caa5a5327a430732c4c55c522dcf4ad43acd5f28b0","bytes":28536,"rows":144},
+"types.json": {"sha256":"bfec9e9db5231b91204428dd818b8e6254eb9a1a2695ff0b1b469f375b181207","bytes":28536,"rows":144},
 "industry.json": {"sha256":"b8401465fba8fead64767f945201859eed83f91e6bdaef08d0ef3c4290dd75df","bytes":6784,"rows":9},
 "universe.json": {"sha256":"f9816f55392bc0c7c40a2b5e2297adc13176ce5d56024fa7c5028ef0701d4b11","bytes":8528,"rows":16}
 },
-"sourceCommit": "3e8c3563c2fe21f7be223a6c3ff8391f2dfce0f4"
+"sourceCommit": "1ca04b702f7bfdb6191451df7221985eb6e78a39"
 }

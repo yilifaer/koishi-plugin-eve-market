@@ -268,11 +268,22 @@ function parseKey(raw: Buffer): Buffer {
   return key
 }
 
-/** 第一次启动时生成（权限 0600）；已经有了就原样读出来，绝不覆盖 */
+/** 别的用户也能读时尽量改回 0600（Windows 上权限位没有意义，跳过；改不了也不影响使用） */
+async function tightenKeyFile(file: string): Promise<void> {
+  if (process.platform === 'win32') return
+  try {
+    const { mode } = await fs.stat(file)
+    if (mode & 0o077) await fs.chmod(file, 0o600)
+  } catch {}
+}
+
+/** 第一次启动时生成（权限 0600）；已经有了就原样读出来，绝不覆盖。密钥和 keyId 都不写日志 */
 export async function loadSecretKey(dir: string, logger?: Logger): Promise<Buffer> {
   const file = path.join(dir, SECRET_KEY_FILE)
   try {
-    return parseKey(await fs.readFile(file))
+    const key = parseKey(await fs.readFile(file))
+    await tightenKeyFile(file)
+    return key
   } catch (error) {
     if (errno(error) !== 'ENOENT') throw error
   }
@@ -354,6 +365,8 @@ export async function makePorts(ctx: Context, options: PortOptions): Promise<Cor
   const logger = options.logger ?? koishiLogger(ctx)
   return {
     http: new KoishiHttpClient(ctx.http),
+    // 插件的 ctx.http 在插件停用时会中止进行中的请求；SSO 的请求经根上下文发，停用时照样做完（代理等全局设置一样生效）
+    ssoHttp: new KoishiHttpClient(ctx.root.http),
     clock: options.clock ?? systemClock,
     scheduler: options.scheduler ?? koishiScheduler(ctx),
     logger,

@@ -13,5 +13,7 @@ export function errorDetail(info: SafeErrorInfo): string {
   const status = info.status === undefined ? '' : `HTTP ${info.status}`
   const head = [info.route, status].filter(Boolean).join(' ')
   if (!head) return info.message
-  return info.message && info.message !== status ? `${head}: ${info.message}` : head
+  // ESI 客户端的说明本身以「HTTP 503: 」开头
+  const message = status && info.message.startsWith(`${status}: `) ? info.message.slice(status.length + 2) : info.message
+  return message && message !== status ? `${head}: ${message}` : head
 }

@@ -1,7 +1,7 @@
 // 后置中间件（§2.18）：命令没匹配到、消息 @ 了机器人时才轮到。
 // 只 @ 没内容 → 简短帮助；内容精确命中一个物品 → 改成「查价 …」再走一遍命令；短的 → 「没看懂…你是想查价吗？」；
 // 长的（闲聊）→ 一句「发「帮助」看我能做什么」。回复了就不再调用 next()（否则 Koishi 的「您要找的是不是」还会再发一条）。
-// 没有待办时的「取消」、只有图片没有文字的消息不回复，交给后面的处理者。
+// 没有待办时的「取消」、只有图片没有文字的消息不回复，交给后面的处理者；别人发的管理命令（对他来说不存在）也不回复。
 
 import { h } from 'koishi'
 import type { Context, Next, Session } from 'koishi'
@@ -55,6 +55,8 @@ async function runFallback(commands: CommandContext, session: Session, next: Nex
   const content = textOf(raw)
   // 「取消」只在有待办时由前置中间件接管；没有待办时什么都不说。只有图片之类、没有文字的消息也不归这里
   if (content === CANCEL_WORD || (raw && !content)) return next()
+  // 非管理员发的管理命令：什么都不回（也不交给 Koishi 的「您要找的是不是」）
+  if (commands.registry.hiddenFrom(session, content)) return
   if (!content) {
     await invoke(commands, 'help', session, (inv) => sendCard(inv, shortCard(inv)).then(() => undefined))
     return

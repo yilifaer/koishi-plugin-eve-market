@@ -1,6 +1,7 @@
 // 帮助（§2.14）：注册成隐藏的 eve-market.help [主题]，前置中间件把「帮助」「菜单」「帮助 查价」「帮助查价」改写过来，
 // plugin-help 的快捷方式就不会再匹配；「帮助 <别的插件的命令>」原样交给 plugin-help。
-// 只列已经注册的命令（0.0.1 还没有工业、走势这些），命令名按当前注册的名字。
+// 只列已经注册的命令（还没有工业、走势这些），命令名按当前注册的名字。管理命令只写给管理员看
+// （单聊或授权群里），别人发「帮助 市场状态」得到的是主卡片。
 
 import { Command } from 'koishi'
 import { COMMAND_NAMES, SERVER_LABEL } from '../../constants'
@@ -85,6 +86,15 @@ function otherLines(env: HelpEnv): Line[] {
   return parts.length ? [{ text: parts.join(' · ') }] : []
 }
 
+/** 管理员，并且在单聊或授权群里（和管理命令自己的判断一样） */
+const adminHere = (env: HelpEnv) => env.access.isAdmin && (env.access.isDirect || env.access.allowed)
+
+function adminLines(env: HelpEnv): Line[] {
+  if (!adminHere(env)) return []
+  const ids = (['marketStatus', 'marketAuth', 'selfTest'] as const).filter((id) => has(env, id))
+  return ids.length ? [{ text: `${ids.map((id) => nameOf(env, id)).join(' · ')}（只有管理员能用）` }] : []
+}
+
 function section(heading: string, lines: Line[]): Section[] {
   return lines.length ? [{ heading, lines }] : []
 }
@@ -120,6 +130,7 @@ function mainCard(env: HelpEnv): Card {
     ...section('工业', industryLines(env)),
     ...section('宇宙', universeLines(env)),
     ...section('其他', otherLines(env)),
+    ...section('管理', adminLines(env)),
   )
   const topic = has(env, 'price') ? `；发「${nameOf(env, 'help')} ${nameOf(env, 'price')}」看详细用法` : ''
   card.sections.push({
@@ -233,6 +244,43 @@ function groupIdTopic(env: HelpEnv): Card {
   return card
 }
 
+function adminBack(env: HelpEnv, id: CommandId): Action[][] {
+  return [[{ label: env.commands.registry.name(id), command: { id }, primary: true }, { label: '全部帮助', command: { id: 'help' } }]]
+}
+
+function marketStatusTopic(env: HelpEnv): Card {
+  const name = nameOf(env, 'marketStatus')
+  const card = emptyCard(`**${name}**（管理员）`)
+  card.sections.push({
+    lines: [
+      { text: `${name}：每个市场能不能用、建筑市场上次同步、授权档案、物品数据版本、ESI 配额、配置问题` },
+      { text: `${name} 刷新：马上检查在线数据，只重新同步已经过期或出错的建筑市场（不会打破 ESI 的缓存规则）` },
+      { text: '🟢 正常 · 🟡 需要授权或暂时出错 · 🔴 授权异常（失去停靠或访问权限、令牌失效）' },
+    ],
+  }, {
+    style: 'plain',
+    lines: [{ text: '只在单聊或授权群里回应，其他人发了没有反应。' }],
+  })
+  card.actions = adminBack(env, 'marketStatus')
+  return card
+}
+
+function marketAuthTopic(env: HelpEnv): Card {
+  const name = nameOf(env, 'marketAuth')
+  const card = emptyCard(`**${name}**（管理员）`)
+  card.sections.push({
+    lines: [
+      { text: `${name}：列出 EVE 授权档案（服务角色、权限、上次刷新）和用到它的建筑市场` },
+      { text: '授权和重新授权在浏览器里做：Koishi 控制台 → 本插件的设置页 → 最上面的「打开 EVE 授权页面」' },
+    ],
+  }, {
+    style: 'plain',
+    lines: [{ text: '只在单聊或授权群里回应；消息里只有状态，不会出现口令和网址。' }],
+  })
+  card.actions = adminBack(env, 'marketAuth')
+  return card
+}
+
 const TOPICS: Partial<Record<CommandId, (env: HelpEnv) => Card>> = {
   price: priceTopic,
   batch: batchTopic,
@@ -240,7 +288,13 @@ const TOPICS: Partial<Record<CommandId, (env: HelpEnv) => Card>> = {
   groupId: groupIdTopic,
 }
 
-/** 没写分项说明的命令回主卡片 */
+const ADMIN_TOPICS: Partial<Record<CommandId, (env: HelpEnv) => Card>> = {
+  marketStatus: marketStatusTopic,
+  marketAuth: marketAuthTopic,
+}
+
+/** 没写分项说明的命令回主卡片；管理命令只给管理员看说明 */
 function topicCard(env: HelpEnv, id: CommandId): Card | undefined {
-  return TOPICS[id]?.(env)
+  const admin = adminHere(env) ? ADMIN_TOPICS[id] : undefined
+  return (TOPICS[id] ?? admin)?.(env)
 }

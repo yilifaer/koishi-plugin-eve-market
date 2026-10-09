@@ -5,7 +5,7 @@ import { PRESET_MARKETS } from '../../../src/config/presets'
 import { normalizeConfig } from '../../../src/config/normalize'
 import { createEveCore, describeIssue } from '../../../src/core'
 import { createModuleStore } from '../../../src/core/ports'
-import type { HttpClient, HttpRequest } from '../../../src/core/ports'
+import type { AuthRecord, HttpClient, HttpRequest } from '../../../src/core/ports'
 import type { EveCore } from '../../../src/core/types'
 import { FakeEsi, rawOrder } from '../../fakes/fake-esi'
 import { NodeHttpClient } from '../../fakes/node-http-client'
@@ -44,7 +44,7 @@ afterEach(async () => {
   cleanupDirs()
 })
 
-async function make(raw: Record<string, unknown> = {}, setupEsi?: (fake: FakeEsi) => void): Promise<Made> {
+async function make(raw: Record<string, unknown> = {}, setupEsi?: (fake: FakeEsi) => void, saved: AuthRecord[] = []): Promise<Made> {
   const fake = new FakeEsi()
   setupEsi?.(fake)
   await fake.start()
@@ -62,7 +62,7 @@ async function make(raw: Record<string, unknown> = {}, setupEsi?: (fake: FakeEsi
     scheduler: realScheduler,
     logger,
     cache: new MemoryCache(),
-    auth: { list: async () => [], get: async () => undefined, upsert: unused, remove: unused },
+    auth: { list: async () => saved, get: async (p) => saved.find((r) => r.profile === p), upsert: unused, remove: unused },
     secrets: { keyId: 'test', seal: unused, open: unused },
     store: createModuleStore(),
     bundledDataDir: bundledDir(version),
@@ -164,7 +164,7 @@ describe('createEveCore: configuration problems that need the data', () => {
   })
 })
 
-describe('createEveCore: placeholders until 0.0.2 and 0.2.0', () => {
+describe('createEveCore: EVE authorization, and the industry placeholder until 0.2.0', () => {
   it('structure markets need EVE authorization', async () => {
     const { core } = await make({ markets: [...PRESET_MARKETS, ...STRUCTURE_ROWS], sso: { clientId: 'test-client-id', clientSecret: 'x' } })
     await core.start()
@@ -175,10 +175,23 @@ describe('createEveCore: placeholders until 0.0.2 and 0.2.0', () => {
     expect(core.status().issues.map(describeIssue)).toEqual(['市场第 6 行「联盟市场A」使用的授权档案 default 还没有授权'])
     expect(core.status().markets.find((m) => m.marketKey === '联盟市场a')).toMatchObject({ source: 'structure', state: 'NEEDS_AUTH' })
     expect(await core.auth.getAccessToken('default')).toMatchObject({ ok: false, status: 'NEEDS_AUTH' })
-    expect(() => core.auth.beginAuth('default')).toThrow()
-    expect(await core.auth.completeAuth('code', 'state')).toMatchObject({ ok: false, reason: 'not_configured' })
+    expect(new URL(core.auth.beginAuth('default').url).searchParams.get('client_id')).toBe('test-client-id')
+    expect(await core.auth.completeAuth('code', 'state')).toMatchObject({ ok: false, reason: 'bad_state' })
     expect(await core.auth.searchStructures('default', 'abc')).toMatchObject({ ok: false, code: 'NOT_CONFIGURED' })
     await expect(core.auth.remove('default')).resolves.toBeUndefined()
+  })
+
+  it('a profile saved with another secret.key says why it cannot be used', async () => {
+    const saved: AuthRecord = {
+      profile: 'default', characterId: '2112000001', characterName: 'Test Pilot', ownerHash: 'owner', scopes: [],
+      refreshToken: 'v1:0badc0de:aaaa:bbbb:cccc', keyId: '0badc0de', status: 'OK', lastError: '', lastErrorAt: null,
+      lastRefreshAt: null, lastSuccessAt: null, authorizedAt: null,
+    }
+    const { core } = await make({ markets: [...PRESET_MARKETS, ...STRUCTURE_ROWS], sso: { clientId: 'test-client-id', clientSecret: 'x' } }, undefined, [saved])
+    await core.start()
+    expect(core.status().issues.map(describeIssue)).toEqual([
+      '市场第 6 行「联盟市场A」使用的授权档案 default 不能用：保存授权用的密钥变了（换了机器或 secret.key 丢了），请重新授权',
+    ])
   })
 
   it('without a Client ID the local check already reports it, not twice', async () => {

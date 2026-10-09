@@ -248,6 +248,11 @@ export const SSO_SCOPES: readonly string[] = [
   'esi-universe.read_structures.v1',
   'esi-search.search_structures.v1',
 ]
+/** 按名字搜建筑的权限（名字待核实）：缺了只影响管理页的搜索，建筑市场同步照常 */
+export const SSO_SEARCH_SCOPE = 'esi-search.search_structures.v1'
+/** access token（JWT）的签发者和受众（待核实）。只解码、不验签，所以不取 JWKS */
+export const SSO_JWT_ISSUERS: readonly string[] = ['login.eveonline.com', 'https://login.eveonline.com']
+export const SSO_JWT_AUDIENCE = 'EVE Online'
 /** SSO 回调的路由路径（固定，不是配置） */
 export const SSO_CALLBACK_PATH = '/eve-market/sso/callback'
 export const ADMIN_PAGE_PATH = '/eve-market/admin'
@@ -404,3 +409,18 @@ export const MULTIBUY_SEPARATOR = '\t'
 export const MATERIALS_COPY_BLOCK = true
 /** 基础卡片「主要材料」列几种 */
 export const TOP_MATERIALS = 5
+
+// ------------------------------------------------------------------ EVE 授权页面（§7.4、§8.4）
+
+/** 其余几个路由（管理页和回调的路径在「ESI 与 SSO」一节） */
+export const ADMIN_SEARCH_PATH = '/eve-market/admin/search'
+export const ADMIN_DELETE_PATH = '/eve-market/admin/delete'
+export const SSO_START_PATH = '/eve-market/sso/start'
+/** 页面上「授权」「删除」「搜索」的一次性令牌：多久有效、最多同时几个 */
+export const ADMIN_ACTION_TTL_MIN = 30
+export const ADMIN_ACTION_MAX = 50
+/** 输对口令以后多久不用再输 */
+export const ADMIN_SESSION_HOURS = 12
+/** 按名字搜建筑至少几个字、最多几个字 */
+export const STRUCTURE_SEARCH_MIN_CHARS = 3
+export const STRUCTURE_SEARCH_MAX_CHARS = 100

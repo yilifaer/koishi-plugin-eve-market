@@ -1,8 +1,11 @@
 // 集成测试的环境：真实的 Koishi + 整个插件（installPlugin），物品数据来自 tests/fixtures 的小数据集（临时的自带快照目录），
-// ESI 指向本机的假 ESI（经 ctx.http 真实发请求），模块级存储每个环境一个，互不影响。所有 ID 和名字都是编造的。
+// ESI 和 SSO 指向本机的假 ESI（经 ctx.http 真实发请求），模块级存储每个环境一个，互不影响。所有 ID 和名字都是编造的。
 // 插件和假 ESI 用同一个时钟：默认从 EVE 时间 06:20 开始、跟着真实时间走，结果不受跑测试的时刻（DT 11:00–11:30）影响。
+// 需要 EVE 授权页面时再加载 Koishi 的 server 插件，监听 127.0.0.1 上的一个空闲端口。
 
-import type { Context } from 'koishi'
+import { createRequire } from 'node:module'
+import net from 'node:net'
+import type { Context, ForkScope } from 'koishi'
 import { installPlugin } from '../../../src/bot/plugin'
 import { Config } from '../../../src/config/schema'
 import { PRESET_MARKETS } from '../../../src/config/presets'
@@ -80,6 +83,8 @@ export interface EnvOptions extends Pick<HarnessOptions, 'help' | 'onebot'> {
   clock?: Clock
   /** 插件的定时器（core 的时限、慢提示）；默认 ctx.setTimeout */
   scheduler?: Scheduler
+  /** 加载 Koishi 的 server 插件，监听 127.0.0.1 的这个端口（先用 freePort() 取一个） */
+  serverPort?: number
 }
 
 export interface PluginEnv {
@@ -87,7 +92,23 @@ export interface PluginEnv {
   fake: FakeEsi
   store: ModuleStore
   logger: RecordingLogger
+  /** 本插件（停用它 = 控制台里停用或保存配置时的重载） */
+  plugin(): ForkScope
   stop(): Promise<void>
+}
+
+// koishi 走 CommonJS 入口，server 插件也用 CommonJS，保证是同一份 cordis
+const requireCjs = createRequire(__filename)
+const serverModule = requireCjs('@koishijs/plugin-server') as { default?: unknown; Server?: unknown }
+const ServerPlugin = (serverModule.default ?? serverModule.Server ?? serverModule) as never
+
+/** 127.0.0.1 上一个空闲端口 */
+export async function freePort(): Promise<number> {
+  const probe = net.createServer()
+  await new Promise<void>((resolve) => probe.listen(0, '127.0.0.1', resolve))
+  const port = (probe.address() as net.AddressInfo).port
+  await new Promise((resolve) => probe.close(resolve))
+  return port
 }
 
 export function baseConfig(config: Record<string, unknown> = {}): Record<string, unknown> {
@@ -113,25 +134,30 @@ interface InstallSetup {
   logger: RecordingLogger
   clock: Clock
   scheduler?: Scheduler
+  /** 装好以后记下本插件 */
+  installed?: (fork: ForkScope) => void
 }
 
 function pluginInstaller(setup: InstallSetup, config: Record<string, unknown>) {
   const data = bundledDir(makeVersion())
   const { fake, store, logger, clock, scheduler } = setup
   return (app: Context) => {
-    app.plugin({
+    const fork = app.plugin({
       name: 'eve-market',
+      // 和 src/index.ts 一样：授权档案表要用数据库
+      inject: ['database', 'http'],
       Config,
       apply: (ctx: Context, cfg: Config) => installPlugin(ctx, cfg, {
         store,
         bundledDataDir: data,
-        overrides: { esiBase: fake.base, random: () => 0.5 },
+        overrides: { esiBase: fake.base, ssoBase: fake.base, random: () => 0.5 },
         logger,
         clock,
         ...scheduler ? { scheduler } : {},
       }),
     // 控制台的原始值，由 Schema 补默认值、normalize 逐行检查
     }, baseConfig(config) as unknown as Config)
+    setup.installed?.(fork)
   }
 }
 
@@ -149,11 +175,14 @@ export async function startPlugin(options: EnvOptions = {}): Promise<PluginEnv> 
   const fake = await fakeEsi(clock, options.esi)
   const store = createModuleStore()
   const logger = new RecordingLogger()
-  const install = pluginInstaller({ fake, store, logger, clock, scheduler: options.scheduler }, options.config ?? {})
+  let plugin: ForkScope | undefined
+  const install = pluginInstaller({ fake, store, logger, clock, scheduler: options.scheduler, installed: (fork) => { plugin = fork } }, options.config ?? {})
+  let server: ForkScope | undefined
   const h = await startHarness({
     help: options.help,
     onebot: options.onebot,
     setup: (app) => {
+      if (options.serverPort) server = app.plugin(ServerPlugin, { host: '127.0.0.1', port: options.serverPort })
       options.before?.(app)
       install(app)
       options.setup?.(app)
@@ -164,7 +193,10 @@ export async function startPlugin(options: EnvOptions = {}): Promise<PluginEnv> 
     fake,
     store,
     logger,
+    plugin: () => plugin!,
     async stop() {
+      // 先停 server（它停用时要写日志，日志服务比它先撤掉会报错）
+      server?.dispose()
       await h.stop()
       await fake.stop()
       cleanupDirs()

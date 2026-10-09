@@ -133,4 +133,9 @@ export interface CorePorts {
   bundledDataDir: string
   /** 插件版本，写进 User-Agent */
   version: string
+  /**
+   * EVE SSO 的换 token、刷新、撤销用：插件停用时不中止（刷新请求发出去以后 SSO 可能已经换了 refresh token，
+   * 半路放弃就丢了新的）。不写 = http
+   */
+  ssoHttp?: HttpClient
 }

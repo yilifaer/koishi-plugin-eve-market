@@ -30,6 +30,8 @@ export interface CommandContext {
   /** 和 core 用同一个时钟、定时器（卡片上的「N 分钟前」、慢提示） */
   clock: Clock
   scheduler: Scheduler
+  /** EVE 授权页面挂上了没有（要有 Koishi 的 server 插件）；不写 = 没有 */
+  webReady?: () => boolean
 }
 
 /** 一次命令调用 */

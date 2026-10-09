@@ -444,14 +444,19 @@ describe('normalizeConfig: freight and notices', () => {
 
 describe('normalizeConfig: sso, render, advanced', () => {
   it('callback URL', () => {
-    expect(run({ sso: { callbackUrl: 'http://localhost:15140/eve-market/sso/callback' } }).settings.sso.callbackUrl).toBe('http://localhost:15140/eve-market/sso/callback')
-    const wrongPath = run({ sso: { callbackUrl: 'http://127.0.0.1:15140/callback' } })
-    expect(wrongPath.settings.sso.callbackUrl).toBe('http://127.0.0.1:15140/callback')
+    expect(run({ sso: { callbackUrl: 'http://localhost:12345/eve-market/sso/callback' } }).settings.sso.callbackUrl).toBe('http://localhost:12345/eve-market/sso/callback')
+    const wrongPath = run({ sso: { callbackUrl: 'http://127.0.0.1:12345/callback' } })
+    expect(wrongPath.settings.sso.callbackUrl).toBe('http://127.0.0.1:12345/callback')
     expect(wrongPath.lines).toEqual(['EVE 授权：「回调地址」的路径应该是 /eve-market/sso/callback，现在写的地址授权后回不到插件'])
     const notUrl = run({ sso: { callbackUrl: '127.0.0.1:5140' } })
     expect(notUrl.settings.sso.callbackUrl).toBe('http://127.0.0.1:5140/eve-market/sso/callback')
     expect(notUrl.lines).toHaveLength(1)
     expect(run({ sso: { callbackUrl: '' } }).settings.sso.callbackUrl).toBe('http://127.0.0.1:5140/eve-market/sso/callback')
+  })
+
+  it('Client ID and Secret Key go together', () => {
+    expect(run({ sso: { clientSecret: 'fake-secret' } }).lines).toEqual(['EVE 授权：填了 Secret Key，但还没填 Client ID'])
+    expect(run({ sso: { clientId: ' fake-client-id ', clientSecret: ' fake-secret\n' } }).settings.sso).toMatchObject({ clientId: 'fake-client-id', clientSecret: 'fake-secret' })
   })
 
   it('map URLs', () => {

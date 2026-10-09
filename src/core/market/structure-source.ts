@@ -1,5 +1,5 @@
-// 建筑市场（有授权档案的那种）在价格服务里的接口。整站同步和订单簿在 structure.ts（0.0.2），
-// 在那之前用 pendingStructures()：一律「需要授权」，群里看到的和授权异常同一句话。
+// 建筑市场（有授权档案的那种）在价格服务里的接口。整站同步和订单簿在 structure.ts；
+// 没有接上它时用 pendingStructures()：一律「需要授权」，群里看到的和授权异常同一句话。
 // 授权档案留空的建筑不走这里，由价格服务从星域订单里按建筑 ID 过滤。
 
 import type { MarketAvailability, MarketDef, MarketSourceStatus, QuoteReason, TypeId } from '../types'

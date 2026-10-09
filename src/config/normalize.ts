@@ -636,6 +636,7 @@ function normalizeSso(raw: Raw, issues: IssueList): SsoSettings {
     adminKey: text(o.adminKey).trim(),
   }
   if (settings.clientId && !settings.clientSecret) issues.add(s, '填了 Client ID，但还没填 Secret Key', { field: 'clientSecret' })
+  if (!settings.clientId && settings.clientSecret) issues.add(s, '填了 Secret Key，但还没填 Client ID', { field: 'clientId' })
   return settings
 }
 

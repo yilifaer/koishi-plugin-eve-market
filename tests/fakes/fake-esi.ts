@@ -136,7 +136,7 @@ export class FakeEsi {
   /** 正在处理的请求数和最大值（检查并发） */
   inFlight = 0
   peakInFlight = 0
-  private holds: Array<{ pattern: RegExp; release: Promise<void> }> = []
+  private holds: Array<{ pattern: RegExp; match?: (req: EsiLogEntry) => boolean; release: Promise<void> }> = []
 
   // 数据
   regionOrders = new Map<number, RawOrder[]>()
@@ -207,10 +207,10 @@ export class FakeEsi {
     this.faults.push({ method, pattern, fault, times })
   }
 
-  /** 匹配的请求一直等到调用返回的函数 */
-  hold(pattern: RegExp): () => void {
+  /** 匹配的请求一直等到调用返回的函数；match 可以再按请求体挑（例如只挡刷新、不挡用授权码换 token） */
+  hold(pattern: RegExp, match?: (req: EsiLogEntry) => boolean): () => void {
     let release!: () => void
-    const entry = { pattern, release: new Promise<void>((resolve) => (release = resolve)) }
+    const entry = { pattern, match, release: new Promise<void>((resolve) => (release = resolve)) }
     this.holds.push(entry)
     return () => {
       this.holds = this.holds.filter((h) => h !== entry)
@@ -251,7 +251,7 @@ export class FakeEsi {
     this.inFlight++
     this.peakInFlight = Math.max(this.peakInFlight, this.inFlight)
     try {
-      for (const hold of this.holds.filter((h) => h.pattern.test(entry.path))) await hold.release
+      for (const hold of this.holds.filter((h) => h.pattern.test(entry.path) && (!h.match || h.match(entry)))) await hold.release
       await this.beforeRespond?.(entry)
       const fault = this.faults.find((f) => f.method === entry.method && f.pattern.test(entry.path))
       if (fault) {

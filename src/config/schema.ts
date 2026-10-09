@@ -236,7 +236,7 @@ export const Config: Schema<Config> = Schema.intersect([
       callbackUrl: str(DEFAULT_CALLBACK_URL)
         .description('回调地址：必须和开发者网站上填的完全一样，并且是你的浏览器能打开的地址。授权页面会显示应该填什么，不一致时标红，照抄即可。'),
       adminKey: secret()
-        .description('授权页面的口令，可以不填。授权页面只接受本机访问（经 SSH 隧道也算本机）；只有把 Koishi 开放给别的电脑访问时才需要设。'),
+        .description('授权页面的口令。授权页面只接受在 Koishi 所在电脑上直接打开（经 SSH 隧道也算）。只要这台电脑上有反向代理（例如 QQ 机器人用 webhook 方式时的 nginx、Caddy）、内网穿透或端口转发把 Koishi 的端口开放出去，就一定要设；都没有时可以不填。'),
     }).default({} as Config['sso']).loose(),
   }).description('EVE 授权'),
 

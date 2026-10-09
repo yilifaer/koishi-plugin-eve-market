@@ -1,10 +1,10 @@
 {
 "schema": 1,
-"buildNumber": 3579973,
-"sdeReleaseDate": "2026-10-06T11:08:26Z",
-"source": "CCP hf. EVE Online Static Data Export (Tranquility), build 3579973",
+"buildNumber": 3586130,
+"sdeReleaseDate": "2026-10-07T11:10:05Z",
+"source": "CCP hf. EVE Online Static Data Export (Tranquility), build 3586130",
 "license": "EVE Developer License Agreement (non-commercial). NOT covered by CC BY 4.0. See official/NOTICE.md",
-"generatedAt": "2026-10-07T08:09:40.607Z",
+"generatedAt": "2026-10-07T18:57:28.294Z",
 "columns": ["id","en","zh","group","marketGroup","metaGroup","techLevel","volume","packagedVolume","portionSize","variationParent","capacity","py"],
 "types": [
 [34,"Tritanium","三钛合金",18,1857,null,null,0.01,null,1,null,null,"santaihejin sthj"],

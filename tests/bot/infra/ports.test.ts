@@ -392,6 +392,28 @@ describe('Scheduler, Logger and makePorts', () => {
     }
   })
 
+  it('disposing the plugin aborts its own http requests but not the SSO ones (a rotated refresh token is not lost)', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'eve-market-instance-'))
+    const root = await app()
+    try {
+      let plugin!: Context
+      const fork = root.plugin({ name: 'eve-market-ports-test', inject: ['http'], apply: (ctx: Context) => { plugin = ctx } })
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      const auth: AuthStore = { list: async () => [], get: async () => undefined, upsert: async () => {}, remove: async () => {} }
+      const ports = await makePorts(plugin, { auth, bundledDataDir: '/bundled', version: '0.0.2', dir })
+      const own = ports.http.request({ method: 'GET', url: `${base}/slow?ms=300`, timeoutMs: 5000 })
+      const sso = ports.ssoHttp!.request({ method: 'POST', url: `${base}/slow?ms=300`, timeoutMs: 5000 })
+      own.catch(() => undefined)
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      fork.dispose()
+      expect((await failure(own)).kind).toBe('aborted')
+      expect((await sso).body.toString()).toBe('late')
+    } finally {
+      await root.stop()
+      await fs.rm(dir, { recursive: true, force: true })
+    }
+  })
+
   it('the module store is one object for the whole process', () => {
     expect(moduleStore()).toBe(moduleStore())
     expect(moduleStore().get('ports-test', () => ({ n: 1 }))).toBe(moduleStore().get('ports-test', () => ({ n: 2 })))

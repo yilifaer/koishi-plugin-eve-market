@@ -206,4 +206,29 @@ describe('registry outside a running app', () => {
       await h.stop()
     }
   })
+
+  it('only: the command and its names exist only for the sessions it accepts (plugin-help goes by command.ctx)', async () => {
+    const h = await startHarness()
+    try {
+      const scopes = createScopes(h.app, { general: { requireAt: true, allowSandbox: false }, echo: new EchoLog() })
+      const registry = new CommandRegistry(scopes.cmdCtx, { filter: scopes.filter, logger: { debug() {}, info() {}, warn() {}, error() {} } })
+      let admin = false
+      const command = registry.register('marketStatus', { args: '[action:text]', hidden: true, only: () => admin })!
+      const filter = command._aliases['市场状态'].filter as (session: Session) => boolean
+      const session = h.qq.session({ platform: 'qq', type: 'message', user: { id: 'u1' }, channel: { id: 'u1', type: 1 } })
+      expect(filter(session)).toBe(false)
+      expect(command.match(session)).toBe(false)
+      expect(registry.hiddenFrom(session, '市场状态')).toBe(true)
+      expect(registry.hiddenFrom(session, '市场状态刷新')).toBe(true)
+      expect(registry.hiddenFrom(session, '市场状态 -h')).toBe(true)
+      expect(registry.hiddenFrom(session, '查价 乌鸦级')).toBe(false)
+      admin = true
+      expect(filter(session)).toBe(true)
+      expect(command.match(session)).toBe(true)
+      expect(registry.hiddenFrom(session, '市场状态')).toBe(false)
+      command.dispose()
+    } finally {
+      await h.stop()
+    }
+  })
 })
