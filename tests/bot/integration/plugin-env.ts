@@ -85,6 +85,18 @@ export interface EnvOptions extends Pick<HarnessOptions, 'help' | 'onebot'> {
   scheduler?: Scheduler
   /** 加载 Koishi 的 server 插件，监听 127.0.0.1 的这个端口（先用 freePort() 取一个） */
   serverPort?: number
+  /** 提供一个 puppeteer 服务（假浏览器或真的 Chromium）；不写 = 没有 puppeteer */
+  puppeteer?: PuppeteerLike
+}
+
+/** Koishi puppeteer 服务里用到的部分 */
+export interface PuppeteerLike {
+  page(): Promise<unknown>
+}
+
+/** 以插件的形式提供 puppeteer 服务（停用这个插件 = 控制台里停用 puppeteer） */
+export function puppeteerPlugin(service: PuppeteerLike) {
+  return { name: 'fake-puppeteer', apply: (ctx: Context) => { ctx.set('puppeteer', service) } }
 }
 
 export interface PluginEnv {
@@ -112,7 +124,12 @@ export async function freePort(): Promise<number> {
 }
 
 export function baseConfig(config: Record<string, unknown> = {}): Record<string, unknown> {
-  return { ...config, advanced: { manifestUrl: '', glossaryUrl: '', ...config.advanced as object } }
+  return {
+    ...config,
+    advanced: { manifestUrl: '', glossaryUrl: '', ...config.advanced as object },
+    // 势力图地址默认留空：不联网，也不留下预取和定时更新的定时器
+    render: { influenceMapUrl: '', coalitionMapUrl: '', ...config.render as object },
+  }
 }
 
 /** 一种物品在 Jita 4-4 的卖单和买单（只挂在本站） */
@@ -144,8 +161,8 @@ function pluginInstaller(setup: InstallSetup, config: Record<string, unknown>) {
   return (app: Context) => {
     const fork = app.plugin({
       name: 'eve-market',
-      // 和 src/index.ts 一样：授权档案表要用数据库
-      inject: ['database', 'http'],
+      // 和 src/index.ts 一样：授权档案表要用数据库；puppeteer 可选，用的时候才取
+      inject: { database: { required: true }, http: { required: true }, puppeteer: { required: false } },
       Config,
       apply: (ctx: Context, cfg: Config) => installPlugin(ctx, cfg, {
         store,
@@ -183,6 +200,7 @@ export async function startPlugin(options: EnvOptions = {}): Promise<PluginEnv> 
     onebot: options.onebot,
     setup: (app) => {
       if (options.serverPort) server = app.plugin(ServerPlugin, { host: '127.0.0.1', port: options.serverPort })
+      if (options.puppeteer) app.plugin(puppeteerPlugin(options.puppeteer))
       options.before?.(app)
       install(app)
       options.setup?.(app)

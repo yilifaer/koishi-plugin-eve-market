@@ -40,8 +40,8 @@ describe('sumByDate', () => {
       [day('2026-10-01', 10, 1), day('2026-10-02', 20, 2), day('2026-10-03', 30, 3)],
       [day('2026-10-03', 300, 30), day('2026-10-01', 100, 10)],
     ])).toEqual([
-      { date: '2026-10-01', average: 110, highest: 121.00000000000001, lowest: 99, volume: 11, orderCount: 6 },
-      { date: '2026-10-03', average: 330, highest: 363, lowest: 297, volume: 33, orderCount: 6 },
+      { date: '2026-10-01', average: 110, highest: 121.00000000000001, lowest: 99, volume: 11, orderCount: 6, turnover: 1 * 10 + 10 * 100 },
+      { date: '2026-10-03', average: 330, highest: 363, lowest: 297, volume: 33, orderCount: 6, turnover: 3 * 30 + 30 * 300 },
     ])
     expect(sumByDate([])).toEqual([])
   })

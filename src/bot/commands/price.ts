@@ -17,6 +17,7 @@ import type { CardEnv, MarketQuote, SetQuotes } from './price-card'
 import { candidatesCard, notFoundCard, notTradableText, searchKeyword, setName, setsCard, unknownMarketCard } from './resolution'
 import type { ChoiceOptions } from './resolution'
 import { SAY } from './text'
+import { trendButtons, trendPrefix } from './trend'
 import { within } from './wait'
 
 export function registerPrice(commands: CommandContext): void {
@@ -203,17 +204,9 @@ async function quoteSet(inv: Invocation, parsed: ParsedQuery, set: ImplantSet): 
 
 // ------------------------------------------------------------------ 按钮
 
-/** 走势按钮：指名 NPC 市场时带上市场；玩家建筑没有成交历史，不带 */
-function trendPrefix(market: MarketDef | undefined): string {
-  return market && market.type !== 'structure' ? marketPrefix(market) : ''
-}
-
+/** 月度、季度走势（按钮只给这两个，§2.4.1）；args(范围的写法) → 命令参数 */
 function trendActions(inv: Invocation, args: (range: string) => string): Action[] {
-  if (!inv.commands.registry.has('trend')) return []
-  return [
-    { label: '月度走势', command: { id: 'trend', args: args('月') }, primary: true },
-    { label: '季度走势', command: { id: 'trend', args: args('季') } },
-  ]
+  return inv.commands.registry.has('trend') ? trendButtons(['month', 'quarter'], args) : []
 }
 
 function itemActions(inv: Invocation, item: ItemInfo, market: MarketDef | undefined, alt: ItemInfo | undefined): Action[][] {

@@ -1,5 +1,5 @@
-// 后置中间件（§2.18）：命令没匹配到、消息 @ 了机器人时才轮到。
-// 只 @ 没内容 → 简短帮助；内容精确命中一个物品 → 改成「查价 …」再走一遍命令；短的 → 「没看懂…你是想查价吗？」；
+// 后置中间件（§2.18、§3.7.5）：命令没匹配到、消息 @ 了机器人时才轮到。
+// 带战报链接（控制台 brAuto 开着）→ 改成「战报 <链接>」再走一遍命令；只 @ 没内容 → 简短帮助；内容精确命中一个物品 → 改成「查价 …」再走一遍命令；短的 → 「没看懂…你是想查价吗？」；
 // 长的（闲聊）→ 一句「发「帮助」看我能做什么」。回复了就不再调用 next()（否则 Koishi 的「您要找的是不是」还会再发一条）。
 // 没有待办时的「取消」、只有图片没有文字的消息不回复，交给后面的处理者；别人发的管理命令（对他来说不存在）也不回复。
 
@@ -7,6 +7,7 @@ import { h } from 'koishi'
 import type { Context, Next, Session } from 'koishi'
 import { BARE_ITEM_QUERY, CANCEL_WORD, FALLBACK_SHORT_CHARS } from '../../constants'
 import { isFailure } from '../../core/types'
+import { findBrLink } from '../../core/universe'
 import { buildAccess, isAddressed } from '../scope'
 import type { Action } from '../view/card'
 import { hasUrl, safeEcho } from '../view/escape'
@@ -59,6 +60,13 @@ async function runFallback(commands: CommandContext, session: Session, next: Nex
   if (commands.registry.hiddenFrom(session, content)) return
   if (!content) {
     await invoke(commands, 'help', session, (inv) => sendCard(inv, shortCard(inv)).then(() => undefined))
+    return
+  }
+  // 战报自动识别：每条消息只取第一个有效链接
+  const br = commands.settings.render.brAuto ? commands.registry.get('br') : undefined
+  const link = br ? findBrLink(content) : null
+  if (br && link) {
+    await session.execute({ command: br, args: [link.url], options: {} })
     return
   }
   const price = commands.registry.get('price')

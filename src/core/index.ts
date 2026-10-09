@@ -20,7 +20,7 @@ import type {
   Access, AuthService, ConfigIssue, ConfigSection, CoreFailure, CoreOverrides, CoreStatus, DataService,
   EveCore, IndustryService, ItemIndexStats, Settings,
 } from './types'
-import { createUniverseService } from './universe'
+import { createIncursions, createInfluenceMaps, createServerStatus, createUniverseService } from './universe'
 
 const NO_INDUSTRY_YET = '工业计算在 0.2.0 提供'
 const EMPTY_STATS: ItemIndexStats = { items: 0, marketItems: 0, adminAliases: 0, glossaryAliases: 0, sets: 0 }
@@ -151,6 +151,16 @@ export function createEveCore(ports: CorePorts, settings: Settings, overrides: C
   const structures = createStructureMarkets({ esi, auth, registry: markets, cache, clock, scheduler, logger, store, random: overrides.random })
   const prices = createMarketService({ registry: markets, esi, clock, scheduler, logger, store, structures })
   const checks = new ConfigChecks({ settings, data, items, markets, auth, logger })
+  const maps = createInfluenceMaps({
+    http: ports.http,
+    cache,
+    clock,
+    scheduler,
+    logger,
+    urls: { influence: settings.render.influenceMapUrl, coalition: settings.render.coalitionMapUrl },
+    version: ports.version,
+    random: overrides.random,
+  })
   const unsubscribe = data.onUpdate(() => checks.recheck())
   let started: Promise<void> | undefined
   // ready 等数据和授权档案都读好：刚启动时还没读到的档案不会被当成「需要授权」
@@ -167,9 +177,14 @@ export function createEveCore(ports: CorePorts, settings: Settings, overrides: C
     history: createHistoryService({ esi, clock }),
     appraisal: createAppraisalService({ items, markets, prices, settings, store, clock, scheduler, logger, random: overrides.random }),
     industry: pendingIndustry(),
-    universe: createUniverseService({ data, items, store, clock, esi, logger }),
+    universe: createUniverseService({
+      data, items, store, clock, esi, logger,
+      incursions: createIncursions({ esi, data, clock, logger }),
+      status: createServerStatus({ esi, clock, logger }),
+    }),
     auth,
     format: createPriceFormatter(settings.display, clock),
+    maps,
 
     notices(access: Access): string[] {
       const now = clock.now()
@@ -194,12 +209,15 @@ export function createEveCore(ports: CorePorts, settings: Settings, overrides: C
     },
 
     start(): Promise<void> {
+      // 势力图先读本地缓存，过一会儿再预取，不和数据加载抢
+      maps.start()
       started ??= Promise.all([esi.client.start().then(() => data.start()), auth.start().finally(authLoaded)]).then(() => structures.start())
       return started
     },
 
     async stop(): Promise<void> {
       unsubscribe()
+      maps.stop()
       structures.stop()
       auth.stop()
       items.dispose()

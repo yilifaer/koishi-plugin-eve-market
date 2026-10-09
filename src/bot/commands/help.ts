@@ -1,10 +1,10 @@
 // 帮助（§2.14）：注册成隐藏的 eve-market.help [主题]，前置中间件把「帮助」「菜单」「帮助 查价」「帮助查价」改写过来，
 // plugin-help 的快捷方式就不会再匹配；「帮助 <别的插件的命令>」原样交给 plugin-help。
-// 只列已经注册的命令（还没有工业、走势这些），命令名按当前注册的名字。管理命令只写给管理员看
-// （单聊或授权群里），别人发「帮助 市场状态」得到的是主卡片。
+// 只列已经注册的命令（还没有工业），命令名按当前注册的名字。管理命令只写给管理员看
+// （单聊或授权群里；样式自检在哪个群都行），别人发「帮助 市场状态」得到的是主卡片。
 
 import { Command } from 'koishi'
-import { COMMAND_NAMES, SERVER_LABEL } from '../../constants'
+import { COMMAND_NAMES, SERVER_LABEL, TRANSLATE_ALIAS } from '../../constants'
 import type { CommandId } from '../../constants'
 import type { CommandRegistry } from '../register'
 import type { Action, Card, Line, Section } from '../view/card'
@@ -106,7 +106,7 @@ const direct = (env: HelpEnv, ids: CommandId[]): Action[] =>
   ids.filter((id) => has(env, id)).map((id) => ({ label: env.commands.registry.name(id), command: { id }, ...id === 'br' ? { fillOnly: true } : {} }))
 
 function topicButtons(env: HelpEnv): Action[] {
-  const topics: Array<[CommandId, string]> = [['price', '查价说明'], ['batch', '批量说明'], ['manufacture', '制造说明']]
+  const topics: Array<[CommandId, string]> = [['price', '查价说明'], ['batch', '批量说明'], ['trend', '走势说明'], ['manufacture', '制造说明']]
   return topics
     .filter(([id]) => has(env, id))
     .map(([id, label]) => ({ label, command: { id: 'help', args: env.commands.registry.name(id) } }))
@@ -281,10 +281,109 @@ function marketAuthTopic(env: HelpEnv): Card {
   return card
 }
 
+function trendTopic(env: HelpEnv): Card {
+  const name = nameOf(env, 'trend')
+  const card = emptyCard(`**${name}**`)
+  const npc = env.core.markets.visible(env.access).filter((m) => m.type !== 'structure')
+  const example = npc[1] ?? npc[0]
+  card.sections.push({
+    lines: [
+      { text: `${name} 乌鸦级：近 30 天的价格图，再加一张小卡片（最近均价、最高最低、日均成交）` },
+      { text: `${name} 乌鸦级 季：近 90 天；写「年」是近 365 天` },
+      { text: `${name} ${example ? escapeMarkdown(marketPrefix(example)) : ''}乌鸦级：指定 NPC 市场，按它所在的星域` },
+    ],
+  }, {
+    style: 'plain',
+    lines: [{ text: '数据是 ESI 的星域成交历史，每天更新一次；玩家建筑市场没有成交历史。' }],
+  })
+  card.actions = back(env, 'trend')
+  return card
+}
+
+function brTopic(env: HelpEnv): Card {
+  const name = nameOf(env, 'br')
+  const card = emptyCard(`**${name}**`)
+  card.sections.push({
+    lines: [
+      { text: `${name} 加上 BR 工具的战报链接：把战报页面截图发出来` },
+      { text: '也可以直接 @我 发战报链接，不用写命令' },
+      { text: '一般要 10–30 秒；长战报分成两张图；同一个链接 10 分钟内再发很快' },
+    ],
+  })
+  card.actions = back(env, 'br')
+  return card
+}
+
+/** 「中英对照」：别名还在（没有和别的插件撞名）时写出来 */
+function translateAlias(env: HelpEnv): string {
+  const command = env.commands.registry.get('translate')
+  return command && Command.normalize(TRANSLATE_ALIAS) in command._aliases ? `（也可以写「${escapeMarkdown(TRANSLATE_ALIAS)}」）` : ''
+}
+
+function translateTopic(env: HelpEnv): Card {
+  const name = nameOf(env, 'translate')
+  const card = emptyCard(`**${name}**${translateAlias(env)}`)
+  card.sections.push({
+    lines: [
+      { text: `${name} 三钛合金：物品的中英文名，物品有别名时一起列出` },
+      { text: `${name} Jita：星系、星座、星域（星系带安全等级）` },
+      { text: `${name} 打X：黑话表里的说法和解释` },
+    ],
+  })
+  card.actions = back(env, 'translate')
+  return card
+}
+
+const UNIVERSE: CommandId[] = ['incursion', 'influenceMap', 'coalitionMap', 'serverStatus']
+
+function universeTopic(env: HelpEnv): Card {
+  const ids = UNIVERSE.filter((id) => has(env, id))
+  const card = emptyCard(`**${ids.map((id) => nameOf(env, id)).join(' · ')}**`)
+  const about: Partial<Record<CommandId, string>> = {
+    incursion: '当前所有入侵的位置、状态和影响力',
+    influenceMap: '欧服主权影响力图（来源 Verite，每小时更新）',
+    coalitionMap: '联盟影响力图（来源 Verite，每小时更新）',
+    serverStatus: '在线人数、本次开服、下次维护',
+  }
+  card.sections.push({ lines: ids.map((id) => ({ text: `${nameOf(env, id)}：${about[id] ?? ''}` })) }, {
+    style: 'plain',
+    lines: [{ text: '这几个命令都不用加参数。' }],
+  })
+  card.actions = [
+    ids.map((id) => ({ label: env.commands.registry.name(id), command: { id } })),
+    [{ label: '全部帮助', command: { id: 'help' } }],
+  ]
+  return card
+}
+
+function selfTestTopic(env: HelpEnv): Card {
+  const name = nameOf(env, 'selfTest')
+  const card = emptyCard(`**${name}**（管理员）`)
+  card.sections.push({
+    lines: [
+      { text: `${name} 1：Markdown 格式、按钮、可点文字，最后是回报格式` },
+      { text: `${name} 2：图片下面的说明、引用回复、@ 提醒、长消息和长图` },
+      { text: '每条测试消息开头写了正常是什么样子；上线前在测试群里做一次，照回报格式把结果告诉开发者' },
+    ],
+  })
+  card.actions = [[
+    { label: `${env.commands.registry.name('selfTest')} 1`, command: { id: 'selfTest', args: '1' }, primary: true },
+    { label: `${env.commands.registry.name('selfTest')} 2`, command: { id: 'selfTest', args: '2' } },
+  ]]
+  return card
+}
+
 const TOPICS: Partial<Record<CommandId, (env: HelpEnv) => Card>> = {
   price: priceTopic,
   batch: batchTopic,
+  trend: trendTopic,
   search: searchTopic,
+  br: brTopic,
+  translate: translateTopic,
+  incursion: universeTopic,
+  influenceMap: universeTopic,
+  coalitionMap: universeTopic,
+  serverStatus: universeTopic,
   groupId: groupIdTopic,
 }
 
@@ -293,8 +392,9 @@ const ADMIN_TOPICS: Partial<Record<CommandId, (env: HelpEnv) => Card>> = {
   marketAuth: marketAuthTopic,
 }
 
-/** 没写分项说明的命令回主卡片；管理命令只给管理员看说明 */
+/** 没写分项说明的命令回主卡片；管理命令只给管理员看说明（样式自检不限群） */
 function topicCard(env: HelpEnv, id: CommandId): Card | undefined {
+  if (id === 'selfTest') return env.access.isAdmin ? selfTestTopic(env) : undefined
   const admin = adminHere(env) ? ADMIN_TOPICS[id] : undefined
   return (TOPICS[id] ?? admin)?.(env)
 }

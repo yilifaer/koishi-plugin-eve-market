@@ -1,5 +1,7 @@
 // 金额、数量、体积共用的数字格式：在十进制上四舍五入（.5 远离 0），千分位可关。
 
+import { DIFF_MIN_PCT } from '../../constants'
+
 /** 在十进制字符串上移动小数点，避免 1.005 × 100 = 100.49999… 这类二进制误差 */
 function shift(value: number, digits: number): number {
   const [mantissa, exponent = '0'] = String(value).split('e')
@@ -10,6 +12,12 @@ function shift(value: number, digits: number): number {
 export function roundHalfAway(value: number, digits: number): number {
   const rounded = Math.sign(value) * shift(Math.round(shift(Math.abs(value), digits)), -digits)
   return rounded === 0 ? 0 : rounded
+}
+
+/** 涨跌幅（百分数）→「4.0%」：保留 1 位小数，不带方向；绝对值不到 DIFF_MIN_PCT 时 undefined（算持平） */
+export function formatChange(pct: number): string | undefined {
+  if (!(Math.abs(pct) >= DIFF_MIN_PCT)) return undefined
+  return `${roundHalfAway(Math.abs(pct), 1).toFixed(1)}%`
 }
 
 export function groupThousands(digits: string): string {

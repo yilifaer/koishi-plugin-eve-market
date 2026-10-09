@@ -15,6 +15,7 @@ interface Call {
   kind: 'markdown' | 'text' | 'image'
   content: string
   rows?: KeyboardRow[]
+  quote?: string
 }
 
 class FakeSender implements Sender {
@@ -32,8 +33,8 @@ class FakeSender implements Sender {
     return this.next()
   }
 
-  async text(_: Session, content: string) {
-    this.calls.push({ kind: 'text', content })
+  async text(_: Session, content: string, quote?: string) {
+    this.calls.push({ kind: 'text', content, ...quote ? { quote } : {} })
     return this.next()
   }
 
@@ -310,4 +311,36 @@ describe('Replier', () => {
     expect(sender.calls).toHaveLength(2)
     expect(sender.calls[1].content).toMatch(/另有 \d+ 行未显示$/)
   })
+
+  it('a quoted text quotes only its first part; maxChars allows one longer message up to the hard limit', async () => {
+    const { replier, sender } = setup()
+    const long = Array.from({ length: 500 }, (_, i) => `第 ${i} 行：内容`).join('\n')
+    expect(long.length).toBeGreaterThan(MAX_MESSAGE_CHARS)
+    expect(await replier.text(long, { quote: 'MSG-9' })).toBe(true)
+    expect(sender.calls.map((c) => c.quote)).toEqual(['MSG-9', undefined])
+    const { replier: one, sender: single } = setup()
+    const text = '字'.repeat(3900)
+    expect(await one.text(text, { maxChars: 3900 })).toBe(true)
+    expect(single.calls.map((c) => c.content.length)).toEqual([3900])
+    // 不会超过硬上限
+    const { replier: capped, sender: cut } = setup()
+    expect(await capped.text('字'.repeat(4100), { maxChars: 9999 })).toBe(true)
+    expect(cut.calls.every((c) => c.content.length <= 4000)).toBe(true)
+  })
+
+  it('a card can be allowed one longer message (up to the hard limit)', async () => {
+    let rows = 40
+    while (toQQMarkdown(longCard(rows), renderOptions()).md.length <= MAX_MESSAGE_CHARS) rows++
+    const card = longCard(rows)
+    const length = toQQMarkdown(card, renderOptions()).md.length
+    expect(length).toBeLessThanOrEqual(4000)
+    const normal = setup()
+    await normal.replier.card(card)
+    expect(normal.sender.calls).toHaveLength(2)
+    // 按钮写成文字的那种版式也要放得下，所以给到硬上限
+    const longer = setup()
+    expect(await longer.replier.card(card, { maxChars: 4000 })).toBe(true)
+    expect(longer.sender.calls.map((c) => c.content.length)).toEqual([length])
+  })
 })
+

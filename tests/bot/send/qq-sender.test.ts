@@ -100,6 +100,15 @@ describe('QQSender', () => {
     expect(elements[0].attrs.content).toBe('a <b> & <qqbot-at-user id="x" />')
   })
 
+  it('a quoted text reply puts a quote element in front (the adapter turns it into message_reference)', async () => {
+    const { session, bot } = fakeSession()
+    await sender.text(session, '引用测试', 'MSG-1')
+    const elements = bot.sendMessage.mock.calls[0][1] as h[]
+    expect(elements.map((e) => e.type)).toEqual(['quote', 'text'])
+    expect(elements[0].attrs.id).toBe('MSG-1')
+    expect(elements[1].attrs.content).toBe('引用测试')
+  })
+
   it('sends images as data URLs with the MIME type and only the bytes of the view', async () => {
     const { session, bot } = fakeSession()
     const backing = new Uint8Array([0, 0xff, 0xd8, 0xff, 0])
@@ -142,6 +151,9 @@ describe('SessionSender (sandbox)', () => {
     expect((text as h).attrs.content).toBe('<不是标签>')
     expect((image as h[]).map((e) => e.type)).toEqual(['img', 'text'])
     expect((image as h[])[0].attrs.src).toMatch(/^data:image\/png;base64,/)
+    await sender.text(session, '引用', 'MSG-2')
+    const quoted = (send.mock.calls as unknown as Array<[h[]]>)[2][0]
+    expect(quoted.map((e) => e.type)).toEqual(['quote', 'text'])
   })
 
   it('senderFor picks the adapter path only on qq', () => {

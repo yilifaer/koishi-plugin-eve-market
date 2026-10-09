@@ -50,6 +50,8 @@ export type FailureReason =
   | 'two-markets'
   /** 批量查价表头里的价格调整超出范围 */
   | 'modifier-range'
+  /** UPSTREAM_UNAVAILABLE：图片超过大小上限（势力图） */
+  | 'too-large'
 
 export interface CoreFailure {
   ok: false
@@ -750,6 +752,8 @@ export interface HistoryPoint {
   lowest: number
   volume: number
   orderCount: number
+  /** 当天的成交额（ISK）：各件的 volume × average 之和（套装）；不写 = volume × average */
+  turnover?: number
 }
 
 export interface HistoryResult {
@@ -1012,6 +1016,7 @@ export interface Incursion {
   influence: number
   hasBoss: boolean
   faction: NamePair | null
+  /** 集结星系在前，其余按 ESI 的顺序。数据里没有的星系（staging 同样）：en 是 ID 本身、zh 为空、security 是 NaN */
   systems: Array<NamePair & { security: number }>
 }
 
@@ -1029,6 +1034,12 @@ export interface ServerStatus {
   startTime: number
   vip: boolean
   dataTime: number | null
+  /** 已经运行了多久（秒）：现在 − startTime */
+  uptimeSec: number
+  /** 下一次例行维护开始的时间（每天 EVE 时间 11:00） */
+  nextDowntime: number
+  /** 请求失败，用的是几分钟内的缓存（维护时间里不会这样） */
+  stale: boolean
 }
 
 export type TranslateKind = 'item' | 'group' | 'category' | 'system' | 'constellation' | 'region' | 'slang'
@@ -1069,6 +1080,37 @@ export interface UniverseService {
   serverStatus(): Promise<ServerStatus | CoreFailure>
   translate(q: string, limit: number): TranslateResult
   system(id: number): SystemView | undefined
+}
+
+// ------------------------------------------------------------------ 势力图（§2.10）
+
+export type InfluenceMapKind = 'influence' | 'coalition'
+
+/** 交给机器人的图片只有这两种（MIME 都按文件头判断） */
+export type ImageMime = 'image/png' | 'image/jpeg'
+
+export interface InfluenceMap {
+  kind: InfluenceMapKind
+  /** 下载到的图片原样（不转码） */
+  body: Buffer
+  /** 按文件头判断，不信响应头 */
+  mime: ImageMime
+  /** 图片更新时间：来源的 Last-Modified，没有时是第一次下载到这张图的时间 */
+  updatedAt: number
+  /** 最近一次下载或确认没变的时间 */
+  checkedAt: number
+  /** 最近一次更新失败（来源暂时访问不了），发的是旧图 */
+  stale: boolean
+}
+
+export interface InfluenceMapService {
+  /**
+   * 控制台里地址留空 → NOT_CONFIGURED；下载失败又没有旧图 → UPSTREAM_UNAVAILABLE（图片超过大小上限时 reason 是 too-large）。
+   * 有缓存时很快返回（过期了最多等 2 秒新图）；没有缓存时要等下载（最多 30 秒）
+   */
+  get(kind: InfluenceMapKind): Promise<InfluenceMap | CoreFailure>
+  /** 本地已经有这张图（没有时第一次要现下载，bot 按它决定要不要准备慢提示） */
+  cached(kind: InfluenceMapKind): boolean
 }
 
 // ------------------------------------------------------------------ EVE 授权（服务角色）
@@ -1212,6 +1254,8 @@ export interface EveCore {
   universe: UniverseService
   auth: AuthService
   format: PriceFormatter
+  /** 势力图、联盟势力图 */
+  maps: InfluenceMapService
   /** 查价告示：启用、没过期、本群能看的前 MAX_NOTICES 条 */
   notices(access: Access): string[]
   status(): CoreStatus

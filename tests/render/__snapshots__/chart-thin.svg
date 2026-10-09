@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450" viewBox="0 0 800 450" font-family="&quot;PingFang SC&quot;,&quot;Hiragino Sans GB&quot;,&quot;Microsoft YaHei&quot;,&quot;Noto Sans CJK SC&quot;,sans-serif">
+<defs><clipPath id="plot"><rect x="70" y="124" width="706" height="184"/></clipPath></defs>
+<rect width="800" height="450" fill="#fcfcfb"/>
+<text x="24" y="36" font-size="22" fill="#0b0b0b"><tspan font-weight="700">某种旗舰 Some Capital</tspan><tspan fill="#52514e"> · 伏尔戈（Jita）· 近 30 天</tspan></text>
+<text x="24" y="66" font-size="13" fill="#52514e">最新均价</text><text x="24" y="91" font-size="19" fill="#0b0b0b" font-weight="600">1.50B</text><text x="149.3" y="66" font-size="13" fill="#52514e">区间涨跌</text><text x="149.3" y="91" font-size="19" fill="#0b0b0b" font-weight="600">持平</text><text x="274.7" y="66" font-size="13" fill="#52514e">最高均价</text><text x="274.7" y="91" font-size="19" fill="#0b0b0b" font-weight="600">1.50B</text><text x="400" y="66" font-size="13" fill="#52514e">最低均价</text><text x="400" y="91" font-size="19" fill="#0b0b0b" font-weight="600">1.50B</text><text x="525.3" y="66" font-size="13" fill="#52514e">日均成交量</text><text x="525.3" y="91" font-size="19" fill="#0b0b0b" font-weight="600">0.2</text><text x="650.7" y="66" font-size="13" fill="#52514e">日均成交额</text><text x="650.7" y="91" font-size="19" fill="#0b0b0b" font-weight="600">258.62M</text>
+<line x1="24" y1="106" x2="776" y2="106" stroke="#e1e0d9" stroke-width="1"/>
+<line x1="70" y1="277.3" x2="776" y2="277.3" stroke="#e1e0d9" stroke-width="1"/>
+<text x="60" y="281.9" font-size="13" fill="#52514e" text-anchor="end">1.48B</text>
+<line x1="70" y1="216" x2="776" y2="216" stroke="#e1e0d9" stroke-width="1"/>
+<text x="60" y="220.6" font-size="13" fill="#52514e" text-anchor="end">1.50B</text>
+<line x1="70" y1="154.7" x2="776" y2="154.7" stroke="#e1e0d9" stroke-width="1"/>
+<text x="60" y="159.2" font-size="13" fill="#52514e" text-anchor="end">1.52B</text>
+<path d="M152.4 216L175.9 216L175.9 216L152.4 216ZM361.2 216H367.2V216H361.2ZM549.4 216H555.4V216H549.4ZM714.2 216H720.2V216H714.2Z" fill="rgba(42, 120, 214, 0.12)" clip-path="url(#plot)"/>
+<path d="M175.9 216L364.2 216M364.2 216L552.4 216M552.4 216L717.2 216" fill="none" stroke="#2a78d6" stroke-width="1.5" stroke-dasharray="3 4" stroke-linecap="round" opacity="0.7"/>
+<path d="M152.4 216L175.9 216" fill="none" stroke="#2a78d6" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="364.2" cy="216" r="3" fill="#2a78d6"/>
+<circle cx="552.4" cy="216" r="3" fill="#2a78d6"/>
+<circle cx="717.2" cy="216" r="4.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="60" y="336.6" font-size="13" fill="#52514e" text-anchor="end">1</text>
+<text x="60" y="354" font-size="11" fill="#52514e" text-anchor="end">成交量</text>
+<line x1="70" y1="332" x2="776" y2="332" stroke="#e1e0d9" stroke-width="1"/>
+<path d="M145.3 388V335Q145.3 332 148.3 332H156.4Q159.4 332 159.4 335V388ZM168.8 388V335Q168.8 332 171.8 332H180Q183 332 183 335V388ZM357.1 388V335Q357.1 332 360.1 332H368.2Q371.2 332 371.2 335V388ZM545.4 388V335Q545.4 332 548.4 332H556.5Q559.5 332 559.5 335V388ZM710.1 388V335Q710.1 332 713.1 332H721.2Q724.2 332 724.2 335V388Z" fill="#86b6ef"/>
+<line x1="70" y1="388" x2="776" y2="388" stroke="#52514e" stroke-width="1"/>
+<line x1="105.3" y1="388" x2="105.3" y2="392" stroke="#52514e" stroke-width="1"/>
+<text x="105.3" y="408" font-size="13" fill="#52514e" text-anchor="middle">09/11</text>
+<line x1="270" y1="388" x2="270" y2="392" stroke="#52514e" stroke-width="1"/>
+<text x="270" y="408" font-size="13" fill="#52514e" text-anchor="middle">09/18</text>
+<line x1="434.8" y1="388" x2="434.8" y2="392" stroke="#52514e" stroke-width="1"/>
+<text x="434.8" y="408" font-size="13" fill="#52514e" text-anchor="middle">09/25</text>
+<line x1="599.5" y1="388" x2="599.5" y2="392" stroke="#52514e" stroke-width="1"/>
+<text x="599.5" y="408" font-size="13" fill="#52514e" text-anchor="middle">10/02</text>
+<line x1="764.2" y1="388" x2="764.2" y2="392" stroke="#52514e" stroke-width="1"/>
+<text x="757.2" y="408" font-size="13" fill="#52514e" text-anchor="middle">10/09</text>
+<text x="24" y="436" font-size="13" fill="#52514e">ESI 市场历史（星域）· 截至 2026-10-07</text>
+<line x1="509" y1="431.5" x2="525" y2="431.5" stroke="#2a78d6" stroke-width="2.5" stroke-linecap="round"/><text x="531" y="436" font-size="13" fill="#52514e">日均价</text><rect x="586" y="425" width="16" height="12" rx="2" fill="rgba(42, 120, 214, 0.12)"/><text x="608" y="436" font-size="13" fill="#52514e">每日最高–最低</text><rect x="719" y="425" width="8" height="12" rx="1.5" fill="#86b6ef"/><text x="737" y="436" font-size="13" fill="#52514e">成交量</text>
+</svg>

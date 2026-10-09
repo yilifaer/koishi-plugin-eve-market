@@ -1,11 +1,13 @@
-// UniverseService：中英对照、星系信息；入侵和服务器状态在 0.0.3 接上（之前回复 NOT_CONFIGURED）。
+// UniverseService：中英对照、星系信息、入侵、服务器状态（入侵和服务器状态没有接上时回复 NOT_CONFIGURED）。
 
 import type { Clock, Logger, ModuleStore } from '../ports'
 import type {
   CoreFailure, DataService, IncursionsResult, ItemResolver, ServerStatus, SystemView, TranslateResult, UniverseService,
 } from '../types'
+import type { IncursionsSource } from './incursions'
 import { UniverseNames } from './names'
 import type { NamesEsi } from './names'
+import type { ServerStatusSource } from './status'
 import { Translator } from './translate'
 
 export interface UniverseServiceOptions {
@@ -18,6 +20,10 @@ export interface UniverseServiceOptions {
   logger?: Logger
   /** 默认 USE_GLOSSARY */
   useGlossary?: boolean
+  /** 入侵（§2.9）；不给时回复 NOT_CONFIGURED */
+  incursions?: Pick<IncursionsSource, 'get'>
+  /** 服务器状态（§2.12）；不给时回复 NOT_CONFIGURED */
+  status?: Pick<ServerStatusSource, 'get'>
 }
 
 export interface ManagedUniverseService extends UniverseService {
@@ -26,24 +32,24 @@ export interface ManagedUniverseService extends UniverseService {
 }
 
 function notYet(what: string): CoreFailure {
-  return { ok: false, code: 'NOT_CONFIGURED', message: `${what}在 0.0.3 提供` }
+  return { ok: false, code: 'NOT_CONFIGURED', message: `${what}没有接上` }
 }
 
 class Service implements ManagedUniverseService {
   readonly names: UniverseNames
   private readonly translator: Translator
 
-  constructor(o: UniverseServiceOptions) {
+  constructor(private readonly o: UniverseServiceOptions) {
     this.names = new UniverseNames({ data: o.data, clock: o.clock, esi: o.esi, logger: o.logger })
     this.translator = new Translator({ data: o.data, items: o.items, store: o.store, useGlossary: o.useGlossary })
   }
 
   async incursions(): Promise<IncursionsResult | CoreFailure> {
-    return notYet('入侵')
+    return this.o.incursions ? this.o.incursions.get() : notYet('入侵')
   }
 
   async serverStatus(): Promise<ServerStatus | CoreFailure> {
-    return notYet('服务器状态')
+    return this.o.status ? this.o.status.get() : notYet('服务器状态')
   }
 
   translate(q: string, limit: number): TranslateResult {

@@ -60,6 +60,13 @@ export interface ReplierOptions {
   now?: () => number
 }
 
+export interface TextOptions {
+  /** 引用这条消息（消息 ID） */
+  quote?: string
+  /** 单条上限，默认 MAX_MESSAGE_CHARS，最多 HARD_MAX_MESSAGE_CHARS（样式自检的长消息用） */
+  maxChars?: number
+}
+
 type Level = 'markdown' | 'no-buttons' | 'text'
 type Recovery = 'stop' | 'no-buttons' | 'text' | 'scrub'
 
@@ -111,9 +118,9 @@ export class Replier {
   }
 
   /** 渲染 → 分段 → 发送 → 失败降级；然后单独发 copyBlocks。全部发出去时返回 true */
-  async card(card: Card): Promise<boolean> {
+  async card(card: Card, options: Pick<TextOptions, 'maxChars'> = {}): Promise<boolean> {
     const copies = (card.copyBlocks ?? []).filter((c) => c.trim())
-    const parts = this.layout(card, copies.length)
+    const parts = this.layout(card, copies.length, Math.min(HARD_MAX_MESSAGE_CHARS, options.maxChars ?? MAX_MESSAGE_CHARS))
     for (let i = 0; i < parts.plan.parts.length; i++) {
       if (!(await this.cardPart(parts, i))) return false
     }
@@ -124,10 +131,11 @@ export class Replier {
   }
 
   /** 纯文字（太长时按行拆分，段数不超过剩下的预算） */
-  async text(content: string): Promise<boolean> {
-    const parts = split(content, MAX_MESSAGE_CHARS, Math.min(MAX_SPLIT_PARTS, Math.max(1, this.remaining())), (n) => `另有 ${n} 行未显示`)
-    for (const part of parts) {
-      if (!(await this.sendText(part))) return false
+  async text(content: string, options: TextOptions = {}): Promise<boolean> {
+    const max = Math.min(HARD_MAX_MESSAGE_CHARS, options.maxChars ?? MAX_MESSAGE_CHARS)
+    const parts = split(content, max, Math.min(MAX_SPLIT_PARTS, Math.max(1, this.remaining())), (n) => `另有 ${n} 行未显示`)
+    for (let i = 0; i < parts.length; i++) {
+      if (!(await this.sendText(parts[i], i === 0 ? options.quote : undefined))) return false
     }
     return parts.length > 0
   }
@@ -152,7 +160,7 @@ export class Replier {
     return false
   }
 
-  private layout(card: Card, copies: number): CardParts {
+  private layout(card: Card, copies: number, maxChars: number): CardParts {
     const render = this.opts.render
     const text = textLayout(card, render)
     const rich = this.currentLevel() !== 'text'
@@ -162,7 +170,7 @@ export class Replier {
     // copyBlocks 也要占预算，但卡片至少能发一段
     const room = this.remaining()
     const maxParts = Math.max(1, Math.min(MAX_SPLIT_PARTS, room - Math.min(copies, room - 1)))
-    const plan = planSplit(layouts, MAX_MESSAGE_CHARS, maxParts)
+    const plan = planSplit(layouts, maxChars, maxParts)
     return { plan, text, markdown, plain, rows: rich ? keyboardRows(card, render) : [] }
   }
 
@@ -205,22 +213,22 @@ export class Replier {
     return this.finish(await this.attempt('text', fallback.text))
   }
 
-  private async sendText(content: string): Promise<boolean> {
-    const result = await this.attempt('text', content)
+  private async sendText(content: string, quote?: string): Promise<boolean> {
+    const result = await this.attempt('text', content, [], quote)
     if (!result || result.ok) return !!result?.ok
     if (recoveryFor(result, { markdown: false, buttons: false }) !== 'scrub' || this.degraded) return this.halt()
     this.degraded = true
     this.scrub = true
-    return this.finish(await this.attempt('text', content))
+    return this.finish(await this.attempt('text', content, [], quote))
   }
 
   /** 检查预算和时间后发一条；没发（预算用完、太晚）时返回 null */
-  private async attempt(kind: 'markdown' | 'text', content: string, rows: KeyboardRow[] = []): Promise<SendResult | null> {
+  private async attempt(kind: 'markdown' | 'text', content: string, rows: KeyboardRow[] = [], quote?: string): Promise<SendResult | null> {
     if (!this.gate()) return null
     const body = clip(this.scrub ? scrubUrls(content) : content)
     const result = kind === 'markdown'
       ? await this.sender.markdown(this.session, body, rows)
-      : await this.sender.text(this.session, body)
+      : quote ? await this.sender.text(this.session, body, quote) : await this.sender.text(this.session, body)
     this.used += result.sent
     if (result.ok) this.remember(body)
     else this.logFailure(result, kind, body.length)

@@ -192,7 +192,7 @@ describe('columnQuantity', () => {
 describe('normalizeLine', () => {
   it('folds full-width characters and spaces, keeps tabs, drops zero-width characters', () => {
     expect(normalizeLine('ＲＡＶＥＮ＊１０')).toBe('RAVEN*10')
-    expect(normalizeLine('　乌鸦级　x10​ ')).toBe('乌鸦级 x10')
+    expect(normalizeLine('　乌鸦级　x10\u200b ')).toBe('乌鸦级 x10')
     expect(normalizeLine('Raven\t2')).toBe('Raven\t2')
     expect(normalizeLine('Raven ✕ 2')).toBe('Raven × 2')
     expect(normalizeLine('50,000 m³')).toBe('50,000 m3')

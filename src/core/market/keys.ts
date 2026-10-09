@@ -2,7 +2,7 @@
 // NFKC、小写、破折号统一成 -、连续空白合成一个。core 不能引用 config，所以这里另写一份。
 
 const DASHES = /[‐-―−]/g
-const ZERO_WIDTH = /[​-‍⁠﻿]/g
+const ZERO_WIDTH = /[\u200b-\u200d\u2060\ufeff]/g
 const WIDE = /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]/
 
 export function marketKey(text: string): string {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createPriceFormatter, formatAgo, formatClock, formatDuration, zonedParts } from '../../../src/core/format'
+import { createPriceFormatter, formatAgo, formatClock, formatDateTime, formatDuration, formatTime, zonedParts } from '../../../src/core/format'
 import { FakeTime } from '../../fakes/fake-time'
 
 const DISPLAY = { priceDisplayMode: 'full_and_compact', compactDecimals: 2, thousandSeparator: true, showCurrency: true } as const
@@ -44,6 +44,14 @@ describe('clock', () => {
     expect(formatClock(Date.UTC(2026, 9, 7, 11, 0), now, 'UTC')).toBe('11:00')
     expect(formatClock(Date.UTC(2026, 9, 7, 11, 0), now, 'Asia/Shanghai')).toBe('19:00')
     expect(zonedParts(Date.UTC(2026, 9, 7, 16, 0), 'Asia/Shanghai')).toEqual({ year: 2026, month: 10, day: 8, hour: 0, minute: 0 })
+  })
+
+  it('HH:MM and MM/DD HH:MM in a given time zone', () => {
+    const at = Date.UTC(2026, 9, 7, 16, 5)
+    expect(formatTime(at, 'UTC')).toBe('16:05')
+    expect(formatTime(at, 'Asia/Shanghai')).toBe('00:05')
+    expect(formatDateTime(at, 'UTC')).toBe('10/07 16:05')
+    expect(formatDateTime(at, 'Asia/Shanghai')).toBe('10/08 00:05')
   })
 })
 

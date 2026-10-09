@@ -9,6 +9,7 @@ import type { Clock, Logger, ModuleStore, Scheduler } from '../../core/ports'
 import type { Access, EveCore, Settings } from '../../core/types'
 import { describeError } from '../../core/util'
 import { choicesOf, pendingKey } from '../pending'
+import type { Media } from '../media'
 import type { PendingStore } from '../pending'
 import type { CommandRegistry } from '../register'
 import { buildAccess } from '../scope'
@@ -32,6 +33,8 @@ export interface CommandContext {
   scheduler: Scheduler
   /** EVE 授权页面挂上了没有（要有 Koishi 的 server 插件）；不写 = 没有 */
   webReady?: () => boolean
+  /** 出图和截图（走势图、战报）；不写 = 没有（走势只发文字卡片，战报回复截图服务没有启动） */
+  media?: Media
 }
 
 /** 一次命令调用 */

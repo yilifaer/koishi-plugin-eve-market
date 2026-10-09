@@ -37,11 +37,24 @@ export function zonedParts(ms: number, timeZone: string): ZonedParts {
 
 const pad = (n: number) => String(n).padStart(2, '0')
 
+const hourMinute = (at: ZonedParts) => `${pad(at.hour)}:${pad(at.minute)}`
+const monthDay = (at: ZonedParts) => `${pad(at.month)}/${pad(at.day)}`
+
+/** HH:MM（在这个时区里） */
+export function formatTime(ms: number, timeZone: string): string {
+  return hourMinute(zonedParts(ms, timeZone))
+}
+
+/** MM/DD HH:MM（在这个时区里） */
+export function formatDateTime(ms: number, timeZone: string): string {
+  const at = zonedParts(ms, timeZone)
+  return `${monthDay(at)} ${hourMinute(at)}`
+}
+
 /** 和 now 同一天（在这个时区里）写 HH:MM，否则 MM/DD HH:MM */
 export function formatClock(ms: number, now: number, timeZone: string): string {
   const at = zonedParts(ms, timeZone)
   const today = zonedParts(now, timeZone)
-  const time = `${pad(at.hour)}:${pad(at.minute)}`
   const sameDay = at.year === today.year && at.month === today.month && at.day === today.day
-  return sameDay ? time : `${pad(at.month)}/${pad(at.day)} ${time}`
+  return sameDay ? hourMinute(at) : `${monthDay(at)} ${hourMinute(at)}`
 }

@@ -1,10 +1,10 @@
 // HistoryService（§6.8 的数据部分）：ESI 的星域成交历史，每天一行。
 // - 按 (星域, 物品) 缓存，缓存时间和出错时用多旧的数据以 ESI 客户端的路由设置为准；
 // - PLEX 这类全局市场物品总是用全局市场星域；
-// - 多个物品（植入体套装）按日期对齐后相加，缺件的日子不算；完全没有历史的物品列进 missing；
+// - 多个物品（植入体套装）按日期对齐后相加，缺件的日子不算；成交额按件算好再相加；完全没有历史的物品列进 missing；
 // - 窗口是最近 days 个 UTC 日（含今天）。
 
-import { GLOBAL_MARKET_REGION, GLOBAL_MARKET_TYPES } from '../../constants'
+import { DAY_MS, GLOBAL_MARKET_REGION, GLOBAL_MARKET_TYPES } from '../../constants'
 import { isEsiError } from '../esi'
 import type { EsiApi, EsiHistoryDay, EsiResult } from '../esi'
 import type { Clock } from '../ports'
@@ -19,7 +19,6 @@ export interface HistoryServiceOptions {
   clock: Clock
 }
 
-const DAY_MS = 86_400_000
 /** ESI 给大约 13 个月 */
 export const MAX_HISTORY_DAYS = 400
 
@@ -42,15 +41,18 @@ function isNoHistory(error: unknown): boolean {
   return isEsiError(error) && error.kind === 'http' && error.status === 404
 }
 
-/** 各件按日期对齐后相加，只留每一件都有成交的日子 */
+/**
+ * 各件按日期对齐后相加，只留每一件都有成交的日子。
+ * 成交额（turnover）是各件的 volume × average 之和：相加后的成交量乘相加后的均价会多算好几倍
+ */
 export function sumByDate(series: ReadonlyArray<readonly EsiHistoryDay[]>): HistoryPoint[] {
   if (!series.length) return []
-  const sums = new Map<string, HistoryPoint & { parts: number }>()
+  const sums = new Map<string, Required<HistoryPoint> & { parts: number }>()
   for (const days of series) {
     for (const d of days) {
       const sum = sums.get(d.date)
       if (!sum) {
-        sums.set(d.date, { ...d, parts: 1 })
+        sums.set(d.date, { ...d, turnover: d.volume * d.average, parts: 1 })
         continue
       }
       sum.average += d.average
@@ -58,6 +60,7 @@ export function sumByDate(series: ReadonlyArray<readonly EsiHistoryDay[]>): Hist
       sum.lowest += d.lowest
       sum.volume += d.volume
       sum.orderCount += d.orderCount
+      sum.turnover += d.volume * d.average
       sum.parts++
     }
   }

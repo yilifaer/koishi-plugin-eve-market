@@ -4,7 +4,7 @@
 /** 汉字（含扩展 A 和兼容区） */
 export const HAN = '\\u3400-\\u4dbf\\u4e00-\\u9fff\\uf900-\\ufaff'
 
-const ZERO_WIDTH = /[​-‍⁠﻿]/g
+const ZERO_WIDTH = /[\u200b-\u200d\u2060\ufeff]/g
 const DASHES = /[‐‑‒–—―−]/g
 
 export function normalizeLine(raw: string): string {

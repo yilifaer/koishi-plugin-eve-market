@@ -66,6 +66,43 @@ export interface RawType {
   portion_size?: number
 }
 
+// ------------------------------------------------------------------ 入侵、服务器状态（ESI 的字段名）
+
+export interface RawIncursion {
+  constellation_id: number
+  faction_id: number
+  has_boss: boolean
+  infested_solar_systems: number[]
+  /** 0–1 */
+  influence: number
+  staging_solar_system_id: number
+  state: 'established' | 'mobilizing' | 'withdrawing'
+  type: string
+}
+
+/** 默认：萨沙共和国在木本呂（Jita 所在的星座）立足 */
+export function rawIncursion(o: Partial<RawIncursion> = {}): RawIncursion {
+  return {
+    constellation_id: 20000020,
+    faction_id: 500019,
+    has_boss: false,
+    infested_solar_systems: [30000142, 30000144, 30000145],
+    influence: 0.64,
+    staging_solar_system_id: 30000142,
+    state: 'established',
+    type: 'Incursion',
+    ...o,
+  }
+}
+
+/** vip 只在 VIP 模式时出现 */
+export interface RawServerStatus {
+  players: number
+  server_version: string
+  start_time: string
+  vip?: boolean
+}
+
 // ------------------------------------------------------------------ 请求记录和故障
 
 export interface EsiLogEntry {
@@ -145,7 +182,7 @@ export class FakeEsi {
   prices: Array<{ type_id: number; adjusted_price?: number; average_price?: number }> = []
   industrySystems: Array<{ solar_system_id: number; cost_indices: Array<{ activity: string; cost_index: number }> }> = []
   incursions: unknown[] = []
-  serverStatus = { players: 23456, server_version: '3000001', start_time: '2026-10-07T11:05:12Z', vip: false }
+  serverStatus: RawServerStatus = { players: 23456, server_version: '3000001', start_time: '2026-10-07T11:05:12Z', vip: false }
   types = new Map<number, RawType>()
   names = new Map<number, { name: string; category: string }>()
   /** 名字 → ID，按语言分开（en、zh），名字不区分大小写 */

@@ -19,6 +19,8 @@ export const BATCH_DEADLINE_MS = 12000
 export const BASE_COMPARE_WAIT_MS = 1000
 /** 等 core 按时限返回的结果时多给的余量（只防它卡住） */
 export const DEADLINE_GUARD_MS = 250
+/** 一天（UTC 日）的毫秒数 */
+export const DAY_MS = 86_400_000
 /** 重操作超过这么久还没好才发慢提示 */
 export const SLOW_HINT_MS = 3000
 /** 冷启动、未缓存的物品超过这么多种时，批量查价才可能发慢提示 */
@@ -307,6 +309,8 @@ export const INDUSTRY_INDICES_CACHE_MIN = 60
 export const ADJUSTED_PRICES_CACHE_MIN = 60
 export const INDUSTRY_STALE_HOURS = 24
 export const STATUS_CACHE_SEC = 30
+/** 服务器状态、入侵请求失败以后，这么久之内直接回答「取不到」，不再请求 */
+export const FAILURE_MEMO_SEC = 30
 export const STATUS_STALE_MIN = 5
 export const INCURSIONS_CACHE_MIN = 5
 export const INCURSIONS_STALE_MIN = 60
@@ -367,6 +371,23 @@ export const TREND_BAND_CLAMP = { min: 0.5, max: 2 }
 export const TREND_PADDING = 0.03
 /** 没有图时的文字走势条分成几段 */
 export const SPARKLINE_SEGMENTS = 15
+/** 浅色主题：QQ 聊天里缩小显示时比深色清楚 */
+export const CHART_COLORS_LIGHT = {
+  background: '#fcfcfb',
+  panel: '#fcfcfb',
+  grid: '#e1e0d9',
+  text: '#0b0b0b',
+  muted: '#52514e',
+  line: '#2a78d6',
+  band: 'rgba(42, 120, 214, 0.12)',
+  volume: '#86b6ef',
+  up: '#006300',
+  down: '#d03b3b',
+} as const
+/** 走势图用哪套配色（深色那套是 CHART_COLORS） */
+export const CHART_THEME: 'light' | 'dark' = 'light'
+/** 走势图单次渲染最多多久（不算排队），超时就只发文字卡片 */
+export const CHART_RENDER_TIMEOUT_MS = 20000
 
 /** 浏览器页面最多同时几个，其中战报最多占 1 个 */
 export const BROWSER_PAGES = 2
@@ -381,7 +402,10 @@ export const BR_SETTLE_MS = 1500
 /** 入队时估算（已过去的时间 + 前面任务数 × 60 秒）超过 240 秒就直接回复「截图繁忙」 */
 export const BR_QUEUE_TASK_SEC = 60
 export const BR_QUEUE_REJECT_SEC = 240
-export const BR_LINKS_PER_MESSAGE = 1
+/** 战报页面的视口高度（截图高度按页面实际高度，比这个矮的页面截出来就是这么高） */
+export const BR_VIEWPORT_HEIGHT = 900
+/** 战报截图缓存最多几个链接（每个最多 2 张图） */
+export const BR_CACHE_MAX = 6
 
 /** 势力图下载：超时和大小上限；超过 IMAGE_MAX_BYTES 的图片不发 */
 export const MAP_TIMEOUT_MS = 30000

@@ -1,6 +1,6 @@
-// 插件组装（§3.7.3）：规范化配置 → 授权档案表 → 模块级存储 → 平台范围 → 安全注册 → 前置中间件 → 命令 → 后置中间件
-// → 有 server 插件时挂上 EVE 授权页面；ready 时建端口（含 secret.key 的密钥盒）、组装 core 并启动
-// （读缓存或自带快照 → 建索引 → 授权档案 → 建筑市场同步），停用时停掉 core（取消请求、清定时器）。
+// 插件组装（§3.7.3）：规范化配置 → 授权档案表 → 模块级存储 → 平台范围 → 出图和截图（puppeteer 调用时再取）→ 安全注册
+// → 前置中间件 → 命令 → 后置中间件 → 有 server 插件时挂上 EVE 授权页面；ready 时建端口（含 secret.key 的密钥盒）、组装 core 并启动
+// （读缓存或自带快照 → 建索引 → 授权档案 → 建筑市场同步），停用时停掉 core（取消请求、清定时器）并关掉所有浏览器页面。
 // 数据还没准备好时收到的命令最多等 8 秒。
 
 import { readFileSync } from 'node:fs'
@@ -11,10 +11,12 @@ import type { Config } from '../config/schema'
 import { createEveCore } from '../core'
 import type { AuthStore, Clock, Logger, ModuleStore, Scheduler } from '../core/ports'
 import type { CoreOverrides, EveCore, Settings } from '../core/types'
+import { puppeteerPages } from '../render'
 import { createAuthStore } from '../storage'
 import { installWebRoutes } from '../web'
 import { CoreRuntime, installFallback, listProbe, registerCommands } from './commands'
 import type { CommandContext } from './commands'
+import { createMedia } from './media'
 import { pendingStore } from './pending'
 import { koishiLogger, koishiScheduler, makePorts, moduleStore, systemClock } from './ports'
 import { installPrefix, textReply } from './prefix'
@@ -86,10 +88,12 @@ export function installPlugin(ctx: Context, config: Config, options: PluginOptio
   const auth = options.auth ?? createAuthStore(ctx, clock)
   const runtime = new CoreRuntime(logger)
   const web = { ready: false }
+  // puppeteer 是可选服务：每次出图时才取，插件启动后才启用 puppeteer 也能用
+  const media = createMedia({ pages: puppeteerPages(() => ctx.get('puppeteer')), logger })
   const scopes = createScopes(ctx, { general: settings.general, echo: sendState(store).echo })
   const registry = new CommandRegistry(scopes.cmdCtx, { filter: scopes.filter, logger })
   const commands: CommandContext = {
-    settings, registry, pending: pendingStore(store), store, logger, core: runtime, clock, scheduler, webReady: () => web.ready,
+    settings, registry, pending: pendingStore(store), store, logger, core: runtime, clock, scheduler, webReady: () => web.ready, media,
   }
 
   installPrefix(scopes.cmdCtx, {
@@ -111,5 +115,7 @@ export function installPlugin(ctx: Context, config: Config, options: PluginOptio
   })
 
   ctx.on('ready', () => runtime.start(() => buildCore(ctx, { settings, auth, store, logger, clock, scheduler }, options)))
-  ctx.on('dispose', () => runtime.stop())
+  ctx.on('dispose', async () => {
+    await Promise.all([runtime.stop(), media.dispose()])
+  })
 }

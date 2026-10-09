@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { Channel, h, User } from 'koishi'
 import type { Context, Session } from 'koishi'
 import { GROUP, GROUP2, MEMBER, MEMBER2, QQ_SELF, dispatch, messageEvent } from '../../harness'
-import { MARKETS_WITH_ALLIANCE, RAVEN, THE_FORGE, addOrders, buttons, card, jitaOrders, startPlugin } from './plugin-env'
+import { MARKETS_WITH_ALLIANCE, RAVEN, THE_FORGE, addOrders, buttonRows, buttons, card, jitaOrders, startPlugin } from './plugin-env'
 import type { EnvOptions, PluginEnv } from './plugin-env'
 
 let env: PluginEnv | undefined
@@ -63,9 +63,14 @@ describe('help next to plugin-help', () => {
     const e = await start()
     const sent = await e.h.group('帮助')
     expect(sent[0].markdown).not.toContain('工业')
-    expect(sent[0].markdown).not.toContain('走势')
-    expect(sent[0].markdown).toContain('**其他**\n\n- 搜索 乌鸦 · 本群ID')
-    expect(buttons(sent)).toEqual(['查价=>查价 ', '批量查价=>批量查价 ', '查价说明=>帮助 查价', '批量说明=>帮助 批量查价'])
+    expect(sent[0].markdown).toContain('- 走势 乌鸦级：近 30 天价格图')
+    expect(sent[0].markdown).toContain('**宇宙**\n\n- 入侵 · 势力图 · 联盟势力图 · 服务器状态\n- 战报 + BR 链接（直接 @我 发链接也行）')
+    expect(sent[0].markdown).toContain('**其他**\n\n- 搜索 乌鸦 · 翻译 三钛合金 · 本群ID')
+    expect(buttonRows(sent)).toEqual([
+      ['查价=>查价 ', '批量查价=>批量查价 ', '走势=>走势 '],
+      ['入侵=>入侵', '势力图=>势力图', '战报=>战报 ', '服务器状态=>服务器状态'],
+      ['查价说明=>帮助 查价', '批量说明=>帮助 批量查价', '走势说明=>帮助 走势'],
+    ])
   })
 })
 
@@ -230,7 +235,7 @@ describe('fallback (§2.18)', () => {
     const e = await start()
     const sent = await e.h.group('')
     expect(sent).toHaveLength(1)
-    expect(sent[0].markdown).toBe('**EVE 市场助手** · 欧服\n\n**价格**\n\n- 查价 乌鸦级：默认市场的出售、中间、收购价\n- 查价 Jita PLEX*500：指定市场和数量\n- 批量查价：粘贴清单或装配，算总价')
+    expect(sent[0].markdown).toBe('**EVE 市场助手** · 欧服\n\n**价格**\n\n- 查价 乌鸦级：默认市场的出售、中间、收购价\n- 查价 Jita PLEX*500：指定市场和数量\n- 批量查价：粘贴清单或装配，算总价\n- 走势 乌鸦级：近 30 天价格图')
   })
 
   it('an exact item name is priced; a market and quantity in front work too', async () => {

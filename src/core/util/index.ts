@@ -1,5 +1,7 @@
 export { Backoff, jitter, randomBetween } from './backoff'
 export type { Random } from './backoff'
+export { FailureMemo } from './failure-memo'
+export { PNG_SIGNATURE, imageSize, sniffImage } from './image'
 export { LruCache } from './lru'
 export type { LruOptions } from './lru'
 export { Pool, mapLimit } from './pool'

@@ -40,3 +40,98 @@ export const QUOTE = {
   noSell: '暂无卖单',
   noBuy: '暂无买单',
 } as const
+
+/** 走势（§2.4） */
+export const TREND = {
+  title: (item: string, place: string, days: number) => `📈 **${item} · ${place} · 近 ${days} 天**`,
+  latest: '最近日均价',
+  range: (days: number, high: string, low: string) => `${days} 天最高 ${high} · 最低 ${low}`,
+  volume: (qty: string, unit: string, turnover: string) => `日均成交 ${qty} ${unit} · 日均成交额 ${turnover}`,
+  spark: (bars: string) => `走势 ${bars}`,
+  regionNote: (region: string) => `数据是整个${region}星域的成交，每天更新一次`,
+  globalNote: '数据是全宇宙统一市场的成交，每天更新一次',
+  stale: '⚠ ESI 暂时没有响应，这是之前缓存的数据',
+  missing: (n: number) => `其中 ${n} 件没有成交记录，没有算进去`,
+  thin: (days: number) => `近 ${days} 天成交太少，无法绘图`,
+  noHistory: (item: string, place: string) => `${item}在${place}没有成交记录`,
+  structure: (market: string) => `${market} 是玩家建筑市场，ESI 不提供成交历史`,
+  structureButton: (market: string) => `看${market}走势`,
+  noMarket: '没有可以看走势的 NPC 市场，请管理员检查控制台的「市场」表格',
+  esiDown: '⚠ ESI 暂时没有响应，取不到成交历史，请稍后再试',
+  downtime: '⚠ DT 维护中，暂时取不到成交历史，请稍后再试',
+  hint: '⏳ 正在画走势图…',
+  rangeLabel: { month: '月度走势', quarter: '季度走势', year: '年度走势' },
+  global: '全局市场',
+  unitShip: '艘',
+  unitSet: '件',
+  unitItem: '个',
+} as const
+
+/** 入侵（§2.9） */
+export const INCURSION = {
+  title: (count: number, classes: string) => `**当前入侵** · ${count} 处${classes ? `（${classes}）` : ''}`,
+  none: '当前欧服没有进行中的入侵。',
+  staging: (name: string) => `集结星系 ${name}`,
+  state: (state: string, influence: string, boss: boolean) => `状态 ${state} · 影响力 ${influence} · Boss ${boss ? '已出现' : '未出现'}`,
+  systems: (count: number, list: string) => `被入侵星系（${count}）${list}`,
+  systemCount: (count: number) => `被入侵星系 ${count} 个`,
+  stateNames: { established: '立足', mobilizing: '动员', withdrawing: '撤退' },
+  faction: (name: string) => `入侵势力 ${name}`,
+  cached: '（缓存）',
+  esiDown: '⚠ 暂时取不到入侵信息（ESI 没有响应），请稍后再试',
+} as const
+
+/** 安全等级分类的叫法 */
+export const SEC_CLASS = { high: '高安', low: '低安', null: '00' } as const
+
+/** 势力图、联盟势力图（§2.10） */
+export const MAP = {
+  name: { influence: '势力图', coalition: '联盟势力图' },
+  hint: (name: string) => `⏳ 正在下载${name}…`,
+  caption: (name: string, updated: string) => `欧服${name} · 来源 Verite · 图片更新于 ${updated}`,
+  staleCaption: (name: string, ago: string) => `欧服${name} · 来源 Verite · 图片更新于 ${ago}（来源暂时无法访问）`,
+  unavailable: (name: string) => `${name}暂时获取不到，请稍后再试。`,
+  tooLarge: (name: string) => `${name}太大，暂时发不了。`,
+  notConfigured: (name: string) => `${name}没有开启（控制台里没有填图片地址）。`,
+  sendFailed: (name: string) => `${name}发送失败，请稍后再试。`,
+} as const
+
+/** 服务器状态（§2.12） */
+export const SERVER = {
+  online: `**欧服状态** · 🟢 在线`,
+  vip: `**欧服状态** · 🟡 VIP 模式（只有开发人员能登录）`,
+  players: '在线人数',
+  started: (at: string, uptime: string) => `本次开服 ${at}（已运行 ${uptime}）`,
+  nextDowntime: (at: string, eve: string) => `下次维护 ${at}（EVE 时间 ${eve}）`,
+  version: (v: string) => `服务器版本 ${v}`,
+  clocks: (eve: string, local: string) => `EVE 时间 ${eve} · 北京时间 ${local}`,
+  stale: (ago: string) => `ESI 暂时没有响应，这是 ${ago}的状态`,
+  down: (eve: string, local: string) => `🔴 连不上欧服。现在可能在例行维护（每天 EVE 时间 ${eve}，北京时间 ${local}，一般 15–30 分钟）。`,
+} as const
+
+/** 翻译（§2.13） */
+export const TRANSLATE = {
+  usageTitle: '**翻译用法**',
+  found: (query: string, n: number) => `**「${query}」找到 ${n} 个**`,
+  more: (n: number) => `还有 ${n} 个，关键词写具体一点`,
+  none: (query: string) => `没有找到「${query}」的中英对照。`,
+  aliases: (list: string) => `别名：${list}`,
+  kind: { item: '物品', group: '分组', category: '大类', system: '星系', constellation: '星座', region: '星域', slang: '黑话' },
+} as const
+
+/** 战报（§2.11） */
+export const BR = {
+  usageTitle: '**战报用法**',
+  badLink: '这个战报链接的格式不对：只支持 BR 工具的战报链接（br/ 加 24 位编号，或 related/ 加星系和时间）。',
+  noBrowser: '截图服务没有启动，请联系管理员。',
+  busy: '截图繁忙，请稍后再试。',
+  hint: '⏳ 正在截取战报，一般要 10–30 秒…',
+  ahead: (n: number) => `（前面还有 ${n} 个）`,
+  truncated: (px: number) => `页面过长，已截取前 ${px} 像素`,
+  timeout: '战报页面 60 秒内没有打开，链接可能失效，或者网站暂时访问不了。',
+  http: (status: number) => `战报页面打不开（网站返回 ${status}），链接可能失效。`,
+  unreachable: '战报网站暂时访问不了，请稍后再试。',
+  failed: '战报截图失败，请稍后再试。',
+  sendFailed: '战报图片发送失败，请稍后再试。',
+  logNoBrowser: '战报截图需要 Koishi 的 puppeteer 插件，现在没有启用',
+} as const

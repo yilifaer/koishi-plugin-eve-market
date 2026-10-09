@@ -4,7 +4,7 @@ import { universe } from './helpers'
 describe('UniverseService', () => {
   const u = universe()
 
-  it('incursions and server status come with 0.0.3', async () => {
+  it('incursions and server status answer NOT_CONFIGURED until their sources are given', async () => {
     expect(await u.incursions()).toMatchObject({ ok: false, code: 'NOT_CONFIGURED' })
     expect(await u.serverStatus()).toMatchObject({ ok: false, code: 'NOT_CONFIGURED' })
   })

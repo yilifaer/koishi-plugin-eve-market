@@ -1,20 +1,35 @@
-// 命令：查价、批量查价、搜索、本群ID、帮助（隐藏的 eve-market.help）、管理员的市场状态和市场授权，以及后置的兜底中间件。
+// 命令：查价、批量查价、走势、搜索、入侵、势力图、联盟势力图、战报、服务器状态、翻译（中英对照）、本群ID、
+// 帮助（隐藏的 eve-market.help）、管理员的市场状态、市场授权和样式自检，以及后置的中间件（战报自动识别、裸物品名、兜底）。
 
 import { registerAdmin } from './admin'
 import { registerBatch } from './batch'
+import { registerBr } from './br'
 import type { CommandContext } from './context'
 import { registerGroupId } from './group-id'
 import { registerHelp } from './help'
+import { registerIncursion } from './incursion'
+import { registerMaps } from './map'
 import { registerPrice } from './price'
 import { registerSearch } from './search'
+import { registerSelfTest } from './selftest'
+import { registerServerStatus } from './server-status'
+import { registerTranslate } from './translate'
+import { registerTrend } from './trend'
 
 /** 安全注册：和别的插件重名的命令跳过（记进「命令冲突」），其余照常 */
 export function registerCommands(commands: CommandContext): void {
   registerPrice(commands)
   registerBatch(commands)
+  registerTrend(commands)
   registerSearch(commands)
+  registerIncursion(commands)
+  registerMaps(commands)
+  registerBr(commands)
+  registerServerStatus(commands)
+  registerTranslate(commands)
   registerGroupId(commands)
   registerAdmin(commands)
+  registerSelfTest(commands)
   registerHelp(commands)
 }
 

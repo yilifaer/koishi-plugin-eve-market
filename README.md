@@ -2,26 +2,55 @@
 
 > 0.0.x 是测试版：功能还在陆续加入，配置项和命令的写法可能还会变。第一个正式版是 0.1.0。
 
-EVE Online market helper for the official QQ bot, as a Koishi plugin (Tranquility server). It answers item price queries for the NPC trade hubs, configured markets and player structure markets (synced with one authorized service character through EVE SSO), appraises pasted lists and EFT fittings, and searches items by Chinese or English name, pinyin or common slang. It only replies on the official QQ platform (adapter-qq) and leaves other platforms such as OneBot alone. All replies are in Chinese.
+EVE Online market helper for the official QQ bot, as a Koishi plugin (Tranquility server). It answers item price queries for the NPC trade hubs, configured markets and player structure markets (synced with one authorized service character through EVE SSO), appraises pasted lists and EFT fittings, draws price history charts, and searches items by Chinese or English name, pinyin or common slang. It also lists incursions, sends the influence maps, takes screenshots of battle reports, shows the server status and translates names between Chinese and English. It only replies on the official QQ platform (adapter-qq) and leaves other platforms such as OneBot alone. All replies are in Chinese.
 
 EVE Online 欧服（Tranquility）市场助手，Koishi 插件，**只在 QQ 官方机器人上回复**。
 
-## 现在能做什么（0.0.2）
+## 现在能做什么（0.0.3）
 
 | 命令 | 例子 | 说明 |
 |---|---|---|
-| 查价 | `查价 乌鸦级`、`查价 Jita PLEX*500` | 本群默认市场（或指定市场）的出售、中间、收购价，和 Jita 比较的涨跌；授权群里还有联盟建筑市场 |
+| 查价 | `查价 乌鸦级`、`查价 Jita PLEX*500` | 本群默认市场（或指定市场）的出售、中间、收购价，和 Jita 比较的涨跌；授权群里还有联盟建筑市场；卡片下面有「月度走势」「季度走势」按钮 |
 | 批量查价 | `批量查价` 换行后粘贴清单或 EFT 装配 | 合计、调整（`-5%`、`95%`、`95折`）、改用别的市场或价格类型、装配估价、运费 |
+| 走势 | `走势 乌鸦级`、`走势 Amarr 乌鸦级 季` | 近 30 天（`季` 90 天、`年` 365 天）的价格图，再加一张小卡片：最近均价和涨跌、最高最低、日均成交 |
 | 搜索 | `搜索 乌鸦`、`搜索 乌鸦级` | 按名字找物品，或者列出相关物品，每一行带价格 |
+| 入侵 | `入侵` | 当前所有入侵：星座、集结星系、状态、影响力、被入侵的星系 |
+| 势力图、联盟势力图 | `势力图`、`联盟势力图` | 欧服的主权影响力图和联盟影响力图（来源 Verite，每小时更新） |
+| 战报 | `战报` 加 BR 链接，或者直接 @机器人 发链接 | 把 BR 工具的战报页面截图发出来，长战报分成两张 |
+| 服务器状态 | `服务器状态` | 在线人数、本次开服、下次例行维护，EVE 时间和北京时间 |
+| 翻译（中英对照） | `翻译 三钛合金`、`中英对照 Jita` | 物品、星系、星座、星域、黑话的中英文名，物品的别名 |
 | 本群ID | `本群ID` | 查看本群和自己的完整 ID（填「授权群」「管理员」时用） |
-| 帮助 | `帮助`、`帮助 批量查价` | 用法 |
+| 帮助 | `帮助`、`帮助 走势` | 用法 |
 | 市场状态（管理员） | `市场状态`、`市场状态 刷新` | 每个市场能不能用、建筑市场上次同步、授权档案、物品数据版本、ESI 配额、配置问题；「刷新」马上检查在线数据，只重新同步过期或出错的建筑市场 |
 | 市场授权（管理员） | `市场授权` | EVE 授权档案的状态：服务角色、权限、上次刷新、用到它的市场 |
+| 样式自检（管理员） | `样式自检 1`、`样式自检 2` | 上线前检查 QQ 上的显示：每条测试消息开头写了正常是什么样子 |
 
 - 群里先 @机器人 再输入；单聊直接发。
 - 中文名、英文名、常用简称（黑话）、拼音都可以；有几个可能时会列出来让你点选，也可以 @机器人 回复编号。
-- 管理命令只回应控制台「管理员」里的人（或 Koishi 权限等级 4 以上），并且只在私聊或授权群里回应；别人发了没有反应，帮助里也看不到。
-- 走势图、入侵、势力图、战报、服务器状态、翻译会在后面的测试版里加入；制造和反应在 0.2.0。
+- 管理命令只回应控制台「管理员」里的人（或 Koishi 权限等级 4 以上）；「市场状态」「市场授权」只在私聊或授权群里回应，「样式自检」在哪个群都行。别人发了没有反应，帮助里也看不到。
+- 制造、制造比价和反应在 0.2.0。
+
+## 走势图和战报截图（puppeteer）
+
+走势图和战报截图要用 Koishi 的 **puppeteer** 插件（插件市场里搜 `puppeteer`，Koishi 官方的那个）。它是可选的：
+
+- 没有装、或者没有启用时，「走势」只发文字卡片，卡片里有一行文字走势（`走势 ▁▂▃▄▅▆▇█…`）；「战报」回复「截图服务没有启动，请联系管理员。」，Koishi 日志里也会写一句。
+- 以后再装也行：插件每次出图时才去找 puppeteer，装好、启用以后马上就能用，不用重启本插件。
+- 走势图里的中文要用系统里的中文字体（Windows 自带的微软雅黑就可以）。Linux 服务器上如果图里的中文是方块，要先装一个中文字体（例如文泉驿或 Noto Sans CJK）。
+- 浏览器页面最多同时开 2 个（战报最多占 1 个），每次用完就关；截图慢时（超过 3 秒）会先发一句「⏳ 正在…」。
+- 同一个市场、同一个时间范围的走势图，在成交历史更新（一般一天一次）、日期变化（按 EVE 时间）之前再要直接用缓存；同一个战报链接 10 分钟内再发也直接用缓存。
+
+战报的自动识别：群里 @机器人 的消息、或者私聊消息里带 BR 工具的战报链接时，插件自动截图（每条消息只处理第一个链接，回复里不会再写出链接）。不想要的话，在控制台「图片与截图」里关掉「@机器人 的消息里带战报链接时自动截图」（brAuto），之后只有写明「战报 链接」才截图。
+
+势力图从 Verite 下载，本机缓存 60 分钟；Verite 暂时访问不了时发缓存里的旧图。图片地址在控制台「图片与截图」里可以改，留空就关闭这个命令。
+
+## 上线前：样式自检
+
+QQ 客户端对 Markdown、按钮、图片的显示有些地方没有文档写明。机器人在测试群里能用以后，管理员 @机器人 发「样式自检 1」，看完再发「样式自检 2」：
+
+- 每条测试消息开头都写了「正常」是什么样子，照着看就行；
+- 第 1 页最后一条、第 2 页最后一条写了回报的格式，照这个格式把结果告诉开发者；
+- 有不正常的地方，开发者改好以后发一个补丁版本，控制台里不用改任何设置。
 
 ## 联盟建筑市场（EVE 授权）
 
@@ -37,11 +66,12 @@ EVE Online 欧服（Tranquility）市场助手，Koishi 插件，**只在 QQ 官
 ## 安装
 
 1. 打开 Koishi 控制台的「插件市场」，搜索 `koishi-plugin-eve-market`，**确认作者是 yilifaer**，点安装。
-2. 插件需要 `database`（任意一种数据库插件，例如 database-sqlite）和 `http` 服务（Koishi 自带）；EVE 授权页面还要用 `server` 服务（Koishi 控制台本身就用它，一般都有）。
+2. 插件需要 `database`（任意一种数据库插件，例如 database-sqlite）和 `http` 服务（Koishi 自带）；EVE 授权页面还要用 `server` 服务（Koishi 控制台本身就用它，一般都有）；走势图和战报截图要用 `puppeteer` 服务（可选，见上面一节）。
 3. QQ 官方机器人用的是 adapter-qq；其他平台（例如 LLBot 的 OneBot）上的消息插件一律不碰。
 4. 启用插件，先看一眼配置里的「市场」表格：预置了 Jita 和另外四个 NPC 交易中心，可以改、删、加。
 5. 在群里 @机器人 发「本群ID」，把群 ID 填进「授权群」，把自己的 ID 填进「管理员」。
 6. 有联盟建筑市场的话，按 [docs/EVE授权.md](docs/EVE授权.md) 做一次 EVE 授权，然后以管理员身份发「市场状态」确认。
+7. 在测试群里做一次「样式自检」（见上面一节）。
 
 升级：插件市场里点更新。回滚：「依赖管理」里选回上一个版本。注意：安装、升级、卸载插件都会让 Koishi 整体重载一次，挑群里没人说话的时候做。
 
@@ -52,6 +82,9 @@ EVE Online 欧服（Tranquility）市场助手，Koishi 插件，**只在 QQ 官
 - 物品、工业、星图数据：由 [eve-cn-slang](https://github.com/yilifaer/eve-cn-slang) 每周从 CCP 发布的静态数据（SDE）生成。插件启动后在线检查更新；下载不了时用本地缓存，再不行用包里自带的快照。
 - 价格：EVE 的 ESI 接口（欧服），遵守 ESI 给的缓存时间和限流。联盟建筑市场用服务角色的 EVE 授权读取（EVE SSO），整站同步后存在本机缓存里，重启后不会在 ESI 过期之前重新请求。
 - 简称、黑话：EVE Online 中文黑话表（同一个仓库的 `glossary.yaml`）。
+- 走势：ESI 的星域成交历史（每天更新一次）；入侵、服务器状态：ESI。
+- 势力图、联盟势力图：[Verite](https://www.verite.space/) 的图片，原样转发。
+- 战报截图：[BR 工具](https://br.evetools.org/) 的战报页面，只打开 BR 工具的地址。
 
 ## 许可与致谢
 
@@ -64,5 +97,6 @@ EVE Online 欧服（Tranquility）市场助手，Koishi 插件，**只在 QQ 官
 
 ## 更新记录
 
+- 0.0.3（测试版）：走势（价格图 + 小卡片；没有 puppeteer 时发文字走势）、入侵、势力图、联盟势力图、战报（命令和 @机器人 发链接自动识别）、服务器状态、翻译（中英对照）、管理命令「样式自检」；查价卡片上加了「月度走势」「季度走势」按钮；帮助里加了这些命令的说明。
 - 0.0.2（测试版）：联盟建筑市场（服务角色 EVE 授权、加密保存的刷新令牌、本机才能打开的授权页面、按名字搜建筑、整站同步和缓存）；管理命令「市场状态」（含「刷新」）、「市场授权」；控制台顶部加了「打开 EVE 授权页面」；新文档 [docs/EVE授权.md](docs/EVE授权.md)。
 - 0.0.1（测试版）：查价、批量查价（含装配估价、运费）、搜索、本群ID、帮助。

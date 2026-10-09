@@ -293,7 +293,7 @@ describe('市场状态 / 市场授权', () => {
     expect(card(status)).toContain('物品数据：SDE build')
     expect(card(status)).toContain('配置问题：市场第 6 行「联盟市场A」使用的授权档案 default 还没有授权')
     expect(card(status)).toContain('命令冲突：无')
-    expect(buttonRows(status)).toEqual([['立即刷新=>市场状态 刷新', '市场授权=>市场授权']])
+    expect(buttonRows(status)).toEqual([['立即刷新=>市场状态 刷新', '样式自检=>样式自检', '市场授权=>市场授权']])
     const auth = await e.h.direct('市场授权')
     expect(card(auth)).toBe([
       '**EVE 授权档案**',
@@ -349,7 +349,7 @@ describe('市场状态 / 市场授权', () => {
 
   it('help lists the admin commands only for admins', async () => {
     const { e } = await start()
-    expect(card(await e.h.group('帮助'))).toContain('**管理**\n\n- 市场状态 · 市场授权（只有管理员能用）')
+    expect(card(await e.h.group('帮助'))).toContain('**管理**\n\n- 市场状态 · 市场授权 · 样式自检（只有管理员能用）')
     expect(card(await e.h.group('帮助', { userId: MEMBER2 }))).not.toContain('市场状态')
     expect(card(await e.h.group('帮助 市场状态'))).toContain('**市场状态**（管理员）')
     expect(card(await e.h.group('帮助 市场状态', { userId: MEMBER2 }))).not.toContain('（管理员）')

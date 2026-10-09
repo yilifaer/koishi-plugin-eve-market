@@ -8,10 +8,11 @@
 import { h } from 'koishi'
 import type { Session } from 'koishi'
 import { MAX_KEYBOARD_ROWS } from '../../constants'
+import type { ImageMime } from '../../core/types'
 import { safeError } from '../../core/util'
 import type { KeyboardButton, KeyboardRow } from '../view/card'
 
-export type ImageMime = 'image/png' | 'image/jpeg'
+export type { ImageMime }
 
 export interface SendFailure {
   ok: false
@@ -29,7 +30,8 @@ export interface Sender {
   /** 能发 Markdown 和按钮（QQ）；沙盒只发纯文字 */
   readonly rich: boolean
   markdown(session: Session, md: string, rows: KeyboardRow[]): Promise<SendResult>
-  text(session: Session, text: string): Promise<SendResult>
+  /** quote：引用这条消息（message_reference） */
+  text(session: Session, text: string, quote?: string): Promise<SendResult>
   image(session: Session, data: Buffer, mime: ImageMime, caption?: string): Promise<SendResult>
 }
 
@@ -64,6 +66,11 @@ export function markdownElements(md: string, rows: KeyboardRow[]): h[] {
     else elements.push(h('button-group', {}, buttons))
   })
   return elements
+}
+
+/** 纯文字；引用一条消息时前面加 quote 元素（适配器转成 message_reference） */
+export function textElements(text: string, quote?: string): h[] {
+  return quote ? [h.quote(quote), h.text(text)] : [h.text(text)]
 }
 
 type Loose = Record<string, unknown>
@@ -122,8 +129,8 @@ export class QQSender implements Sender {
     return deliver(session, markdownElements(md, rows))
   }
 
-  text(session: Session, text: string): Promise<SendResult> {
-    return deliver(session, [h.text(text)])
+  text(session: Session, text: string, quote?: string): Promise<SendResult> {
+    return deliver(session, textElements(text, quote))
   }
 
   /** 图片后面的文字和图片合成一条（msg_type 7） */
@@ -142,8 +149,8 @@ export class SessionSender implements Sender {
     return this.text(session, md)
   }
 
-  async text(session: Session, text: string): Promise<SendResult> {
-    await session.send(h.text(text))
+  async text(session: Session, text: string, quote?: string): Promise<SendResult> {
+    await session.send(quote ? textElements(text, quote) : h.text(text))
     return { ok: true, sent: 1 }
   }
 

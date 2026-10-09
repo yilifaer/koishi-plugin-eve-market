@@ -116,11 +116,17 @@ export function setName(set: ImplantSet): string {
   return set.name.zh ? `${set.name.zh}套装` : `${set.name.en} set`
 }
 
-/** 未知市场 / 本群看不到的市场（同一句话）：按钮是前 4 个可用市场，保留原来的物品和数量 */
-export function unknownMarketCard(core: Pick<EveCore, 'markets'>, failure: CoreFailure, access: Access, command: (market: MarketDef) => CommandRef): Card {
+/**
+ * 未知市场 / 本群看不到的市场（同一句话）：按钮是前 4 个可用市场，保留原来的物品和数量。
+ * usable：这个命令能用哪些市场（走势只列有成交历史的 NPC 市场）；不写 = 全部
+ */
+export function unknownMarketCard(
+  core: Pick<EveCore, 'markets'>, failure: CoreFailure, access: Access, command: (market: MarketDef) => CommandRef,
+  usable: (market: MarketDef) => boolean = () => true,
+): Card {
   const markets = (failure.markets ?? core.markets.visible(access).map((m) => m.key))
     .map((key) => core.markets.get(key))
-    .filter((m): m is MarketDef => !!m)
+    .filter((m): m is MarketDef => !!m && usable(m))
   const card = emptyCard(SAY.unknownMarket(safeEcho(failure.token ?? '')))
   card.sections.push({ style: 'plain', lines: [{ text: markets.length ? SAY.marketsHere(marketNames(markets)) : SAY.noMarketsHere }] })
   const buttons = markets.slice(0, MAX_ACTIONS_PER_ROW).map((m) => ({ label: shortName(m), command: command(m) }))

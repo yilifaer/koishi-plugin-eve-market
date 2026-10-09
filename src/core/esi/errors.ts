@@ -55,6 +55,11 @@ export class EsiError extends Error {
     return this.kind === 'rate-limited' || this.kind === 'error-limited' || this.kind === 'throttled'
   }
 
+  /** 调用方自己不等了（时限到了或者中止）：请求可能还在后台继续，不算 ESI 出了问题 */
+  get abandoned(): boolean {
+    return this.kind === 'deadline' || this.kind === 'aborted'
+  }
+
   /** 写进日志和「市场状态」的结构 */
   info(): SafeErrorInfo {
     const info: SafeErrorInfo = { route: this.route, message: this.message }

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>战报测试页：内容晚到</title>
+<style>
+  html, body { margin: 0; padding: 0; }
+  #content { height: 100px; background: #ffffff; }
+</style>
+</head>
+<body>
+  <div id="content">加载中</div>
+  <script>
+    // 模拟页面先出空壳、数据稍后才渲染出来
+    setTimeout(() => {
+      const el = document.getElementById('content')
+      el.textContent = ''
+      el.style.height = '5000px'
+      el.style.background = '#00ffff'
+    }, 800)
+  </script>
+</body>
+</html>

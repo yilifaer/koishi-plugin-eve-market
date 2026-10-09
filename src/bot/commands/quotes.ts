@@ -1,7 +1,7 @@
 // 报价的显示：每个市场的状态（缓存、同步异常、授权异常、超时……）、和基准市场比较的 ▲▼、页脚的更新时间。
 
-import { DIFF_MIN_PCT, SERVER_LABEL, STALE_AFTER_MINUTES } from '../../constants'
-import { formatAgo, roundHalfAway } from '../../core/format'
+import { SERVER_LABEL, STALE_AFTER_MINUTES } from '../../constants'
+import { formatAgo, formatChange } from '../../core/format'
 import type { PriceFormatter, PriceQuote } from '../../core/types'
 import { QUOTE } from './text'
 
@@ -70,8 +70,7 @@ export function diffPct(value: number | null | undefined, base: number | null | 
 
 /** 相差多少（「4.5%」，保留 1 位，不带方向）；不到 0.1% 时 undefined */
 export function diffText(pct: number): string | undefined {
-  if (Math.abs(pct) < DIFF_MIN_PCT) return undefined
-  return `${roundHalfAway(Math.abs(pct), 1).toFixed(1)}%`
+  return formatChange(pct)
 }
 
 /** ▲4.5% / ▼3.6%：同侧比较，保留 1 位；相差不到 0.1% 或缺一边时不写 */

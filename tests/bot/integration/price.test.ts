@@ -42,7 +42,7 @@ describe('查价: markets and visibility', () => {
     expect(sent[0].markdown).toMatch(/^\*\*乌鸦级\*\* Raven · 战列舰\n\n\*\*Jita 4-4\*\*\n\n- 出售 `258,400,000 ISK`（258\.40M）/)
     expect(sent[0].markdown).toContain('**联盟市场A**\n\n- 出售 `270,000,000 ISK`（270.00M）▲4.5%\n- 中间 `255,000,000 ISK`（255.00M）\n- 收购 `240,000,000 ISK`（240.00M）▼3.6%')
     expect(sent[0].markdown).toMatch(/\*\*\*\n欧服 · 更新于 \d\d:\d\d · ▲▼ 与 Jita 4-4 比较\n> 📢 矿石收购按 Jita 收购价 92%$/)
-    expect(buttonRows(sent)).toEqual([['相关物品=>搜索 乌鸦级']])
+    expect(buttonRows(sent)).toEqual([['月度走势=>走势 乌鸦级 月', '季度走势=>走势 乌鸦级 季', '相关物品=>搜索 乌鸦级']])
   })
 
   it('another group sees only public markets and public notices', async () => {
@@ -76,7 +76,8 @@ describe('查价: markets and visibility', () => {
     const sent = await e.h.group('查价 联盟市场A 乌鸦级*10')
     expect(sent[0].markdown).toContain('**乌鸦级** Raven ×10 · 战列舰\n\n**联盟市场A**\n\n- 出售 `270,000,000 ISK`（270.00M）▲4.5% · 合计 2.70B')
     expect(sent[0].markdown).toMatch(/欧服 · 联盟市场A 更新于 \d\d:\d\d · ▲▼ 与 Jita 4-4 比较/)
-    expect(buttonRows(sent)).toEqual([['相关物品=>搜索 联盟市场A 乌鸦级']])
+    // 玩家建筑没有成交历史：走势按钮不带市场
+    expect(buttonRows(sent)).toEqual([['月度走势=>走势 乌鸦级 月', '季度走势=>走势 乌鸦级 季', '相关物品=>搜索 联盟市场A 乌鸦级']])
   })
 
   it('an older market is marked, a failing market says ESI did not answer, the others are fine', async () => {
@@ -225,7 +226,7 @@ describe('查价: output settings', () => {
     const e = await start({ config: { display: { output: 'text' } }, esi: ravenOrders })
     const sent = await e.h.group('查价 乌鸦级')
     expect(sent[0].markdown).toBeUndefined()
-    expect(sent[0].text).toMatch(/^乌鸦级 Raven · 战列舰\n【Jita 4-4】\n出售 258,400,000 ISK \(258\.40M\)\n中间 253,700,000 ISK \(253\.70M\)\n收购 249,000,000 ISK \(249\.00M\)\n———\n欧服 · 更新于 \d\d:\d\d\n相关物品：@我 发送「搜索 乌鸦级」$/)
+    expect(sent[0].text).toMatch(/^乌鸦级 Raven · 战列舰\n【Jita 4-4】\n出售 258,400,000 ISK \(258\.40M\)\n中间 253,700,000 ISK \(253\.70M\)\n收购 249,000,000 ISK \(249\.00M\)\n———\n欧服 · 更新于 \d\d:\d\d\n月度走势：@我 发送「走势 乌鸦级 月」\n季度走势：@我 发送「走势 乌鸦级 季」$/)
   })
 
   it('clickable = none sends Markdown without buttons and writes the numbers out', async () => {
