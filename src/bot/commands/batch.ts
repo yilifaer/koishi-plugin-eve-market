@@ -39,7 +39,7 @@ export async function runBatch(inv: Invocation, text: string, options: BatchOpti
   await hint.sent()
   if (isFailure(result)) return batchFailure(inv, result, parsed.header)
   if (!result.rows.length) return nothingRecognized(inv, result)
-  await sendResult(inv, result, !!parsed.header.all, options.note)
+  await sendResult(inv, result, parsed.header, options.note)
 }
 
 /** 一行都没认出来：只写警告和用法；批量清单待办带着卡片上的候选，回复编号和重新粘贴都行 */
@@ -67,9 +67,10 @@ function batchEnv(inv: Invocation): BatchEnv {
   return env
 }
 
-async function sendResult(inv: Invocation, result: AppraisalResult, all: boolean, note?: string): Promise<void> {
+async function sendResult(inv: Invocation, result: AppraisalResult, header: PasteHeader, note?: string): Promise<void> {
   const maxParts = Math.min(MAX_SPLIT_PARTS, Math.max(1, inv.reply.remaining()))
-  const cards = resultCards(batchEnv(inv), result, { all, maxParts, notices: notices(inv), ...note ? { note } : {} })
+  const view = { all: !!header.all, ...header.from ? { from: header.from } : {} }
+  const cards = resultCards(batchEnv(inv), result, { ...view, maxParts, notices: notices(inv), ...note ? { note } : {} })
   for (const card of cards) {
     if (!(await sendCard(inv, card))) return
   }

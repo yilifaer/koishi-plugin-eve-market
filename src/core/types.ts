@@ -794,6 +794,8 @@ export interface PasteHeader {
   appraisalId?: string
   /** 「全部」：长清单的完整明细 */
   all?: boolean
+  /** 「从81」：完整清单从第 81 项接着列（带上它就是「全部」） */
+  from?: number
   /** 行号=#typeID：替换某一行未识别的物品 */
   replace?: Record<number, TypeId>
 }

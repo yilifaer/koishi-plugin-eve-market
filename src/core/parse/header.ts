@@ -20,6 +20,8 @@ const DISCOUNT_TENTHS = { min: 5, max: 10 }
 const ALL_WORD = '全部'
 const APPRAISAL_ID = new RegExp(`^#([A-Za-z0-9]{${APPRAISAL_ID_LENGTH}})$`)
 const REPLACE = /^(\d{1,4})=#(\d{1,10})$/
+/** 「全部 从81」：完整清单从第 81 项接着列（「下一页」按钮用） */
+const FROM = /^从(\d{1,4})$/
 
 type Param =
   | { kind: 'market'; key: string; phrase: string; words: number }
@@ -28,6 +30,7 @@ type Param =
   | { kind: 'bad-modifier'; word: string }
   | { kind: 'appraisal'; id: string }
   | { kind: 'all' }
+  | { kind: 'from'; index: number }
   | { kind: 'replace'; lineNo: number; typeId: number }
 
 /** 表头行（全是参数）；inline = 开头是参数、后面是物品（「Jita Raven*2」），rest 是物品那部分 */
@@ -37,7 +40,7 @@ export type HeaderLine =
   | { kind: 'none' }
 
 const NONE: HeaderLine = { kind: 'none' }
-/** 第一行开头能拆出来的参数（估价编号、全部、行号替换只在单独的表头行里出现） */
+/** 第一行开头能拆出来的参数（估价编号、全部、从N、行号替换只在单独的表头行里出现） */
 const LEADING_KINDS = new Set<Param['kind']>(['market', 'side', 'modifier', 'bad-modifier'])
 
 const roundPct = (value: number) => {
@@ -91,6 +94,8 @@ function classify(words: string[], at: number, matchMarket: MarketMatcher): Para
   const id = parseAppraisalId(word)
   if (id) return { kind: 'appraisal', id }
   if (word === ALL_WORD) return { kind: 'all' }
+  const from = FROM.exec(word)
+  if (from && Number(from[1]) >= 1) return { kind: 'from', index: Number(from[1]) }
   const replace = REPLACE.exec(word)
   if (replace && Number(replace[1]) >= 1 && Number(replace[2]) >= 1) {
     return { kind: 'replace', lineNo: Number(replace[1]), typeId: Number(replace[2]) }
@@ -137,6 +142,10 @@ function buildHeader(params: Param[]): PasteHeader | CoreFailure {
         break
       case 'all':
         header.all = true
+        break
+      case 'from':
+        header.all = true
+        header.from = param.index
         break
       case 'replace':
         header.replace = { ...header.replace, [param.lineNo]: param.typeId }

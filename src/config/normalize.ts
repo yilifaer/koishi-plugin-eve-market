@@ -162,6 +162,7 @@ function reservedReason(name: string): string | null {
   if (/^[\d\s.,]+$/.test(key)) return '是纯数字，会被当成数量'
   if (/^[+-]?\d+(\.\d+)?\s*(%|折)$/.test(key)) return '会被当成价格调整'
   if (key.startsWith('#')) return '不能以 # 开头'
+  if (/^从\d+$/.test(key)) return '会被当成「全部 从N」的页码'
   return null
 }
 

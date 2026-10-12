@@ -77,6 +77,9 @@ describe('parseHeaderLine', () => {
   it('reads saved appraisals, 全部 and line replacements', () => {
     expect(header('#K7Q2 buy')).toEqual({ kind: 'header', header: { appraisalId: 'K7Q2', side: 'buy' } })
     expect(header('#K7Q2 全部')).toEqual({ kind: 'header', header: { appraisalId: 'K7Q2', all: true } })
+    // 「下一页」按钮：从第 81 项接着列
+    expect(header('#K7Q2 全部 从81')).toEqual({ kind: 'header', header: { appraisalId: 'K7Q2', all: true, from: 81 } })
+    expect(header('#K7Q2 从0')).toEqual({ kind: 'header', header: { appraisalId: 'K7Q2', market: '从0' } })
     expect(header('#K7Q2 7=#17636 9=#638')).toEqual({ kind: 'header', header: { appraisalId: 'K7Q2', replace: { 7: 17636, 9: 638 } } })
     expect(header('#K7Q2 Jita')).toEqual({ kind: 'header', header: { appraisalId: 'K7Q2', market: 'Jita' } })
   })

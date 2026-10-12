@@ -124,13 +124,44 @@ describe('longer lists', () => {
     for (const card of cards) expect(md(card).length).toBeLessThanOrEqual(3500)
   })
 
-  it('「全部」lists beyond 120 in as many messages as allowed, without asking again', () => {
-    const cards = resultCards(env(), appraisal(jita, manyRows(150)), options({ all: true }))
-    const all = cards.map((c) => md(c)).join('\n')
-    const listed = all.split('\n').filter((l) => l.startsWith('- ')).length
-    expect(listed).toBeGreaterThan(120)
-    expect(all).not.toContain('完整清单')
-    if (listed < 150) expect(all).toContain(`…其余 ${150 - listed} 种`)
+  it('「全部」lists every type; what does not fit goes on the next page through「下一页」', () => {
+    const result = appraisal(jita, manyRows(150))
+    const listed = (cards: ReturnType<typeof resultCards>) => cards.map((c) => md(c)).join('\n').split('\n').filter((l) => l.startsWith('- '))
+    // 只剩 1 条回复
+    const first = resultCards(env(), result, options({ all: true, maxParts: 1 }))
+    expect(first).toHaveLength(1)
+    expect(md(first[0]).length).toBeLessThanOrEqual(3500)
+    const n = listed(first).length
+    expect(n).toBeGreaterThan(30)
+    expect(md(first[0])).toContain(`**合计**`)
+    expect(md(first[0])).toContain(`第 1–${n} 项，共 150 项`)
+    expect(md(first[0])).toContain(`…还有 ${150 - n} 项，点「下一页」接着看`)
+    expect(buttons(first[0])[0]).toEqual([`下一页=>批量查价 #K7Q2 全部 从${n + 1}`])
+    expect(md(first[0])).not.toContain('其余')
+    // 下一页接着列，没有合计，列完了就不再有「下一页」
+    const second = resultCards(env(), result, options({ all: true, from: n + 1, maxParts: 2 }))
+    expect(md(second[0]).startsWith(`**批量估价 #K7Q2 完整清单**\n第 ${n + 1}–`)).toBe(true)
+    expect(md(second[0])).not.toContain('**合计**')
+    for (const card of second) expect(md(card).length).toBeLessThanOrEqual(3500)
+    const rest = listed(second)
+    expect(n + rest.length).toBe(150)
+    expect(new Set([...listed(first), ...rest]).size).toBe(150)
+    expect(md(second[second.length - 1])).not.toContain('下一页')
+    expect(buttons(second[second.length - 1]).flat().join()).not.toContain('下一页')
+  })
+
+  it('「全部」with a long warning list shows every line; without it the rest is in「完整清单」', () => {
+    const unresolved = Array.from({ length: 20 }, (_, i) => ({ lineNo: i + 2, raw: `zzzz${i}`, total: 0 }))
+    const result = appraisal(jita, manyRows(5), { unresolved })
+    const short = resultCards(env(), result, options())
+    expect(md(short[0])).toContain('…另有 5 行，在「完整清单」里')
+    expect(buttons(short[0])[0]).toEqual(['完整清单=>批量查价 #K7Q2 全部'])
+    const full = resultCards(env(), result, options({ all: true }))
+    const out = full.map((c) => md(c)).join('\n')
+    for (let i = 0; i < 20; i++) expect(out).toContain(`「zzzz${i}」没有找到`)
+    expect(out).toContain('⚠ 有 20 行没有计入合计：')
+    expect(out).not.toContain('另有')
+    expect(out).not.toContain('下一页')
   })
 
   it('with only one message left the details are summed up in the first one', () => {

@@ -141,6 +141,7 @@ describe('normalizeConfig: markets', () => {
         { name: 'Amarr', location: '60008494', enabled: false },
         { name: 'Amarr', location: '60008494' },
         { [INVALID_ROW_KEY]: true },
+        { name: '从81', location: '60008494' },
       ],
     })
     expect(settings.markets.map((m) => m.name)).toEqual(['Jita 4-4', 'Amarr'])
@@ -156,6 +157,7 @@ describe('normalizeConfig: markets', () => {
       '市场第 9 行「名称」#638 不能以 # 开头，已跳过',
       '市场第 10 行「类型」写的「station」不认识，已跳过',
       '市场第 13 行有写错的字段（例如类型、启用写成了别的值），已跳过',
+      '市场第 14 行「名称」从81 会被当成「全部 从N」的页码，已跳过',
     ])
   })
 

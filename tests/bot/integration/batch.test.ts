@@ -250,6 +250,25 @@ describe('批量查价: long lists and the reply budget', () => {
     expect(sent.length).toBeLessThanOrEqual(2)
   })
 
+  it('「全部」goes on with「下一页」until every type was listed', async () => {
+    const e = await start({ esi: allPriced })
+    const id = idOf(await e.h.direct(`批量查价\n${list}`))
+    const listed: string[] = []
+    let command = `批量查价 #${id} 全部`
+    for (let page = 0; page < 5 && command; page++) {
+      const sent = await e.h.direct(command)
+      listed.push(...sent.flatMap((s) => (s.markdown ?? '').split('\n').filter((l) => l.startsWith('- '))))
+      command = sent[sent.length - 1].rows.flat().find((b) => b.label === '下一页')?.text ?? ''
+    }
+    expect(command).toBe('')
+    expect(new Set(listed).size).toBe(60)
+    expect(listed).toHaveLength(60)
+    // 「下一页」按钮的命令：从第 31 项接着列，不重复合计
+    const next = await e.h.direct(`批量查价 #${id} 全部 从31`)
+    expect(next[0].markdown).toMatch(new RegExp(`^\\*\\*批量估价 #${id} 完整清单\\*\\*\\n第 31–60 项，共 60 项`))
+    expect(next[0].markdown).not.toContain('**合计')
+  })
+
   it('a slow cold start sends one hint after 3 seconds, then the result', async () => {
     // 时钟和定时器都是假的：拨到 3 秒发出提示，再放行 ESI
     const time = new FakeTime(TEST_START)

@@ -29,8 +29,10 @@ export interface BatchEnv {
 }
 
 export interface ResultOptions {
-  /** 「全部」：明细不止前 120 种 */
+  /** 「全部」：每一种、每一条没计入的行都列出来 */
   all: boolean
+  /** 「全部 从81」：从第 81 项接着列（上一次发不完时「下一页」按钮带的） */
+  from?: number
   /** 最多发几条（回复额度剩下的） */
   maxParts: number
   /** 标题下的说明（例如「多行内容已按批量查价处理」） */
@@ -186,15 +188,26 @@ export function warningLines(result: AppraisalResult): string[] {
   return entries.sort((a, b) => a.no - b.no).map((e) => e.text)
 }
 
-function warningSections(env: BatchEnv, result: AppraisalResult): Section[] {
-  const sections: Section[] = []
-  if (result.truncated) sections.push({ style: 'plain', lines: [{ text: `⚠ 清单太长，只处理了前 ${MAX_LINES} 行，剩下的请分开发` }] })
+const warningHead = (count: number): Section => ({ style: 'plain', lines: [{ text: `⚠ 有 ${count} 行没有计入合计：` }] })
+
+/** 没计入合计的行最多列 15 行；more = 剩下的在哪里能看到 */
+function warningSections(env: BatchEnv, result: AppraisalResult, more = ''): Section[] {
+  const sections: Section[] = [...truncatedSection(result)]
   const lines = warningLines(result)
   if (lines.length) {
     const shown = lines.slice(0, MAX_WARNING_LINES).map((text): Line => ({ text }))
-    if (lines.length > shown.length) shown.push({ text: `…另有 ${lines.length - shown.length} 行` })
-    sections.push({ style: 'plain', lines: [{ text: `⚠ 有 ${lines.length} 行没有计入合计：` }] }, { lines: shown })
+    if (lines.length > shown.length) shown.push({ text: `…另有 ${lines.length - shown.length} 行${more}` })
+    sections.push(warningHead(lines.length), { lines: shown })
   }
+  return [...sections, ...fallbackSection(env, result)]
+}
+
+function truncatedSection(result: AppraisalResult): Section[] {
+  return result.truncated ? [{ style: 'plain', lines: [{ text: `⚠ 清单太长，只处理了前 ${MAX_LINES} 行，剩下的请分开发` }] }] : []
+}
+
+function fallbackSection(env: BatchEnv, result: AppraisalResult): Section[] {
+  const sections: Section[] = []
   const fallback = result.rows.find((r) => r.fallback)?.fallback
   const fallbackName = fallback && env.core.markets.get(fallback.marketKey)?.name
   if (fallback && fallbackName) {
@@ -269,67 +282,79 @@ function unresolvedChoices(result: AppraisalResult): Choice[] {
 
 // ------------------------------------------------------------------ 组装
 
-function firstCard(env: BatchEnv, result: AppraisalResult, rows: Section | undefined, options: ResultOptions): Card {
+const FULL_LIST = '完整清单'
+
+function headCard(env: BatchEnv, result: AppraisalResult, options: ResultOptions): Card {
   const head = title(result)
   const card = emptyCard(head.title)
   card.meta = [...head.meta, ...options.note ? [options.note] : []]
   card.sections.push(summarySection(env, result))
   const subtotals = subtotalSection(env, result)
   if (subtotals) card.sections.push(subtotals)
-  if (rows) card.sections.push(rows)
-  card.sections.push(...warningSections(env, result), volumeSection(env, result))
   card.footer = footerText(env.core.format, result.dataTime, [`估价 #${result.id}`], `${escapeMarkdown(result.market.name)} `)
   card.notices = options.notices
   return card
 }
 
+function firstCard(env: BatchEnv, result: AppraisalResult, rows: Section | undefined, options: ResultOptions): Card {
+  const card = headCard(env, result, options)
+  if (rows) card.sections.push(rows)
+  card.sections.push(...warningSections(env, result, `，在「${FULL_LIST}」里`), volumeSection(env, result))
+  return card
+}
+
 const lineSize = (line: Line) => ('text' in line ? line.text.length : line.label.length + 40) + 6
 const counted = (chunks: Line[][]) => chunks.reduce((n, c) => n + c.length, 0)
+const PART_CHARS = MAX_MESSAGE_CHARS - SPLIT_PART_RESERVE
 
 /** 明细按长度分成最多 parts 条（按 Markdown 估算，纯文字更短）；used = 放进去的行数 */
 function chunkRows(lines: Line[], parts: number): { chunks: Line[][]; used: number } {
-  const chunks: Line[][] = []
-  if (parts <= 0) return { chunks, used: 0 }
-  let current: Line[] = []
-  let length = 0
-  for (const line of lines) {
-    const size = lineSize(line)
-    if (current.length && length + size > MAX_MESSAGE_CHARS - SPLIT_PART_RESERVE) {
-      chunks.push(current)
-      if (chunks.length >= parts) return { chunks, used: counted(chunks) }
-      current = []
-      length = 0
-    }
-    current.push(line)
-    length += size
-  }
-  if (current.length) chunks.push(current)
+  const chunks = fill(lines, Array.from({ length: Math.max(0, parts) }, () => PART_CHARS), lineSize)
   return { chunks, used: counted(chunks) }
+}
+
+/** 按顺序装进几条消息，第 i 条最多 room[i] 字；每条至少放一项（第一条可以一项都不放） */
+function fill<T>(items: readonly T[], room: readonly number[], size: (item: T) => number): T[][] {
+  const chunks: T[][] = []
+  let at = 0
+  for (const [i, max] of room.entries()) {
+    const chunk: T[] = []
+    let length = 0
+    while (at < items.length) {
+      const n = size(items[at])
+      if (length + n > max && (chunk.length || i === 0)) break
+      chunk.push(items[at++])
+      length += n
+    }
+    chunks.push(chunk)
+    if (at >= items.length) break
+  }
+  return chunks
 }
 
 /**
  * 估价结果 → 一条或几条卡片（按钮和编号只挂在最后一条）。
  * ≤ 10 种详细排版（按粘贴顺序；装配估价按金额）；11–40 种紧凑；更多时第一条放合计、警告、体积和金额最高的 30 种，
- * 其余拆成「明细 2/3」，放不下的只写「…其余 N 种共 X，已计入合计」和「完整清单」按钮
+ * 其余拆成「明细 2/3」，放不下的只写「…其余 N 种共 X，已计入合计」和「完整清单」按钮；「全部」见 fullCards
  */
 export function resultCards(env: BatchEnv, result: AppraisalResult, options: ResultOptions): Card[] {
   const rows = priced(result.rows)
   const fitting = !!result.fitting
   const detailed = !fitting && rows.length <= DETAIL_LINES
   const ordered = detailed ? rows : byTotal(rows)
+  if (options.all && (ordered.length > COMPACT_LINES || warningLines(result).length > MAX_WARNING_LINES)) return fullCards(env, result, options)
   if (ordered.length <= COMPACT_LINES) {
     const card = firstCard(env, result, ordered.length ? rowsSection(env, result, ordered, detailed) : undefined, options)
     return [finish(env, result, card, [])]
   }
   const top = ordered.slice(0, SPLIT_FIRST_ROWS)
   const first = firstCard(env, result, rowsSection(env, result, top, false), options)
-  const capped = options.all ? ordered.slice(SPLIT_FIRST_ROWS) : ordered.slice(SPLIT_FIRST_ROWS, SPLIT_MAX_ROWS)
-  const lines = capped.map((r) => compactLine(env, r, fitting))
+  const lines = ordered.slice(SPLIT_FIRST_ROWS, SPLIT_MAX_ROWS).map((r) => compactLine(env, r, fitting))
   const { chunks, used } = chunkRows(lines, options.maxParts - 1)
   const omitted = ordered.slice(SPLIT_FIRST_ROWS + used)
   const total = chunks.length + 1
   const cards = [first, ...chunks.map((chunk, i) => detailCard(result, chunk, i + 2, total))]
-  return [...cards.slice(0, -1), finish(env, result, cards[cards.length - 1], omitted, options.all)]
+  return [...cards.slice(0, -1), finish(env, result, cards[cards.length - 1], omitted)]
 }
 
 function detailCard(result: AppraisalResult, lines: Line[], no: number, total: number): Card {
@@ -338,18 +363,87 @@ function detailCard(result: AppraisalResult, lines: Line[], no: number, total: n
   return card
 }
 
-/** 最后一条：没列出的行写一句，加按钮和编号 */
-function finish(env: BatchEnv, result: AppraisalResult, card: Card, omitted: ReadonlyArray<{ total: number }>, all = false): Card {
+/** 最后一条：没列出的行写一句，加按钮和编号；警告没列完时也给「完整清单」 */
+function finish(env: BatchEnv, result: AppraisalResult, card: Card, omitted: ReadonlyArray<{ total: number }>): Card {
   const actions: Action[][] = [sideActions(env, result)]
   if (omitted.length) {
     const sum = omitted.reduce((s, r) => s + r.total, 0)
     card.sections.push({ style: 'plain', lines: [{ text: `…其余 ${omitted.length} 种共 ${rowAmount(env, sum)}，已计入合计` }] })
-    if (!all) actions.unshift([{ label: '完整清单', command: { id: 'batch', args: `#${result.id} 全部` }, primary: true }])
+  }
+  if (omitted.length || warningLines(result).length > MAX_WARNING_LINES) {
+    actions.unshift([{ label: FULL_LIST, command: { id: 'batch', args: `#${result.id} 全部` }, primary: true }])
   }
   card.actions = actions.filter((row) => row.length)
   const choices = unresolvedChoices(result)
   if (choices.length) card.choices = choices
   return card
+}
+
+// ------------------------------------------------------------------ 「全部」：完整清单
+
+interface Entry {
+  kind: 'row' | 'warning'
+  line: Line
+}
+
+const sectionSize = (section: Section) => section.lines.reduce((n, l) => n + lineSize(l), 0)
+const cardSize = (card: Card) => card.title.length + (card.footer?.length ?? 0) + 40
+  + [...card.meta ?? [], ...card.notices ?? []].reduce((n, t) => n + t.length + 2, 0)
+  + card.sections.reduce((n, s) => n + sectionSize(s), 0)
+
+/**
+ * 「全部」：金额从高到低的每一种（紧凑排版），后面是每一条没计入合计的行，一共 N 项。
+ * 第一条放合计、体积，剩下的地方接着放明细；回复条数用完还没列完时，最后一条给「下一页」（全部 从M），点了接着列
+ */
+function fullCards(env: BatchEnv, result: AppraisalResult, options: ResultOptions): Card[] {
+  const fitting = !!result.fitting
+  const warnings = warningLines(result)
+  const entries: Entry[] = [
+    ...byTotal(priced(result.rows)).map((r): Entry => ({ kind: 'row', line: compactLine(env, r, fitting) })),
+    ...warnings.map((text): Entry => ({ kind: 'warning', line: { text } })),
+  ]
+  const start = Math.min(Math.max(0, (options.from ?? 1) - 1), Math.max(0, entries.length - 1))
+  const head = start === 0 ? headCard(env, result, options) : undefined
+  if (head) head.sections.push(...truncatedSection(result), ...fallbackSection(env, result), volumeSection(env, result))
+  const parts = Math.max(1, options.maxParts)
+  const room = Array.from({ length: parts }, (_, i) => (i === 0 && head ? PART_CHARS - cardSize(head) : PART_CHARS))
+  const chunks = fill(entries.slice(start), room, (e) => lineSize(e.line))
+  const cards: Card[] = []
+  let at = start
+  for (const [i, chunk] of chunks.entries()) {
+    const card = i === 0 && head ? head : emptyCard(`**批量估价 #${result.id} ${FULL_LIST}**`)
+    if (chunk.length) card.meta = [...card.meta ?? [], `第 ${at + 1}–${at + chunk.length} 项，共 ${entries.length} 项`]
+    card.sections.push(...entrySections(chunk, at, entries, warnings.length, fitting))
+    at += chunk.length
+    cards.push(card)
+  }
+  const last = cards[cards.length - 1]
+  const actions: Action[][] = [sideActions(env, result)]
+  if (at < entries.length) {
+    last.sections.push({ style: 'plain', lines: [{ text: `…还有 ${entries.length - at} 项，点「下一页」接着看` }] })
+    actions.unshift([{ label: '下一页', command: { id: 'batch', args: `#${result.id} 全部 从${at + 1}` }, primary: true }])
+  }
+  last.actions = actions.filter((row) => row.length)
+  const choices = unresolvedChoices(result)
+  if (choices.length) last.choices = choices
+  return cards
+}
+
+/** 一条消息里的明细：连续的物品一段，没计入的行一段（第一条前面写「有 N 行没有计入合计」） */
+function entrySections(chunk: readonly Entry[], at: number, entries: readonly Entry[], warnings: number, fitting: boolean): Section[] {
+  const sections: Section[] = []
+  for (const [i, entry] of chunk.entries()) {
+    const prev = chunk[i - 1]
+    if (prev?.kind !== entry.kind) {
+      if (entry.kind === 'warning') {
+        const first = entries[at + i - 1]?.kind !== 'warning'
+        sections.push(first ? warningHead(warnings) : { style: 'plain', lines: [{ text: '⚠ 没有计入合计的行（接上）：' }] })
+      }
+      sections.push({ style: entry.kind === 'row' && fitting ? 'ordered' : 'bullet', lines: [] })
+    }
+    sections[sections.length - 1].lines.push(entry.line)
+  }
+  return sections
 }
 
 // ------------------------------------------------------------------ 只发表头、一行都没认出来、市场不可用
