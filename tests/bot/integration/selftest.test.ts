@@ -77,7 +77,7 @@ describe('样式自检 1', () => {
       '上面是一行看不见的空格：这一行和上一行之间应该空出一行',
       '',
       '***',
-      '分割线：这一行上面应该有一条横线；看到 *** 就不正常',
+      '分割线：这一行上面应该有一条横线；看到 `***` 就不正常',
     ].join('\n'))
     expect(sent[1].markdown).toContain('下面应该有 4 行按钮：第 1 行 3 个、第 2 行 4 个、第 3 行 2 个、第 4 行 1 个，行和行之间没有空行')
     expect(sent[1].rows.map((row) => row.map((b) => `${b.label}=>${b.text}`))).toEqual([
@@ -121,6 +121,9 @@ describe('样式自检 2', () => {
     expect(sent[2].markdown).toContain(`<qqbot-at-user id="${MEMBER}" /> 这一行开头应该是 @你的名字`)
     // 2-4：按发出去的 Markdown 正好 3,900 字，最后一行是结束标记
     expect(sent[3].markdown).toHaveLength(SELFTEST_LONG_CHARS)
+    // 用一行数字补齐，句子后面不接一串「。」
+    expect(sent[3].markdown).not.toContain('。。')
+    expect(sent[3].markdown).toMatch(/\n补齐长度：\d*\n/)
     expect(sent[3].markdown?.endsWith('——样式自检 2-4 到这里结束——')).toBe(true)
     expect(sent[3].markdown).toContain('2-1 正常 / 2-2 不正常（没有引用）/ 2-3 正常 / 2-4 长消息正常、长图看不清')
     expect(buttonRows(sent)).toEqual([])

@@ -73,7 +73,8 @@ export function markdownCard(): Card {
       { text: '上面是一行看不见的空格：这一行和上一行之间应该空出一行' },
     ],
   })
-  card.footer = '分割线：这一行上面应该有一条横线；看到 *** 就不正常'
+  // *** 写在行内代码里，不然 QQ 会把它当成粗斜体标记吃掉
+  card.footer = '分割线：这一行上面应该有一条横线；看到 `***` 就不正常'
   return card
 }
 
@@ -183,6 +184,8 @@ export function mentionCard(userId: string): Card {
  * 2-4：正好 SELFTEST_LONG_CHARS 字的长消息（按发出去的 Markdown 算），最后一行是结束标记，前面写第 2 页的回报格式。
  * mention：发了 2-3 的 @ 提醒（单聊不发，回报格式里也就不写 2-3）
  */
+const PAD = '补齐长度：'
+
 export function longCard(inv: Pick<Invocation, 'commands' | 'render'>, mention = true): Card {
   const end = '——样式自检 2-4 到这里结束——'
   const target = Math.min(HARD_MAX_MESSAGE_CHARS, SELFTEST_LONG_CHARS)
@@ -202,7 +205,8 @@ export function longCard(inv: Pick<Invocation, 'commands' | 'render'>, mention =
     if (length([...filler, next]) > target) break
     filler.push(next)
   }
-  // 最后一行补几个字，正好凑够
-  filler[filler.length - 1] += '。'.repeat(Math.max(0, target - length(filler)))
-  return build(filler)
+  // 最后加一行数字补齐，正好凑够（不在句子后面接一串「。」）
+  while (filler.length > 1 && length([...filler, PAD]) > target) filler.pop()
+  const pad = Math.max(0, target - length([...filler, PAD]))
+  return build([...filler, PAD + '1234567890'.repeat(Math.ceil(pad / 10)).slice(0, pad)])
 }

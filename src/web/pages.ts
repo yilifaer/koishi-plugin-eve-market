@@ -95,9 +95,10 @@ function profileRow(view: AdminView, row: AdminView['profiles'][number], canStar
   const p = row.info
   const s = PROFILE_STATUS[p.status]
   const authorized = p.status !== 'NEEDS_AUTH' || !!p.characterName
-  const error = p.lastError
-    ? html`<div class="small bad">最近的错误：${p.lastError}${p.lastErrorAt ? `（${view.clock(p.lastErrorAt)}）` : ''}</div>`
-    : ''
+  const when = p.lastErrorAt ? `（${view.clock(p.lastErrorAt)}）` : ''
+  const error = !p.lastError ? ''
+    : p.status === 'OK' ? html`<div class="small muted">已恢复。之前的错误：${p.lastError}${when}</div>`
+      : html`<div class="small bad">最近的错误：${p.lastError}${when}</div>`
   const start = canStart
     ? html`<a class="btn" href="${href(SSO_START_PATH, { profile: p.profile, t: row.startToken })}">${authorized ? '重新授权' : '授权'}</a>`
     : html`<span class="muted small">先完成第 1 步</span>`
@@ -149,9 +150,11 @@ function marketsSection(view: AdminView): Raw {
   }
   const rows = view.structures.map((m) => {
     const s = MARKET_STATE[m.state]
-    const error = m.lastError
-      ? html`${m.lastError.status ? `${m.lastError.status} ` : ''}${m.lastError.message}${m.lastErrorAt ? `（${view.clock(m.lastErrorAt)}）` : ''}`
-      : html`<span class="muted">—</span>`
+    const last = m.lastError
+      ? `${m.lastError.status ? `${m.lastError.status} ` : ''}${m.lastError.message}${m.lastErrorAt ? `（${view.clock(m.lastErrorAt)}）` : ''}`
+      : ''
+    // 已经正常了：上一次的错误只作记录，标明已恢复
+    const error = !last ? html`<span class="muted">—</span>` : m.state === 'OK' ? html`<span class="muted">已恢复。之前：${last}</span>` : html`${last}`
     const orders = m.pages !== null && m.orders !== null ? `${m.pages} 页 ${m.orders.toLocaleString('en-US')} 单` : '—'
     return html`<tr><td><b>${m.name}</b></td><td>${m.authProfile || html`<span class="muted">不用授权</span>`}</td>
 <td>${status(s.tone, s.label)}${m.paused ? html`<div class="small muted">24 小时没人查，同步已暂停（有人查时自动恢复）</div>` : ''}</td>

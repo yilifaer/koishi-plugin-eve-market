@@ -280,6 +280,16 @@ describe('admin page', () => {
     expect(body).not.toContain('<option value="logistics">')
   })
 
+  it('an error from before the market or profile became OK again is marked as recovered', async () => {
+    const env = setup()
+    env.fc.auth.list = [{ ...okProfile(), lastError: '还没有授权', lastErrorAt: Date.UTC(2026, 9, 12, 13, 53) }]
+    env.fc.sources = [structureSource({ marketKey: 'a', name: '联盟市场A', state: 'OK', lastError: { message: '授权档案 default：还没有授权' }, lastErrorAt: Date.UTC(2026, 9, 12, 13, 53) })]
+    const body = (await env.get(ADMIN_PAGE_PATH)).body
+    expect(body).toContain('已恢复。之前：授权档案 default：还没有授权（')
+    expect(body).toContain('已恢复。之前的错误：还没有授权（')
+    expect(body).not.toContain('最近的错误：')
+  })
+
   it('escapes everything that comes from the game or the console', async () => {
     const env = setup({ callbackUrl: 'http://127.0.0.1:5140/eve-market/sso/callback?"><script>alert(1)</script>' })
     env.fc.auth.list = [profile({ profile: 'default', status: 'OK', characterName: '<script>alert(2)</script>', lastError: '<b>x</b>', markets: ['<i>A</i>'] })]
