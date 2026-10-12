@@ -184,8 +184,8 @@ export const CMD_INPUT_IN_LISTS = false
 export const QUOTE_REPLY = false
 /** 用 <qqbot-at-user> 提醒提问的人 */
 export const MENTION_USER = false
-/** 势力图下面附一行说明文字（和图片合成一条） */
-export const MAP_CAPTION = false
+/** 势力图下面附一行说明文字（和图片合成一条）；样式自检 2-1 已确认 QQ 会显示 */
+export const MAP_CAPTION = true
 
 // ------------------------------------------------------------------ 权限
 
@@ -417,7 +417,7 @@ export const MAP_TIMEOUT_MS = 30000
 export const MAP_MAX_BYTES = 20 * 1024 * 1024
 export const IMAGE_MAX_BYTES = 20 * 1024 * 1024
 
-// ------------------------------------------------------------------ 工业（0.2.0）
+// ------------------------------------------------------------------ 工业
 
 export const MAX_ME = 10
 export const MAX_TE = 20

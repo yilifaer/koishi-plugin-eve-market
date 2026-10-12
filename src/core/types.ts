@@ -899,7 +899,7 @@ export interface AppraisalService {
   reprice(id: string, opts: AppraiseOptions & { replace?: Record<number, TypeId>; all?: boolean }): Promise<AppraisalResult | CoreFailure>
 }
 
-// ------------------------------------------------------------------ 工业（0.2.0）
+// ------------------------------------------------------------------ 工业
 
 export interface IndustryRequest {
   typeId: TypeId
@@ -1282,7 +1282,7 @@ export interface CoreStatus {
   markets: MarketSourceStatus[]
   auth: AuthProfileStatus[]
   esi: EsiStatus
-  /** 0.2.0：系统指数和调整价的更新时间 */
+  /** 系统指数和调整价的更新时间（配了工业地点时才有） */
   industry?: { indicesAt: number | null; adjustedPricesAt: number | null }
   /** 本地检查和需要数据的检查合在一起 */
   issues: ConfigIssue[]

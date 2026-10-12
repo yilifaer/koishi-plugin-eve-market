@@ -12,7 +12,7 @@ import {
 // Schema 校验失败会让整个插件加载失败，所以每个字段只做宽松的声明并加 .loose()（类型不对时回到默认值），
 // 具体检查放到 normalize.ts。表格的每一行整体 loose：类型、启用这类选项写错时整行变成 INVALID_ROW，
 // 由 normalize 标成无效并跳过，只影响这一行。
-// 「工业」分组 0.2.0 加入；0.1.x 存下的配置里没有这个分组，按默认值处理。
+// 「工业」分组 0.0.4 加入；之前存下的配置里没有这个分组，按默认值处理。
 
 export interface GroupRow { groupId: string; note: string; enabled: boolean }
 export interface UserRow { userId: string; note: string; enabled: boolean }

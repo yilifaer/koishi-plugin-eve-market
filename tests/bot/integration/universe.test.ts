@@ -212,10 +212,11 @@ describe('势力图 / 联盟势力图', () => {
     const influence = await e.h.group('势力图')
     expect(influence).toHaveLength(1)
     expect(imageOf(influence[0])).toEqual({ mime: 'image/png', data: PNG })
-    // 说明文字要等样式自检确认以后才打开
-    expect(influence[0].text).toBe('')
+    // 图片下面的说明文字和图片在同一条消息里（样式自检 2-1 确认过）
+    expect(influence[0].text).toMatch(/^欧服势力图 · 来源 Verite · 图片更新于 \d\d:\d\d$/)
     const coalition = await e.h.group('联盟势力图')
     expect(imageOf(coalition[0])).toEqual({ mime: 'image/jpeg', data: JPEG })
+    expect(coalition[0].text).toMatch(/^欧服联盟势力图 · 来源 Verite · /)
   })
 
   it('the second time comes from the local cache', async () => {
