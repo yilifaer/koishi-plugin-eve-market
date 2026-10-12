@@ -195,7 +195,7 @@ describe('registry outside a running app', () => {
   it('the filter on the names is the command context filter', async () => {
     const h = await startHarness()
     try {
-      const scopes = createScopes(h.app, { general: { requireAt: true, allowSandbox: false }, echo: new EchoLog() })
+      const scopes = createScopes(h.app, { general: { requireAt: true, allowSandbox: false, qqWatchdog: true }, echo: new EchoLog() })
       const registry = new CommandRegistry(scopes.cmdCtx, { filter: scopes.filter, logger: { debug() {}, info() {}, warn() {}, error() {} } })
       const command = registry.register('incursion')!
       const filter = command._aliases['入侵'].filter as (session: Session) => boolean
@@ -210,7 +210,7 @@ describe('registry outside a running app', () => {
   it('only: the command and its names exist only for the sessions it accepts (plugin-help goes by command.ctx)', async () => {
     const h = await startHarness()
     try {
-      const scopes = createScopes(h.app, { general: { requireAt: true, allowSandbox: false }, echo: new EchoLog() })
+      const scopes = createScopes(h.app, { general: { requireAt: true, allowSandbox: false, qqWatchdog: true }, echo: new EchoLog() })
       const registry = new CommandRegistry(scopes.cmdCtx, { filter: scopes.filter, logger: { debug() {}, info() {}, warn() {}, error() {} } })
       let admin = false
       const command = registry.register('marketStatus', { args: '[action:text]', hidden: true, only: () => admin })!

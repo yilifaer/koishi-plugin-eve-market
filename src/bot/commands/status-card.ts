@@ -10,6 +10,7 @@ import type { CommandConflict } from '../register'
 import { describeConflict } from '../register'
 import type { BreakerStatus } from '../send/breaker'
 import type { Action, Card, Line } from '../view/card'
+import type { WatchdogStatus } from '../watchdog'
 import { escapeMarkdown } from '../view/escape'
 import { emptyCard } from './context'
 
@@ -62,6 +63,8 @@ export interface StatusView extends StatusEnv {
   status: CoreStatus
   conflicts: readonly CommandConflict[]
   breaker: BreakerStatus
+  /** 官方机器人和看门狗；不写 = 不显示这一行 */
+  watchdog?: WatchdogStatus
   /** 「市场状态 刷新」的结果，写在标题下面 */
   refreshed?: string[]
 }
@@ -227,6 +230,20 @@ function messageLine(breaker: BreakerStatus, now: number): Line {
   return { text: `消息：${dots([head, trips])}` }
 }
 
+/** 官方机器人：在线 · 自动重启过 1 次（最近 14:20，之前不在线 12 分钟） */
+function botLine(w: WatchdogStatus | undefined, now: number): Line[] {
+  if (!w) return []
+  if (!w.bots) return [{ text: '官方机器人：没有找到（adapter-qq 没有启用）' }]
+  const restarted = w.restarts && w.lastRestartAt !== null
+    ? `自动重启过 ${w.restarts} 次（最近 ${clock(w.lastRestartAt, now)}${w.lastDownMinutes === null ? '' : `，之前不在线 ${w.lastDownMinutes} 分钟`}）`
+    : ''
+  const off = w.enabled ? '' : '看门狗已关闭'
+  if (w.downSince === null) return [{ text: `官方机器人：${dots(['在线', restarted, off])}` }]
+  const minutes = Math.max(0, Math.floor((now - w.downSince) / 60_000))
+  const auto = w.enabled ? '连续 10 分钟不在线会自动重启 adapter-qq' : off
+  return [{ text: `官方机器人：${dots([`🔴 已经 ${minutes} 分钟不在线`, auto, restarted])}` }]
+}
+
 /** 「配置问题：无」「配置问题：…」或「配置问题：3 条」加下面的明细 */
 function listLines(label: string, items: string[]): Line[] {
   if (!items.length) return [{ text: `${label}：${STATUS_TEXT.none}` }]
@@ -249,6 +266,7 @@ export function statusCard(view: StatusView, actions: Action[][]): Card {
     ...dataLines(status, now),
     ...industryLines(status, now),
     ...esiLine(status, now),
+    ...botLine(view.watchdog, now),
     messageLine(view.breaker, now),
     ...listLines('配置问题', status.issues.map((i) => escapeMarkdown(describeIssue(i)))),
     ...listLines('命令冲突', view.conflicts.map((c) => escapeMarkdown(describeConflict(c)))),

@@ -83,6 +83,8 @@ export interface EnvOptions extends Pick<HarnessOptions, 'help' | 'onebot'> {
   clock?: Clock
   /** 插件的定时器（core 的时限、慢提示）；默认 ctx.setTimeout */
   scheduler?: Scheduler
+  /** 看门狗的定时器；默认 ctx.setTimeout（测试里不会触发） */
+  watchdogScheduler?: Scheduler
   /** 加载 Koishi 的 server 插件，监听 127.0.0.1 的这个端口（先用 freePort() 取一个） */
   serverPort?: number
   /** 提供一个 puppeteer 服务（假浏览器或真的 Chromium）；不写 = 没有 puppeteer */
@@ -151,13 +153,14 @@ interface InstallSetup {
   logger: RecordingLogger
   clock: Clock
   scheduler?: Scheduler
+  watchdogScheduler?: Scheduler
   /** 装好以后记下本插件 */
   installed?: (fork: ForkScope) => void
 }
 
 function pluginInstaller(setup: InstallSetup, config: Record<string, unknown>) {
   const data = bundledDir(makeVersion())
-  const { fake, store, logger, clock, scheduler } = setup
+  const { fake, store, logger, clock, scheduler, watchdogScheduler } = setup
   return (app: Context) => {
     const fork = app.plugin({
       name: 'eve-market',
@@ -171,6 +174,7 @@ function pluginInstaller(setup: InstallSetup, config: Record<string, unknown>) {
         logger,
         clock,
         ...scheduler ? { scheduler } : {},
+        ...watchdogScheduler ? { watchdogScheduler } : {},
       }),
     // 控制台的原始值，由 Schema 补默认值、normalize 逐行检查
     }, baseConfig(config) as unknown as Config)
@@ -193,7 +197,9 @@ export async function startPlugin(options: EnvOptions = {}): Promise<PluginEnv> 
   const store = createModuleStore()
   const logger = new RecordingLogger()
   let plugin: ForkScope | undefined
-  const install = pluginInstaller({ fake, store, logger, clock, scheduler: options.scheduler, installed: (fork) => { plugin = fork } }, options.config ?? {})
+  const install = pluginInstaller({
+    fake, store, logger, clock, scheduler: options.scheduler, watchdogScheduler: options.watchdogScheduler, installed: (fork) => { plugin = fork },
+  }, options.config ?? {})
   let server: ForkScope | undefined
   const h = await startHarness({
     help: options.help,

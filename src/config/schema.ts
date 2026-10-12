@@ -91,7 +91,7 @@ export interface IndustryConfig {
 }
 
 export interface Config {
-  general: { requireAt: boolean; allowSandbox: boolean }
+  general: { requireAt: boolean; allowSandbox: boolean; qqWatchdog: boolean }
   display: {
     output: OutputMode
     numberStyle: NumberStyle
@@ -141,6 +141,8 @@ export const Config: Schema<Config> = Schema.intersect([
         .description('群里只处理 @机器人 的消息（私聊不受影响）。群主打开「接收群内全部消息」后，这个开关可以避免和群里其他机器人重复回复。'),
       allowSandbox: bool(false)
         .description('测试用：也在 Koishi 控制台的「沙盒」里回复（纯文字版本），测完关掉。插件只在 QQ 官方机器人上回复，不会在 LLBot 上回复。'),
+      qqWatchdog: bool(true)
+        .description('官方机器人连续 10 分钟不在线时，自动重启 adapter-qq（和在控制台停用再启用一样），两次至少隔 30 分钟。断网恢复后 adapter-qq 有时一直报「AccessToken无效或过期」，重启就好。'),
     }).default({} as Config['general']).loose(),
   }).description('基本'),
 

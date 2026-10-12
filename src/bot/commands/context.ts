@@ -16,6 +16,7 @@ import { buildAccess } from '../scope'
 import { createReplier, replyBudget, sendState } from '../send/replier'
 import type { Replier } from '../send/replier'
 import type { Card, CardRenderOptions } from '../view/card'
+import type { WatchdogStatus } from '../watchdog'
 import { escapeMarkdown } from '../view/escape'
 import type { CoreHandle } from './runtime'
 import { SAY } from './text'
@@ -35,6 +36,8 @@ export interface CommandContext {
   webReady?: () => boolean
   /** 出图和截图（走势图、战报）；不写 = 没有（走势只发文字卡片，战报回复截图服务没有启动） */
   media?: Media
+  /** 官方机器人看门狗的状态（「市场状态」里显示）；不写 = 没有这一行 */
+  watchdog?: () => WatchdogStatus
 }
 
 /** 一次命令调用 */

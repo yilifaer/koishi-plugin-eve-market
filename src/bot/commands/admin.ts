@@ -71,6 +71,7 @@ async function runStatus(inv: Invocation, refresh: boolean): Promise<void> {
     status: inv.core.status(),
     conflicts: inv.commands.registry.conflicts(),
     breaker: sendState(inv.commands.store).breaker.status(inv.commands.clock.now()),
+    ...inv.commands.watchdog ? { watchdog: inv.commands.watchdog() } : {},
     refreshed,
   }
   await sendCard(inv, statusCard(view, statusActions(inv)))

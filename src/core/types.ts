@@ -120,6 +120,8 @@ export type MarketType = 'npc-station' | 'system' | 'region' | 'structure'
 export interface GeneralSettings {
   requireAt: boolean
   allowSandbox: boolean
+  /** 官方机器人连续 10 分钟不在线时自动重启 adapter-qq */
+  qqWatchdog: boolean
 }
 
 export interface DisplaySettings {

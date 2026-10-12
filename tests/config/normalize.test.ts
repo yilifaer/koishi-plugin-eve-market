@@ -27,7 +27,7 @@ describe('normalizeConfig: defaults', () => {
       const { settings, issues } = run(raw)
       expect(issues).toEqual([])
       expect(settings.issues).toBe(issues)
-      expect(settings.general).toEqual({ requireAt: true, allowSandbox: false })
+      expect(settings.general).toEqual({ requireAt: true, allowSandbox: false, qqWatchdog: true })
       expect(settings.display).toEqual({
         output: 'markdown', numberStyle: 'code', priceDisplayMode: 'full_and_compact', listPriceDisplayMode: 'compact_only',
         compactDecimals: 2, thousandSeparator: true, showCurrency: true, clickable: 'buttons',

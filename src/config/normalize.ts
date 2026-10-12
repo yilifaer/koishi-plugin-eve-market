@@ -704,7 +704,7 @@ export function normalizeConfig(input: unknown): NormalizedConfig {
   const issues = new IssueList()
 
   const g = obj(raw.general)
-  const general = { requireAt: bool(g.requireAt, true), allowSandbox: bool(g.allowSandbox, false) }
+  const general = { requireAt: bool(g.requireAt, true), allowSandbox: bool(g.allowSandbox, false), qqWatchdog: bool(g.qqWatchdog, true) }
   const display = normalizeDisplay(raw, issues)
   const access = normalizeAccess(raw, issues)
 

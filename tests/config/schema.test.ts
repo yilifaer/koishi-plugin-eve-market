@@ -21,7 +21,7 @@ describe('Config schema', () => {
   it('fills every group from an empty config', () => {
     const c = Config({} as any)
     expect(Object.keys(c)).toEqual(['general', 'display', 'access', 'markets', 'aliases', 'price', 'appraisal', 'freight', 'notices', 'industry', 'sso', 'render', 'advanced'])
-    expect(c.general).toEqual({ requireAt: true, allowSandbox: false })
+    expect(c.general).toEqual({ requireAt: true, allowSandbox: false, qqWatchdog: true })
     expect(c.display).toMatchObject({ output: 'markdown', numberStyle: 'code', priceDisplayMode: 'full_and_compact', listPriceDisplayMode: 'compact_only', compactDecimals: 2, clickable: 'buttons' })
     expect(c.markets.map((m) => m.name)).toEqual(['Jita 4-4', 'Amarr', 'Dodixie', 'Rens', 'Hek'])
     expect(c.price).toEqual({ baseMarket: 'Jita 4-4', defaultQuantities: [{ item: 'PLEX', quantity: 500 }] })

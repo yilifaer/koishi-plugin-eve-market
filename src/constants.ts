@@ -169,6 +169,10 @@ export const MAX_ACTIONS_PER_ROW = 4
 export const MAX_CHOICES_PER_ROW = 5
 /** 「未知市场」最多给几个市场按钮（按标签宽度排成 2–3 行） */
 export const MAX_MARKET_BUTTONS = 8
+/** 官方机器人看门狗：多久看一次；连续不在线多久重启 adapter-qq；两次重启至少隔多久 */
+export const QQ_WATCHDOG_CHECK_MS = 60_000
+export const QQ_WATCHDOG_OFFLINE_MS = 10 * 60_000
+export const QQ_WATCHDOG_COOLDOWN_MS = 30 * 60_000
 /** 纯文字降级时动作按钮最多写几行 */
 export const TEXT_ACTION_LINES = 2
 

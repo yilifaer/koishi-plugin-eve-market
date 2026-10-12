@@ -1,4 +1,4 @@
-// 插件组装（§3.7.3）：规范化配置 → 授权档案表 → 模块级存储 → 平台范围 → 出图和截图（puppeteer 调用时再取）→ 安全注册
+// 插件组装（§3.7.3）：规范化配置 → 授权档案表 → 模块级存储 → 平台范围 → 出图和截图（puppeteer 调用时再取）→ 官方机器人看门狗 → 安全注册
 // → 前置中间件 → 命令 → 后置中间件 → 有 server 插件时挂上 EVE 授权页面；ready 时建端口（含 secret.key 的密钥盒）、组装 core 并启动
 // （读缓存或自带快照 → 建索引 → 授权档案 → 建筑市场同步），停用时停掉 core（取消请求、清定时器）并关掉所有浏览器页面。
 // 数据还没准备好时收到的命令最多等 8 秒。
@@ -23,6 +23,7 @@ import { installPrefix, textReply } from './prefix'
 import { CommandRegistry } from './register'
 import { createScopes, messageDedupe } from './scope'
 import { sendState } from './send/replier'
+import { installWatchdog } from './watchdog'
 
 /** 包的根目录：编译后是 lib/bot/plugin.js，源码是 src/bot/plugin.ts，往上两级都是 */
 const PACKAGE_ROOT = path.resolve(__dirname, '../..')
@@ -53,6 +54,8 @@ export interface PluginOptions {
   /** 不写 = 系统时钟、ctx.setTimeout（测试里固定时间，避开 DT） */
   clock?: Clock
   scheduler?: Scheduler
+  /** 看门狗每分钟检查用的定时器；不写 = ctx.setTimeout（不跟着上面测试用的 scheduler 走，免得测试里多出一个定时器） */
+  watchdogScheduler?: Scheduler
 }
 
 interface CoreSetup {
@@ -92,8 +95,12 @@ export function installPlugin(ctx: Context, config: Config, options: PluginOptio
   const media = createMedia({ pages: puppeteerPages(() => ctx.get('puppeteer')), logger })
   const scopes = createScopes(ctx, { general: settings.general, echo: sendState(store).echo })
   const registry = new CommandRegistry(scopes.cmdCtx, { filter: scopes.filter, logger })
+  const watchdog = installWatchdog(ctx, {
+    enabled: settings.general.qqWatchdog, store, clock, logger, scheduler: options.watchdogScheduler ?? koishiScheduler(ctx),
+  })
   const commands: CommandContext = {
     settings, registry, pending: pendingStore(store), store, logger, core: runtime, clock, scheduler, webReady: () => web.ready, media,
+    watchdog: () => watchdog.status(),
   }
 
   installPrefix(scopes.cmdCtx, {

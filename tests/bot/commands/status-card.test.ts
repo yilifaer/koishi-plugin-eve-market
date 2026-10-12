@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { STATUS_TEXT, authCard, dots, errorBrief, marketLines, profileLines, statusCard } from '../../../src/bot/commands/status-card'
 import type { StatusView } from '../../../src/bot/commands/status-card'
 import type { BreakerStatus } from '../../../src/bot/send/breaker'
+import type { WatchdogStatus } from '../../../src/bot/watchdog'
 import { toQQMarkdown } from '../../../src/bot/view/markdown'
 import type { Line } from '../../../src/bot/view/card'
 import type { AuthProfileStatus, ConfigIssue, CoreStatus, MarketSourceStatus } from '../../../src/core/types'
@@ -161,6 +162,21 @@ describe('市场状态: the whole card', () => {
     expect(out).toContain('- 配置问题：10 条\n    - 物品别名第 1 行别名第 1 个有问题')
     expect(out).toContain('    - 另有 2 条，详见 Koishi 日志')
     expect(out).toContain('- 命令冲突：「搜索」和别的插件的命令重名，没有注册')
+  })
+
+  it('the official bot line: online with past restarts, offline counting towards a restart, watchdog off, no bot', () => {
+    const w: WatchdogStatus = { enabled: true, bots: 1, downSince: null, restarts: 0, lastRestartAt: null, lastDownMinutes: null }
+    const line = (o: Partial<WatchdogStatus>) => md(statusCard(view({ watchdog: { ...w, ...o } }), [])).split('\n').find((l) => l.includes('官方机器人'))
+    expect(line({})).toBe('- 官方机器人：在线')
+    expect(line({ restarts: 2, lastRestartAt: NOW - 90 * MINUTE, lastDownMinutes: 12 })).toBe('- 官方机器人：在线 · 自动重启过 2 次（最近 12:50，之前不在线 12 分钟）')
+    expect(line({ downSince: NOW - 4 * MINUTE })).toBe('- 官方机器人：🔴 已经 4 分钟不在线 · 连续 10 分钟不在线会自动重启 adapter-qq')
+    expect(line({ enabled: false, downSince: NOW - 4 * MINUTE })).toBe('- 官方机器人：🔴 已经 4 分钟不在线 · 看门狗已关闭')
+    expect(line({ enabled: false })).toBe('- 官方机器人：在线 · 看门狗已关闭')
+    expect(line({ bots: 0 })).toBe('- 官方机器人：没有找到（adapter-qq 没有启用）')
+    // 放在「消息」一行前面；没有看门狗信息时不写
+    const out = md(statusCard(view({ watchdog: w }), []))
+    expect(out.indexOf('官方机器人')).toBeLessThan(out.indexOf('- 消息：'))
+    expect(md(statusCard(view(), []))).not.toContain('官方机器人')
   })
 
   it('with industry locations: when the system indices and adjusted prices were updated (§2.16)', () => {

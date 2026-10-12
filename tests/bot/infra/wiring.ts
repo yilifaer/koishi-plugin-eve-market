@@ -65,7 +65,7 @@ export function wire(ctx: Context, options: WiringOptions = {}): Wiring {
     warn: (...a: unknown[]) => logs.push(a.map(String).join(' ')),
     error: (...a: unknown[]) => logs.push(a.map(String).join(' ')),
   }
-  const general: GeneralSettings = { requireAt: true, allowSandbox: false, ...options.general }
+  const general: GeneralSettings = { requireAt: true, allowSandbox: false, qqWatchdog: true, ...options.general }
   const access: AccessSettings = { admins: [], allowedGroups: [], allowedUsers: [], ...options.access }
   const scopes = createScopes(ctx, { general, echo: sendState(store).echo })
   const registry = new CommandRegistry(scopes.cmdCtx, { filter: scopes.filter, logger })
