@@ -7,6 +7,15 @@ export const HAN = '\\u3400-\\u4dbf\\u4e00-\\u9fff\\uf900-\\ufaff'
 const ZERO_WIDTH = /[\u200b-\u200d\u2060\ufeff]/g
 const DASHES = /[‐‑‒–—―−]/g
 
+// 游戏复制工业窗口时，物品名包在 <localized hint="中文名">英文名</localized> 里；取里面的名字，空的话取 hint
+const LOCALIZED = /<localized\b([^>]*)>([\s\S]*?)<\/localized>/gi
+const HINT = /\bhint\s*=\s*"([^"]*)"/i
+
+export function stripGameMarkup(raw: string): string {
+  if (!raw.includes('<')) return raw
+  return raw.replace(LOCALIZED, (_m, attrs: string, inner: string) => inner.trim() || HINT.exec(attrs)?.[1] || '')
+}
+
 export function normalizeLine(raw: string): string {
   return raw.replace(ZERO_WIDTH, '').normalize('NFKC').replace(/✕/g, '×').trim()
 }

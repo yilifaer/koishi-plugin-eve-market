@@ -23,7 +23,7 @@ async function start(options: IndustryEnvOptions = {}): Promise<PluginEnv> {
 const CLOCK = String.raw`\d\d:\d\d`
 
 const BASE_CARD = [
-  '**乌鸦级** Raven · 制造 · 基础参考',
+  '**乌鸦级 Raven · 制造 · 基础参考**',
   '',
   '蓝图 ME 0 / TE 0 · 无建筑、无改装件 · 未计系统指数和税',
   '',
@@ -42,7 +42,7 @@ const BASE_CARD = [
 ].join('\n')
 
 const RESULT_HEAD = [
-  '**乌鸦级** Raven · 高级制造计算',
+  '**乌鸦级 Raven · 高级制造计算**',
   '',
   'XX-1 · 大厂 · 00',
   '蓝图 ME 10 / TE 20 · 1 流程（1 艘）',
@@ -105,7 +105,7 @@ describe('制造: base reference', () => {
 
   it('a blueprint name means its product; a T2 product says how its blueprint is obtained', async () => {
     const e = await start()
-    expect(card(await e.h.group('制造 乌鸦级蓝图'))).toMatch(/^\*\*乌鸦级\*\* Raven · 制造 · 基础参考/)
+    expect(card(await e.h.group('制造 乌鸦级蓝图'))).toMatch(/^\*\*乌鸦级 Raven · 制造 · 基础参考\*\*/)
     const t2 = card(await e.h.group('制造 损伤控制 II'))
     expect(t2).toContain('⚠ T2 蓝图一般来自发明（常见 ME 2 / TE 4），发明成本暂不计入')
   })
@@ -226,7 +226,7 @@ describe('制造: advanced steps', () => {
     const first = await e.h.group('制造 乌鸦级 高级')
     expect(card(first)).toBe([
       '**乌鸦级 · 高级制造计算**',
-      '进度：**地点** → ME/TE → 建筑',
+      '进度：**地点 → ME/TE → 建筑**',
       '',
       '请选择制造地点：',
       '',
@@ -243,7 +243,7 @@ describe('制造: advanced steps', () => {
     ])
 
     const second = await e.h.group('1')
-    expect(card(second)).toContain('进度：地点 ✓ → **ME/TE** → 建筑\n已选：XX-1')
+    expect(card(second)).toContain('进度：地点 ✓ → **ME/TE → 建筑**\n已选：XX-1')
     expect(card(second)).toContain('1. ME10/TE20\n2. ME5/TE10\n3. ME0/TE0')
     expect(buttonRows(second)).toEqual([
       ['10/20=>制造 乌鸦级 XX-1 ME10 TE20 高级', '5/10=>制造 乌鸦级 XX-1 ME5 TE10 高级', '0/0=>制造 乌鸦级 XX-1 ME0 TE0 高级'],
@@ -261,13 +261,13 @@ describe('制造: advanced steps', () => {
 
   it('the custom button with a bare 「ME」 asks the same step again', async () => {
     const e = await start()
-    expect(card(await e.h.group('制造 乌鸦级 XX-1 高级 ME'))).toContain('进度：地点 ✓ → **ME/TE** → 建筑')
+    expect(card(await e.h.group('制造 乌鸦级 XX-1 高级 ME'))).toContain('进度：地点 ✓ → **ME/TE → 建筑**')
   })
 
   it('a location with one structure skips the structure step; one visible location skips the location step', async () => {
     const e = await start({ industry: { locations: [LOCATIONS[1]], structures: [STRUCTURES[3]] } })
     const step = await e.h.group('制造 乌鸦级 高级', { channelId: GROUP2 })
-    expect(card(step)).toContain('进度：地点 ✓ → **ME/TE** → 建筑\n已选：XX-2（本群唯一的地点）')
+    expect(card(step)).toContain('进度：地点 ✓ → **ME/TE → 建筑**\n已选：XX-2（本群唯一的地点）')
     const result = card(await e.h.group('1', { channelId: GROUP2 }))
     expect(result).toContain('XX-2 · 中厂（该地点唯一） · 低安\n蓝图 ME 10 / TE 20 · 1 流程（1 艘）')
   })
@@ -284,13 +284,13 @@ describe('制造: advanced steps', () => {
   it('writing a structure or tax without a location starts from the location step', async () => {
     const e = await start()
     const out = await e.h.group('制造 乌鸦级 税:2%')
-    expect(card(out)).toContain('进度：**地点** → ME/TE → 建筑\n已选：设施税 2%')
+    expect(card(out)).toContain('进度：**地点 → ME/TE → 建筑**\n已选：设施税 2%')
     expect(buttons(out)[0]).toBe('XX-1=>制造 乌鸦级 XX-1 税:2% 高级')
     // 写了的建筑也带着：选了地点以后用它，这个地点没有它时再问
     const named = await e.h.group('制造 乌鸦级 建筑:小厂')
     expect(card(named)).toContain('已选：建筑 小厂')
     expect(buttons(named).slice(0, 2)).toEqual(['XX-1=>制造 乌鸦级 XX-1 建筑:小厂 高级', 'XX-2=>制造 乌鸦级 XX-2 建筑:小厂 高级'])
-    expect(card(await e.h.group('1'))).toContain('进度：地点 ✓ → **ME/TE** → 建筑\n已选：XX-1 · 建筑 小厂')
+    expect(card(await e.h.group('1'))).toContain('进度：地点 ✓ → **ME/TE → 建筑**\n已选：XX-1 · 建筑 小厂')
     expect(card(await e.h.group('1'))).toContain('XX-1 · 小厂 · 00\n蓝图 ME 10 / TE 20 · 1 流程（1 艘）\n改装件 未装')
     expect(card(await e.h.group('制造 乌鸦级 XX-2 ME10 TE20 建筑:小厂'))).toContain('⚠ XX-2 没有叫「小厂」的建筑，请重新选择')
   })
@@ -405,7 +405,7 @@ describe('制造: errors', () => {
       '点下面的编号，或者 @我 回复编号（5 分钟内有效）',
     ].join('\n'))
     expect(buttons(sent)[1]).toBe('2=>制造 损伤控制 II XX-1 ME8')
-    expect(card(await e.h.group('2'))).toMatch(/^\*\*损伤控制 II\*\* Damage Control II · 高级制造计算\n\nXX-1 · 大厂（默认建筑） · 00\n蓝图 ME 8 \/ TE 4/)
+    expect(card(await e.h.group('2'))).toMatch(/^\*\*损伤控制 II Damage Control II · 高级制造计算\*\*\n\nXX-1 · 大厂（默认建筑） · 00\n蓝图 ME 8 \/ TE 4/)
     // 拼音、包含这类模糊命中也要确认
     expect(buttons(await e.h.group('制造 wuya XX-1'))).toEqual(['1=>制造 乌鸦级 XX-1'])
   })
@@ -414,7 +414,7 @@ describe('制造: errors', () => {
     const e = await start()
     const out = card(await e.h.group('制造 大型护盾扩展装置 II XX-1'))
     expect(out).toContain('- 材料成本 — （不完整，缺 5 种材料价格）')
-    expect(out).toContain('- **预计总成本** — （不完整，缺 5 种材料价格）（未计安装费用）')
+    expect(out).toContain('- **预计总成本 — （不完整，缺 5 种材料价格）（未计安装费用）**')
     expect(out).toContain('成品 Jita 4-4 暂无卖单')
     expect(out).not.toContain('预计利润')
     expect(out).not.toMatch(/0(\.00)? ISK/)

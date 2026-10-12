@@ -53,7 +53,7 @@ describe('split', () => {
     // 警告（不是数据行）、页脚都还在
     expect(last).toContain('⚠ 有 1 行没有计入合计')
     expect(last.endsWith('***\n欧服 · Jita 更新于 14:20 · 估价 #K7Q2')).toBe(true)
-    expect(out[0]).toContain('**合计**')
+    expect(out[0]).toContain('**合计')
   })
 
   it('one plan works for several layouts of the same card', () => {

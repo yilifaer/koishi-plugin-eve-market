@@ -52,7 +52,7 @@ function example(over: Partial<IndustryResult> = {}): IndustryResult {
 describe('result card (§2.6.4)', () => {
   it('matches the example in the default display mode', () => {
     expect(md(resultCard(env(), example(), 'manufacturing', []))).toBe([
-      '**乌鸦级** Raven · 高级制造计算',
+      '**乌鸦级 Raven · 高级制造计算**',
       '',
       'XX-1 · 索迪约 · 00',
       '蓝图 ME 10 / TE 20 · 1 流程（1 艘）',
@@ -77,10 +77,10 @@ describe('result card (§2.6.4)', () => {
   it('full_only and compact_only change every main amount', () => {
     const full = md(resultCard(env({ priceDisplayMode: 'full_only' }), example(), 'manufacturing', []))
     expect(full).toContain('- 安装费用 `3,840,000 ISK`\n')
-    expect(full).toContain('**预计利润 90,680,456 ISK · 利润率 35.1%**')
+    expect(full).toContain('**预计利润 90,680,456 ISK · 利润率 35.1%')
     const compact = md(resultCard(env({ priceDisplayMode: 'compact_only' }), example(), 'manufacturing', []))
     expect(compact).toContain('- 材料成本 `155.13M`\n- 安装费用 `3.84M`\n')
-    expect(compact).toContain('**预计利润 90.68M · 利润率 35.1%**')
+    expect(compact).toContain('**预计利润 90.68M · 利润率 35.1%')
   })
 
   it('plain text: no Markdown, the same lines', () => {
@@ -180,19 +180,19 @@ describe('compare card (§2.7)', () => {
       rows: [row('XX-1', 'not-installed'), row('XX-2', 'not-applicable'), row('XX-3', 'impossible'), row('XX-4', 'disabled')],
     }
     const out = md(compareCard(env(), c, []))
-    expect(out).toContain('1. **XX-1** · XX-1厂（未装改装件）\n')
-    expect(out).toContain('2. **XX-2** · XX-2厂（改装件对它不生效）\n')
-    expect(out).toContain('3. **XX-3** · XX-3厂\n')
-    expect(out).toContain('4. **XX-4** · XX-4厂\n')
+    expect(out).toContain('1. **XX-1 · XX-1厂（未装改装件）**\n')
+    expect(out).toContain('2. **XX-2 · XX-2厂（改装件对它不生效）**\n')
+    expect(out).toContain('3. **XX-3 · XX-3厂**\n')
+    expect(out).toContain('4. **XX-4 · XX-4厂**\n')
     // 命令里写的「改装:无」「税:」写在元信息里
     expect(md(compareCard(env(), { ...c, rigsOff: true, facilityTaxPct: 3 }, []))).toContain('ME 10 / TE 20 · 1 流程 · 不用改装件 · 设施税 3.00% · 材料按 Jita 4-4 出售价')
   })
 
   it('every row follows listPriceDisplayMode', () => {
     expect(md(compareCard(env(), comparison(), []))).toContain([
-      '1. **XX-2** · 阿兹贝尔 💰最低',
+      '1. **XX-2 · 阿兹贝尔 💰最低**',
       '    - 成本 `165.02M` · 1 小时 23 分 · 利润 90.68M（35.1%）',
-      '2. **XX-1** · 索迪约 ⚡最快',
+      '2. **XX-1 · 索迪约 ⚡最快**',
       '    - 成本 `167.72M` · 1 小时 7 分 · 利润 90.68M（35.1%）',
     ].join('\n'))
     expect(md(compareCard(env({ listPriceDisplayMode: 'inherit', priceDisplayMode: 'full_only' }), comparison(), []))).toContain('- 成本 `165,019,544 ISK` · 1 小时 23 分 · 利润 90,680,456 ISK（35.1%）')

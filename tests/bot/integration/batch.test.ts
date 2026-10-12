@@ -37,18 +37,18 @@ describe('批量查价: header and pending list', () => {
     const e = await start({ esi: prices })
     const header = await e.h.group('批量查价 -5% jita')
     expect(header[0].markdown).toBe([
-      '**批量查价** · Jita 4-4 · 出售价 -5%',
+      '**批量查价 · Jita 4-4 · 出售价 -5%**',
       '请在 5 分钟内 @我 粘贴清单：一行一个，可以直接从游戏里复制，也可以粘贴装配。',
       '- 例：Raven*2\n- 例：Tritanium 1000000',
     ].join('\n\n'))
     const result = await e.h.group('Raven*2\nTritanium 1000000\nPyerite 500000')
-    expect(result[0].markdown).toContain('**批量估价** · Jita 4-4 · 出售价 -5%\n\n**合计** `524,400,000 ISK`（524.40M）\n调整前 552.00M · 3 种 · 1,500,002 件')
+    expect(result[0].markdown).toContain('**批量估价 · Jita 4-4 · 出售价 -5%**\n\n**合计** `524,400,000 ISK`（524.40M）\n调整前 552.00M · 3 种 · 1,500,002 件')
     expect(result[0].markdown).toContain('1. **Raven** ×2 · `513.00M`\n    - 单价 270.00M → 256.50M')
   })
 
   it('the header can be on the second line', async () => {
     const e = await start({ esi: prices })
-    expect(card(await e.h.group('批量查价\nJita buy\nRaven*2'))).toContain('**批量估价** · Jita 4-4 · 收购价')
+    expect(card(await e.h.group('批量查价\nJita buy\nRaven*2'))).toContain('**批量估价 · Jita 4-4 · 收购价')
   })
 
   it('「取消」clears the pending list; with nothing pending it is ignored', async () => {
@@ -65,18 +65,18 @@ describe('批量查价: header and pending list', () => {
       setup: (app) => app.plugin({ name: 'ping', apply: (ctx) => { ctx.command('ping').action(() => 'pong') } }),
     })
     await e.h.group('批量查价 Jita')
-    expect(card(await e.h.group('/查价 乌鸦级'))).toContain('**乌鸦级** Raven · 战列舰')
+    expect(card(await e.h.group('/查价 乌鸦级'))).toContain('**乌鸦级 Raven · 战列舰')
     expect(card(await e.h.group('ping'))).toBe('pong')
     // 待办还在：下一条清单照样接上
-    expect(card(await e.h.group('Raven*2\nTritanium 10'))).toContain('**批量估价** · Jita 4-4 · 出售价')
+    expect(card(await e.h.group('Raven*2\nTritanium 10'))).toContain('**批量估价 · Jita 4-4 · 出售价')
   })
 
   it('nothing recognized: warnings only, and the list can be pasted again', async () => {
     const e = await start({ esi: prices })
     const sent = await e.h.group('批量查价 Jita -5%\nzzzz qqqq\nyyyy wwww')
     expect(card(sent)).toContain('⚠ 有 2 行没有计入合计：')
-    expect(card(sent)).not.toContain('**合计**')
-    expect(card(await e.h.group('Raven*2'))).toContain('**批量估价** · Jita 4-4 · 出售价 -5%')
+    expect(card(sent)).not.toContain('**合计')
+    expect(card(await e.h.group('Raven*2'))).toContain('**批量估价 · Jita 4-4 · 出售价 -5%')
   })
 
   it('nothing recognized but candidates offered: replying with a number picks one, pasting again still works', async () => {
@@ -88,11 +88,11 @@ describe('批量查价: header and pending list', () => {
     expect(card(sent)).toContain('第 1 行「护盾扩展装置 II」可能是 3 种物品，请写完整名称')
     expect(card(sent)).toContain('点下面的编号，或者 @我 回复编号（5 分钟内有效）')
     const picked = card(await e.h.group('2'))
-    expect(picked).toContain('**批量估价** · Jita 4-4 · 出售价')
+    expect(picked).toContain('**批量估价 · Jita 4-4 · 出售价')
     expect(picked).toContain('中型护盾扩展装置 II')
     expect(picked).toContain('`2.00M`')
     // 批量清单待办还在
-    expect(card(await e.h.group('Raven*2\nTritanium 10'))).toContain('**批量估价**')
+    expect(card(await e.h.group('Raven*2\nTritanium 10'))).toContain('**批量估价')
   })
 
   it('the numbered reply works in text output too', async () => {
@@ -119,7 +119,7 @@ describe('批量查价: header and pending list', () => {
     const e = await start({ esi: prices })
     const sent = await e.h.group('批量查价 Amarr -5%\nRaven*2\nTritanium*10')
     const out = card(sent)
-    expect(out).toContain('**批量估价** · Amarr · 出售价 -5%\n\n**合计** —\n没有取到任何价格')
+    expect(out).toContain('**批量估价 · Amarr · 出售价 -5%**\n\n**合计 —**\n没有取到任何价格')
     expect(out).toContain('- 第 1 行 Raven：Amarr 无有效卖单')
     expect(out).not.toMatch(/\b0(\.00)? ISK|调整前|0 种/)
     const id = idOf(sent)
@@ -138,9 +138,9 @@ describe('批量查价: appraisal ID buttons', () => {
     const first = await e.h.group('批量查价 Amarr\nRaven*2')
     const id = idOf(first)
     expect(buttons(first)).toEqual([`改用收购价=>批量查价 #${id} buy`, `改用中间价=>批量查价 #${id} mid`, `改用 Jita=>批量查价 #${id} Jita`])
-    expect(card(await e.h.group(`批量查价 #${id} buy`))).toContain('**批量估价** · Amarr · 收购价')
+    expect(card(await e.h.group(`批量查价 #${id} buy`))).toContain('**批量估价 · Amarr · 收购价')
     const jita = card(await e.h.group(`批量查价 #${id} Jita`))
-    expect(jita).toContain('**批量估价** · Jita 4-4 · 收购价')
+    expect(jita).toContain('**批量估价 · Jita 4-4 · 收购价')
     expect(jita).toContain('`500.00M`')
   })
 
@@ -151,7 +151,7 @@ describe('批量查价: appraisal ID buttons', () => {
     const jitaButton = buttons(sent)[0]
     expect(jitaButton).toMatch(/^Jita=>批量查价 #[A-Z0-9]{4} Jita$/)
     const result = await e.h.group(jitaButton.split('=>')[1])
-    expect(card(result)).toContain('**批量估价** · Jita 4-4 · 出售价')
+    expect(card(result)).toContain('**批量估价 · Jita 4-4 · 出售价')
     expect(card(result)).toContain('`540.00M`')
   })
 
@@ -174,14 +174,14 @@ describe('批量查价: appraisal ID buttons', () => {
     const sent = await e.h.group('批量查价 联盟市场A -5%\nRaven*2')
     const id = idOf(sent)
     expect(card(sent)).toBe([
-      '**批量估价** · 联盟市场A · 出售价 -5%',
+      '**批量估价 · 联盟市场A · 出售价 -5%**',
       '⚠ 联盟市场A 市场数据暂时不可用（ESI 授权或建筑访问权限异常）',
       `清单已保存为 #${id}（24 小时内有效），可以先改用其他市场估价。`,
     ].join('\n\n'))
     expect(buttons(sent)).toEqual([
       `改用 Jita=>批量查价 #${id} Jita`, `改用 Amarr=>批量查价 #${id} Amarr`, `改用 Dodi…=>批量查价 #${id} Dodixie`, `改用 Rens=>批量查价 #${id} Rens`,
     ])
-    expect(card(await e.h.group(`批量查价 #${id} Jita`))).toContain('**批量估价** · Jita 4-4 · 出售价 -5%')
+    expect(card(await e.h.group(`批量查价 #${id} Jita`))).toContain('**批量估价 · Jita 4-4 · 出售价 -5%')
   })
 
   it('unresolved lines get numbered candidates that replace the line', async () => {
@@ -217,7 +217,7 @@ describe('批量查价: fittings and freight', () => {
       'Hammerhead II x5',
     ].join('\n'))
     const out = card(sent)
-    expect(out).toMatch(/^\*\*装配估价\*\* · 乌鸦级「刷怪乌鸦」\nJita 4-4 · 出售价\n\n\*\*合计\*\* /)
+    expect(out).toMatch(/^\*\*装配估价 · 乌鸦级「刷怪乌鸦」\*\*\nJita 4-4 · 出售价\n\n\*\*合计\*\* /)
     expect(out).toContain('- 船体 乌鸦级 · `270.00M`')
     expect(out).toContain('- 装备 2 件 · `4.20M`')
     expect(out).toMatch(/装填弹药按满装计算（2 × [\d,]+ 发）/)
@@ -236,7 +236,7 @@ describe('批量查价: long lists and the reply budget', () => {
     const sent = await e.h.group(`批量查价\n${list}`)
     expect(sent.length).toBeGreaterThanOrEqual(2)
     expect(sent.length).toBeLessThanOrEqual(3)
-    expect(sent[0].markdown).toContain('**合计**')
+    expect(sent[0].markdown).toContain('**合计')
     expect(sent[0].rows).toEqual([])
     expect(sent[1].markdown).toMatch(/^\*\*批量估价 #[A-Z0-9]{4} 明细 2\/\d\*\*/)
     expect(sent[sent.length - 1].rows.length).toBeGreaterThan(0)
@@ -265,7 +265,7 @@ describe('批量查价: long lists and the reply budget', () => {
       release()
       const sent = await pending
       expect(sent[0].text).toBe('⏳ 正在查询 35 种物品的价格…')
-      expect(sent[1].markdown).toContain('**合计**')
+      expect(sent[1].markdown).toContain('**合计')
     } finally {
       release()
     }
@@ -276,7 +276,7 @@ describe('批量查价: long lists and the reply budget', () => {
     const e = await start({ esi: allPriced, clock: time, scheduler: time })
     const sent = await e.h.group(`批量查价\n${items.slice(0, 35).map((it) => it.en).join('\n')}`)
     expect(sent).toHaveLength(1)
-    expect(sent[0].markdown).toContain('**合计**')
+    expect(sent[0].markdown).toContain('**合计')
     expect(time.pending).toBe(0)
   })
 })

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Card } from '../../../src/bot/view/card'
 import { keyboardRows, textActions } from '../../../src/bot/view/clickable'
-import { priceMarkdown, toQQMarkdown } from '../../../src/bot/view/markdown'
+import { keepBoldSpacing, priceMarkdown, toQQMarkdown } from '../../../src/bot/view/markdown'
 import {
   BATCH_MARKDOWN, CANDIDATE_MARKDOWN, PRICE_MARKDOWN, batchCard, candidateCard, compact, price, priceCard, renderOptions,
 } from './cards'
@@ -71,14 +71,14 @@ describe('toQQMarkdown', () => {
 
   it('writes meta under the title, warnings after the data, and no rule without a footer', () => {
     const card = bare({
-      title: '**乌鸦级** Raven ×10 · 战列舰',
+      title: '**乌鸦级 Raven ×10 · 战列舰**',
       meta: ['多行内容已按批量查价处理', '按「乌鸦」查询'],
       sections: [{ heading: '联盟市场A', lines: [{ text: '⚠ 市场数据暂时不可用（同步异常）' }], style: 'plain' }],
       warnings: ['有 2 行没有计入合计'],
       notices: ['只有告示'],
     })
     expect(toQQMarkdown(card, renderOptions()).md).toBe([
-      '**乌鸦级** Raven ×10 · 战列舰',
+      '**乌鸦级 Raven ×10 · 战列舰**',
       '多行内容已按批量查价处理',
       '按「乌鸦」查询',
       '',
@@ -179,5 +179,19 @@ describe('keyboardRows', () => {
     card.actions = [[action('全部结果', 'evil.com'), action('看 x.cn', '乌鸦级'), action('下一页', '护盾 第2页')]]
     expect(keyboardRows(card, renderOptions()).flat().map((b) => b.text)).toEqual([expect.stringMatching(/^查价 /), '查价 护盾 第2页'])
     expect(textActions(card, renderOptions()).map((a) => a.command)).toEqual(['查价 护盾 第2页'])
+  })
+})
+
+// QQ 会吃掉粗体结束标记后面的空格，所以粗体后面紧跟的普通文字一起放进粗体
+describe('keepBoldSpacing', () => {
+  it('moves plain text after the last bold into it', () => {
+    expect(keepBoldSpacing('**乌鸦级** Raven · 战列舰')).toBe('**乌鸦级 Raven · 战列舰**')
+    expect(keepBoldSpacing('「乌鸦级」**相关物品** · Jita 4-4 · 共 82 个')).toBe('「乌鸦级」**相关物品 · Jita 4-4 · 共 82 个**')
+  })
+
+  it('leaves lines alone when the rest has code, markup or nothing after the bold', () => {
+    for (const line of ['1. **乌鸦级** ×2 · `513.00M`', '**合计** `524,400,000 ISK`（524.40M）', '**Jita**', '***', '- 出售 `258,400,000 ISK`', '**a** <qqbot-cmd-input text="x" />']) {
+      expect(keepBoldSpacing(line)).toBe(line)
+    }
   })
 })

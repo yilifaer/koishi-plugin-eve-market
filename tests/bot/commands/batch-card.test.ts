@@ -41,7 +41,7 @@ describe('detailed layout (≤ 10 types)', () => {
     const cards = resultCards(env(), result, options({ notices: ['联盟市场A 矿石收购按 Jita 收购价 92%，详见群公告'] }))
     expect(cards).toHaveLength(1)
     expect(md(cards[0])).toBe([
-      '**批量估价** · 联盟市场A · 出售价 -5%',
+      '**批量估价 · 联盟市场A · 出售价 -5%**',
       '**合计** `524,400,000 ISK`（524.40M）\n调整前 552.00M · 3 种 · 1,500,002 件',
       [
         '1. **乌鸦级** ×2 · `513.00M`',
@@ -222,7 +222,7 @@ describe('nothing priced', () => {
     const c = testCore({ markets: [...PRESET_MARKETS, ALLIANCE_ROW], freight: { routes: [] } }, { priceDisplayMode: mode })
     const cards = resultCards(env(c), result, options())
     const out = md(cards[0])
-    expect(out).toContain('**批量估价** · 联盟市场A · 出售价 -5%\n\n**合计** —\n没有取到任何价格')
+    expect(out).toContain('**批量估价 · 联盟市场A · 出售价 -5%**\n\n**合计 —**\n没有取到任何价格')
     expect(out).toContain('- 第 1 行 乌鸦级：联盟市场A 无有效卖单\n- 第 2 行 三钛合金：超时，暂时取不到价格')
     expect(out).not.toMatch(/0\.00|0 ISK|调整前|按 Jita|运到|到货成本/)
     expect(text(cards[0])).toContain('合计 —\n没有取到任何价格')
@@ -286,7 +286,7 @@ describe('fitting', () => {
     })
     const out = md(resultCards(env(), result, options())[0])
     expect(out.split('\n\n').slice(0, 4)).toEqual([
-      '**装配估价** · 乌鸦级「刷怪乌鸦」\nJita 4-4 · 出售价',
+      '**装配估价 · 乌鸦级「刷怪乌鸦」**\nJita 4-4 · 出售价',
       `**合计** \`${(258.4e6 + 12.6e6 + 5.6e6 + 2.25e6 + 562_120).toLocaleString('en-US')} ISK\`（279.41M）\n5 种 · 2,176 件`,
       '- 船体 乌鸦级 · `258.40M`\n- 装备 8 件 · `18.20M`\n- 无人机和弹药 · `2.81M`',
       [
@@ -309,7 +309,7 @@ describe('fitting', () => {
       freightMissing: 1,
     })
     const out = md(resultCards(env(), result, options())[0])
-    expect(out.split('\n')[0]).toBe('**装配估价** · 乌鸦级')
+    expect(out.split('\n')[0]).toBe('**装配估价 · 乌鸦级**')
     expect(out).toContain('· 超过 350,000 m³，需要拆成 2 单')
     expect(out).toContain('（1 种物品没有 Jita 4-4 出售价，押金没有算进去）')
   })
@@ -319,11 +319,11 @@ describe('other batch cards', () => {
   it('header only: asks for the list (no @ needed in direct chats)', () => {
     const card = headerCard(env(), { marketName: '联盟市场A', side: 'sell', modifierPct: -5 }, false)
     expect(md(card)).toBe([
-      '**批量查价** · 联盟市场A · 出售价 -5%',
+      '**批量查价 · 联盟市场A · 出售价 -5%**',
       '请在 5 分钟内 @我 粘贴清单：一行一个，可以直接从游戏里复制，也可以粘贴装配。',
       '- 例：Raven*2\n- 例：Tritanium 1000000',
     ].join('\n\n'))
-    expect(md(headerCard(env(), { marketName: 'Jita 4-4', side: 'buy', modifierPct: 0 }, true))).toContain('**批量查价** · Jita 4-4 · 收购价\n\n请在 5 分钟内粘贴清单：')
+    expect(md(headerCard(env(), { marketName: 'Jita 4-4', side: 'buy', modifierPct: 0 }, true))).toContain('**批量查价 · Jita 4-4 · 收购价**\n\n请在 5 分钟内粘贴清单：')
   })
 
   it('nothing recognized: warnings and how to paste again, no total', () => {
@@ -340,7 +340,7 @@ describe('other batch cards', () => {
     }
     const card = unavailableCard(env(), failure, { side: 'sell', modifierPct: -5 })
     expect(md(card)).toBe([
-      '**批量估价** · 联盟市场A · 出售价 -5%',
+      '**批量估价 · 联盟市场A · 出售价 -5%**',
       '⚠ 联盟市场A 市场数据暂时不可用（ESI 授权或建筑访问权限异常）',
       '清单已保存为 #K7Q2（24 小时内有效），可以先改用其他市场估价。',
     ].join('\n\n'))

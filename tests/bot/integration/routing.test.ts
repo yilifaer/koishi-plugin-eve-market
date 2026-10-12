@@ -27,7 +27,7 @@ describe('help next to plugin-help', () => {
     for (const input of ['/帮助', '帮助', '菜单', '／帮助']) {
       const sent = await e.h.group(input)
       expect(sent, input).toHaveLength(1)
-      expect(sent[0].markdown, input).toMatch(/^\*\*EVE 市场助手\*\* · 欧服\n\n\*\*价格\*\*\n\n- 查价 乌鸦级：默认市场的出售、中间、收购价/)
+      expect(sent[0].markdown, input).toMatch(/^\*\*EVE 市场助手 · 欧服\*\*\n\n\*\*价格\*\*\n\n- 查价 乌鸦级：默认市场的出售、中间、收购价/)
       expect(sent[0].markdown).toContain('数据：CCP hf.（非商业使用）· 黑话表：EVE Online 中文黑话表 eve-cn-slang（CC BY 4.0）')
     }
   })
@@ -81,9 +81,9 @@ describe('numbered replies and glued commands', () => {
     const e = await start()
     expect((await e.h.group('5'))[0].text).toBe('这个编号已经过期了，请重新查询')
     await e.h.group('查价 乌鸦机')
-    expect(card(await e.h.group('/1'))).toContain('**乌鸦级** Raven · 战列舰')
+    expect(card(await e.h.group('/1'))).toContain('**乌鸦级 Raven · 战列舰')
     // 候选在有效期内一直可以选
-    expect(card(await e.h.group('2'))).toContain('**乌鸦级海军型**')
+    expect(card(await e.h.group('2'))).toContain('**乌鸦级海军型')
   })
 
   it('a number outside the list says which numbers exist', async () => {
@@ -100,7 +100,7 @@ describe('numbered replies and glued commands', () => {
 
   it('「查价乌鸦级」works without a space; commands without arguments must match exactly', async () => {
     const e = await start()
-    expect(card(await e.h.group('查价乌鸦级'))).toContain('**乌鸦级** Raven · 战列舰')
+    expect(card(await e.h.group('查价乌鸦级'))).toContain('**乌鸦级 Raven · 战列舰')
     expect(card(await e.h.group('本群ID是多少'))).toBe('没看懂「本群ID是多少」。你是想查价吗？')
   })
 })
@@ -111,12 +111,12 @@ describe('@, echo, dedupe and other platforms', () => {
     expect(await e.h.group('查价 乌鸦级', { at: false })).toEqual([])
     expect(await e.h.group('乌鸦级', { at: false })).toEqual([])
     // 单聊不用 @
-    expect(card(await e.h.direct('查价 乌鸦级'))).toContain('**乌鸦级**')
+    expect(card(await e.h.direct('查价 乌鸦级'))).toContain('**乌鸦级')
   })
 
   it('requireAt off: commands work without @, but bare items, fallback and numbers still need @', async () => {
     const e = await start({ config: { general: { requireAt: false } } })
-    expect(card(await e.h.group('查价 乌鸦级', { at: false }))).toContain('**乌鸦级**')
+    expect(card(await e.h.group('查价 乌鸦级', { at: false }))).toContain('**乌鸦级')
     expect(await e.h.group('乌鸦级', { at: false })).toEqual([])
     expect(await e.h.group('随便聊聊', { at: false })).toEqual([])
     await e.h.group('查价 乌鸦机')
@@ -141,12 +141,12 @@ describe('@, echo, dedupe and other platforms', () => {
       },
     })
     expect(card(await e.h.group('/ping', { at: false }))).toBe('pong')
-    expect(card(await e.h.group('/查价 乌鸦级', { at: false }))).toContain('**乌鸦级** Raven')
-    expect(card(await e.h.group('/查价乌鸦级', { at: false }))).toContain('**乌鸦级** Raven')
-    expect(card(await e.h.group('/帮助', { at: false }))).toMatch(/^\*\*EVE 市场助手\*\*/)
+    expect(card(await e.h.group('/查价 乌鸦级', { at: false }))).toContain('**乌鸦级 Raven')
+    expect(card(await e.h.group('/查价乌鸦级', { at: false }))).toContain('**乌鸦级 Raven')
+    expect(card(await e.h.group('/帮助', { at: false }))).toMatch(/^\*\*EVE 市场助手/)
     expect(await e.h.group('查价 乌鸦级', { at: false })).toEqual([])
     // @ 了机器人不用前缀，写了也行
-    expect(card(await e.h.group('查价 乌鸦级'))).toContain('**乌鸦级** Raven')
+    expect(card(await e.h.group('查价 乌鸦级'))).toContain('**乌鸦级 Raven')
     expect(card(await e.h.group('/ping'))).toBe('pong')
   })
 
@@ -237,14 +237,14 @@ describe('fallback (§2.18)', () => {
     const e = await start()
     const sent = await e.h.group('')
     expect(sent).toHaveLength(1)
-    expect(sent[0].markdown).toBe('**EVE 市场助手** · 欧服\n\n**价格**\n\n- 查价 乌鸦级：默认市场的出售、中间、收购价\n- 查价 Jita PLEX*500：指定市场和数量\n- 批量查价：粘贴清单或装配，算总价\n- 走势 乌鸦级：近 30 天价格图')
+    expect(sent[0].markdown).toBe('**EVE 市场助手 · 欧服**\n\n**价格**\n\n- 查价 乌鸦级：默认市场的出售、中间、收购价\n- 查价 Jita PLEX*500：指定市场和数量\n- 批量查价：粘贴清单或装配，算总价\n- 走势 乌鸦级：近 30 天价格图')
   })
 
   it('an exact item name is priced; a market and quantity in front work too', async () => {
     const e = await start()
-    expect(card(await e.h.group('乌鸦级'))).toContain('**乌鸦级** Raven · 战列舰\n\n**Jita 4-4**')
-    expect(card(await e.h.group('Jita Raven*2'))).toContain('**乌鸦级** Raven ×2 · 战列舰')
-    expect(card(await e.h.group('高级水晶'))).toContain('**高级水晶套装**')
+    expect(card(await e.h.group('乌鸦级'))).toContain('**乌鸦级 Raven · 战列舰**\n\n**Jita 4-4**')
+    expect(card(await e.h.group('Jita Raven*2'))).toContain('**乌鸦级 Raven ×2 · 战列舰')
+    expect(card(await e.h.group('高级水晶'))).toContain('**高级水晶套装')
   })
 
   it('short unknown text asks whether it was a price query; long chat gets one line', async () => {
@@ -272,7 +272,7 @@ describe('fallback (§2.18)', () => {
   it('a pasted list while a batch is pending wins over the fallback', async () => {
     const e = await start()
     await e.h.group('批量查价')
-    expect(card(await e.h.group('Raven*2'))).toContain('**批量估价**')
+    expect(card(await e.h.group('Raven*2'))).toContain('**批量估价')
   })
 })
 
@@ -306,7 +306,7 @@ describe('搜索 (§2.5)', () => {
     const e = await start()
     const sent = await e.h.group('搜索 乌鸦级')
     expect(sent[0].markdown).toBe([
-      '**「乌鸦级」相关物品** · Jita 4-4 · 共 7 个\n另有涂装 3 个',
+      '**「乌鸦级」相关物品 · Jita 4-4 · 共 7 个**\n另有涂装 3 个',
       [
         '1. 乌鸦级 · Raven · 出售 258.40M · 收购 249.00M',
         '2. 乌鸦级海军型 · Raven Navy Issue · 出售 — · 收购 —',
@@ -317,10 +317,10 @@ describe('搜索 (§2.5)', () => {
       ].join('\n'),
     ].join('\n\n'))
     expect(buttons(sent)).toEqual(['1=>查价 乌鸦级', '2=>查价 乌鸦级海军型', '3=>查价 乌鸦级政府型', '4=>查价 乌鸦级蓝图', '涂装 3 个=>搜索 乌鸦级 涂装'])
-    expect(card(await e.h.group('2'))).toContain('**乌鸦级海军型** Raven Navy Issue')
+    expect(card(await e.h.group('2'))).toContain('**乌鸦级海军型 Raven Navy Issue')
     // 按钮上的个数和点开以后列出的个数一样（不能上市场的涂装也列出，只是不写价格）
     const skins = await e.h.group('搜索 乌鸦级 涂装')
-    expect(skins[0].markdown?.split('\n')[0]).toBe('**「乌鸦级」的搜索结果** · Jita 4-4 · 共 3 个')
+    expect(skins[0].markdown?.split('\n')[0]).toBe('**「乌鸦级」的搜索结果 · Jita 4-4 · 共 3 个**')
     expect(skins[0].markdown).toContain('乌鸦级YC117年涂装 · Raven Serenity YC117 SKIN\n')
   })
 
@@ -337,7 +337,7 @@ describe('搜索 (§2.5)', () => {
   it('pages of 10 with a next-page button; a market in front is kept in the buttons', async () => {
     const e = await start()
     const first = await e.h.group('搜索 Amarr 护盾')
-    expect(first[0].markdown?.split('\n').slice(0, 2)).toEqual([expect.stringMatching(/^\*\*「护盾」的搜索结果\*\* · Amarr · 共 \d+ 个$/), expect.stringMatching(/^第 1\/\d 页$/)])
+    expect(first[0].markdown?.split('\n').slice(0, 2)).toEqual([expect.stringMatching(/^\*\*「护盾」的搜索结果 · Amarr · 共 \d+ 个\*\*$/), expect.stringMatching(/^第 1\/\d 页$/)])
     expect(buttons(first)).toContain('下一页=>搜索 Amarr 护盾 第2页')
     expect(buttons(first)[0]).toMatch(/^1=>查价 Amarr /)
     expect(card(await e.h.group('搜索 Amarr 护盾 第2页'))).toMatch(/第 2\/\d 页/)

@@ -58,22 +58,22 @@ describe('入侵', () => {
     const sent = await e.h.group('入侵')
     expect(sent).toHaveLength(1)
     expect(sent[0].markdown).toMatch(new RegExp(`^${escape([
-      '**当前入侵** · 3 处（高安 1 · 低安 1 · 00 1）',
+      '**当前入侵 · 3 处（高安 1 · 低安 1 · 00 1）**',
       '',
-      '**1. 木本呂** · 伏尔戈 · 高安',
+      '**1. 木本呂 · 伏尔戈 · 高安**',
       '',
       '- 集结星系 吉他 0.9',
       '- 状态 立足 · 影响力 64.0% · Boss 未出现',
       '- 被入侵星系（3）吉他、皮尔米特、新加达里',
       '',
-      '**2. 厄佛拉德** · 摩登赫斯 · 低安',
+      '**2. 厄佛拉德 · 摩登赫斯 · 低安**',
       '',
       // 0 < sec < 0.05 显示成 0.1
       '- 集结星系 伊格贝格尔 0.1',
       '- 状态 动员 · 影响力 12.5% · Boss 未出现',
       '- 被入侵星系（1）伊格贝格尔',
       '',
-      '**3. 730-KH** · 大荒野 · 00',
+      '**3. 730-KH · 大荒野 · 00**',
       '',
       '- 集结星系 NIH-02 0.0',
       '- 状态 撤退 · 影响力 100.0% · Boss 已出现',
@@ -92,8 +92,8 @@ describe('入侵', () => {
       },
     })
     const out = card(await e.h.group('入侵'))
-    expect(out).toContain('**1. 木本呂** · 伏尔戈 · 高安 · 萨沙共和国')
-    expect(out).toContain('**2. 莫卡什塔德** · 德里克 · 高安 · 血袭者同盟')
+    expect(out).toContain('**1. 木本呂 · 伏尔戈 · 高安 · 萨沙共和国')
+    expect(out).toContain('**2. 莫卡什塔德 · 德里克 · 高安 · 血袭者同盟')
     expect(out).toContain('- 集结星系 艾萨恩汀 0.5')
     expect(out).toMatch(/欧服 · 更新于 \d\d:\d\d$/)
   })
@@ -128,7 +128,7 @@ describe('服务器状态', () => {
     const sent = await e.h.group('服务器状态')
     expect(sent).toHaveLength(1)
     expect(sent[0].markdown).toMatch(new RegExp(`^${escape([
-      '**欧服状态** · 🟢 在线',
+      '**欧服状态 · 🟢 在线**',
       '',
       '- 在线人数 `21,873`',
       '- 本次开服 10/06 19:05（已运行 19 小时 1',
@@ -138,7 +138,7 @@ describe('服务器状态', () => {
 
   it('VIP mode in the title', async () => {
     const e = await start({ esi: (fake) => { fake.serverStatus = { players: 12, server_version: '3012345', start_time: '2026-10-07T05:00:00Z', vip: true } } })
-    expect(card(await e.h.group('服务器状态')).split('\n')[0]).toBe('**欧服状态** · 🟡 VIP 模式（只有开发人员能登录）')
+    expect(card(await e.h.group('服务器状态')).split('\n')[0]).toBe('**欧服状态 · 🟡 VIP 模式（只有开发人员能登录）**')
   })
 
   it('cannot reach the server: explains the daily downtime in both clocks', async () => {

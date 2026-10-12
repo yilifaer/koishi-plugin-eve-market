@@ -15,7 +15,7 @@ import { parseHeaderLine } from './header'
 import type { MarketMatcher } from './header'
 import { columnQuantity, dedupeHypotheses, readLine } from './quantity'
 import type { Hypothesis } from './quantity'
-import { hasContent, normalizeLine } from './text'
+import { hasContent, normalizeLine, stripGameMarkup } from './text'
 
 export interface PasteOptions {
   matchMarket: MarketMatcher
@@ -64,7 +64,10 @@ function only(name: string, quantity: number, kind: Hypothesis['kind']): Hypothe
 }
 
 function toRows(text: string): Row[] {
-  return text.split(/\r\n|\r|\n|\u2028|\u2029/).map((raw, i) => ({ lineNo: i + 1, raw: raw.trim(), text: normalizeLine(raw) }))
+  return text.split(/\r\n|\r|\n|\u2028|\u2029/).map((line, i) => {
+    const raw = stripGameMarkup(line)
+    return { lineNo: i + 1, raw: raw.trim(), text: normalizeLine(raw) }
+  })
 }
 
 /** Tab 分列的行不拆；其他行按分隔符拆成几个物品 */

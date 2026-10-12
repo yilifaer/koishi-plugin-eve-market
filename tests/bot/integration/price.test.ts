@@ -39,7 +39,7 @@ describe('查价: markets and visibility', () => {
     })
     const sent = await e.h.group('查价 乌鸦级')
     expect(sent).toHaveLength(1)
-    expect(sent[0].markdown).toMatch(/^\*\*乌鸦级\*\* Raven · 战列舰\n\n\*\*Jita 4-4\*\*\n\n- 出售 `258,400,000 ISK`（258\.40M）/)
+    expect(sent[0].markdown).toMatch(/^\*\*乌鸦级 Raven · 战列舰\*\*\n\n\*\*Jita 4-4\*\*\n\n- 出售 `258,400,000 ISK`（258\.40M）/)
     expect(sent[0].markdown).toContain('**联盟市场A**\n\n- 出售 `270,000,000 ISK`（270.00M）▲4.5%\n- 中间 `255,000,000 ISK`（255.00M）\n- 收购 `240,000,000 ISK`（240.00M）▼3.6%')
     expect(sent[0].markdown).toMatch(/\*\*\*\n欧服 · 更新于 \d\d:\d\d · ▲▼ 与 Jita 4-4 比较\n> 📢 矿石收购按 Jita 收购价 92%$/)
     expect(buttonRows(sent)).toEqual([['月度走势=>走势 乌鸦级 月', '季度走势=>走势 乌鸦级 季', '相关物品=>搜索 乌鸦级', '制造成本=>制造 乌鸦级']])
@@ -68,13 +68,13 @@ describe('查价: markets and visibility', () => {
     expect(buttonRows(missing)).toEqual([['Jita=>查价 Jita 乌鸦级', 'Amarr=>查价 Amarr 乌鸦级', 'Dodixie=>查价 Dodixie 乌鸦级', 'Rens=>查价 Rens 乌鸦级']])
     expect(buttonRows(hidden)).toEqual(buttonRows(missing))
     // 授权群里同一个名字照常查价
-    expect(card(await e.h.group('查价 联盟市场A 乌鸦级'))).toContain('**联盟市场A**')
+    expect(card(await e.h.group('查价 联盟市场A 乌鸦级'))).toContain('**联盟市场A')
   })
 
   it('a named market with a quantity compares with Jita and shows totals', async () => {
     const e = await start({ config: { markets: MARKETS_WITH_ALLIANCE, access: allowed }, esi: ravenOrders })
     const sent = await e.h.group('查价 联盟市场A 乌鸦级*10')
-    expect(sent[0].markdown).toContain('**乌鸦级** Raven ×10 · 战列舰\n\n**联盟市场A**\n\n- 出售 `270,000,000 ISK`（270.00M）▲4.5% · 合计 2.70B')
+    expect(sent[0].markdown).toContain('**乌鸦级 Raven ×10 · 战列舰**\n\n**联盟市场A**\n\n- 出售 `270,000,000 ISK`（270.00M）▲4.5% · 合计 2.70B')
     expect(sent[0].markdown).toMatch(/欧服 · 联盟市场A 更新于 \d\d:\d\d · ▲▼ 与 Jita 4-4 比较/)
     // 玩家建筑没有成交历史：走势按钮不带市场
     expect(buttonRows(sent)).toEqual([['月度走势=>走势 乌鸦级 月', '季度走势=>走势 乌鸦级 季', '相关物品=>搜索 联盟市场A 乌鸦级', '制造成本=>制造 乌鸦级*10']])
@@ -92,7 +92,7 @@ describe('查价: markets and visibility', () => {
       },
     })
     const out = card(await e.h.group('查价 乌鸦级'))
-    expect(out).toMatch(/\*\*Amarr\*\* · 2\d 分钟前\n\n- 出售 `250,000,000 ISK`（250\.00M）▼3\.3%\n- 中间 —\n- 收购 暂无买单/)
+    expect(out).toMatch(/\*\*Amarr · 2\d 分钟前\*\*\n\n- 出售 `250,000,000 ISK`（250\.00M）▼3\.3%\n- 中间 —\n- 收购 暂无买单/)
     expect(out).toContain('**Dodixie**\n⚠ ESI 暂时没有响应')
     expect(out).toContain('**Jita 4-4**\n\n- 出售 `258,400,000 ISK`')
   })
@@ -124,7 +124,7 @@ describe('查价: items', () => {
   it('PLEX uses the global market and the default quantity of 500', async () => {
     const e = await start({ esi: (fake) => addOrders(fake, 19000001, jitaOrders(PLEX, 5_012_000, 4_861_000, { location_id: 60003760 })) })
     const out = card(await e.h.group('查价 Amarr PLEX'))
-    expect(out).toContain('**PLEX** ×500 · 伊甸币\n\n**PLEX 全局市场**\n\n- 出售 `5,012,000 ISK`（5.01M）· 合计 2.51B')
+    expect(out).toContain('**PLEX ×500 · 伊甸币**\n\n**PLEX 全局市场**\n\n- 出售 `5,012,000 ISK`（5.01M）· 合计 2.51B')
     expect(out).toMatch(/欧服 · 更新于 \d\d:\d\d · PLEX 全宇宙统一交易，不分市场/)
     expect(e.fake.count(/^\/markets\/19000001\/orders$/)).toBe(1)
     expect(e.fake.count(/^\/markets\/10000043\/orders$/)).toBe(0)
@@ -134,10 +134,10 @@ describe('查价: items', () => {
     const markets = PRESET_MARKETS.map((m) => (m.name === 'Amarr' ? { ...m, aliases: 'Navy' } : m))
     const e = await start({ config: { markets } })
     const sent = await e.h.group('查价 Navy Cap Booster 800')
-    expect(card(sent)).toContain('**电容注电器装料 800** Cap Booster 800')
-    expect(card(sent)).toContain('**Amarr**')
+    expect(card(sent)).toContain('**电容注电器装料 800 Cap Booster 800')
+    expect(card(sent)).toContain('**Amarr')
     expect(buttonRows(sent)[0]).toContain('查所有市场=>查价 #32014')
-    expect(card(await e.h.group('查价 #32014'))).toContain('**海军电容注电器装料 800** Navy Cap Booster 800')
+    expect(card(await e.h.group('查价 #32014'))).toContain('**海军电容注电器装料 800 Navy Cap Booster 800')
   })
 
   it('a new item not in the data yet is found by its exact name on ESI and marked as new', async () => {
@@ -150,20 +150,20 @@ describe('查价: items', () => {
       },
     })
     const out = card(await e.h.group('查价 Brand New Frigate'))
-    expect(out).toContain('**Brand New Frigate** · 战列舰\n（新物品，数据还没收录）\n\n**Jita 4-4**\n\n- 出售 `1,500,000 ISK`（1.50M）')
+    expect(out).toContain('**Brand New Frigate · 战列舰**\n（新物品，数据还没收录）\n\n**Jita 4-4**\n\n- 出售 `1,500,000 ISK`（1.50M）')
   })
 
   it('an alias says which name it used', async () => {
     const e = await start({ esi: ravenOrders })
-    expect(card(await e.h.group('查价 乌鸦'))).toContain('**乌鸦级** Raven · 战列舰\n按「乌鸦级」查询')
+    expect(card(await e.h.group('查价 乌鸦'))).toContain('**乌鸦级 Raven · 战列舰**\n按「乌鸦级」查询')
   })
 
   it('implant sets list every piece', async () => {
     const e = await start()
     const out = card(await e.h.group('查价 高级水晶套装'))
-    expect(out.split('\n')[0]).toBe('**高级水晶套装** High-grade Crystal · 6 件')
+    expect(out.split('\n')[0]).toBe('**高级水晶套装 High-grade Crystal · 6 件**')
     expect(out).toContain('- 阿尔法型 · 出售 — · 收购 —')
-    expect(out).toContain('- **合计** 出售 缺 6 件')
+    expect(out).toContain('- **合计 出售 缺 6 件**')
   })
 
   it('ambiguous names list candidates that keep the market and quantity; a numbered reply runs one', async () => {
@@ -172,7 +172,7 @@ describe('查价: items', () => {
     expect(list[0].markdown?.split('\n')[0]).toBe('**「护盾扩展装置 II」可能是以下物品，请选择：**')
     expect(buttonRows(list)[0]).toEqual(['1=>查价 Amarr 小型护盾扩展装置 II*4', '2=>查价 Amarr 中型护盾扩展装置 II*4', '3=>查价 Amarr 大型护盾扩展装置 II*4'])
     const picked = card(await e.h.group('2'))
-    expect(picked).toContain('**中型护盾扩展装置 II** Medium Shield Extender II ×4')
+    expect(picked).toContain('**中型护盾扩展装置 II Medium Shield Extender II ×4')
     expect(picked).toContain('**Amarr**\n\n- 出售 `2,000,000 ISK`（2.00M）· 合计 8.00M')
     // 编号后面带数量：换掉原来的数量
     await e.h.group('查价 Amarr 护盾扩展装置 II*4')
@@ -220,7 +220,7 @@ describe('查价: items', () => {
   it('several lines are handled as a batch appraisal and say so', async () => {
     const e = await start({ esi: ravenOrders })
     const sent = await e.h.group('查价 Raven*2\nRaven Navy Issue')
-    expect(sent[0].markdown?.split('\n').slice(0, 2)).toEqual(['**批量估价** · Jita 4-4 · 出售价', '多行内容已按批量查价处理'])
+    expect(sent[0].markdown?.split('\n').slice(0, 2)).toEqual(['**批量估价 · Jita 4-4 · 出售价**', '多行内容已按批量查价处理'])
   })
 })
 

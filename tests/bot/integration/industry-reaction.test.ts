@@ -25,7 +25,7 @@ describe('反应', () => {
     const e = await start()
     const sent = await e.h.group('反应 碳化钨')
     expect(sent[0].markdown).toMatch(new RegExp([
-      '^\\*\\*碳化钨\\*\\* Tungsten Carbide · 反应 · 基础参考',
+      '^\\*\\*碳化钨 Tungsten Carbide · 反应 · 基础参考\\*\\*',
       '',
       '配方 碳化钨反应配方 · 每流程 3 小时，产出 10,000 个',
       '无建筑、无改装件 · 未计系统指数和税 · 材料按 Jita 4-4 出售价',
@@ -46,7 +46,7 @@ describe('反应', () => {
     const e = await start()
     const sent = await e.h.group('反应 碳化钨 XX-1 20流程')
     expect(card(sent)).toContain([
-      '**碳化钨** Tungsten Carbide · 反应计算',
+      '**碳化钨 Tungsten Carbide · 反应计算**',
       '',
       'XX-1 · 反应塔（该地点唯一） · 00 · 20 流程（200,000 个）',
       '改装件 屹立中型复合反应堆时间效率 I（时间 -22%）',
@@ -77,7 +77,7 @@ describe('反应', () => {
   it('steps: only locations that can react (no highsec), then the result when there is one structure', async () => {
     const e = await start()
     const first = await e.h.group('反应 碳化钨 高级')
-    expect(card(first)).toContain('**碳化钨 · 高级反应计算**\n进度：**地点** → 建筑\n\n请选择反应地点：\n\n1. XX-1 · 00 · 反应塔 · 系统指数 1.85%\n2. XX-2 · 低安 · 反应厂 · 系统指数 1.00%')
+    expect(card(first)).toContain('**碳化钨 · 高级反应计算**\n进度：**地点 → 建筑**\n\n请选择反应地点：\n\n1. XX-1 · 00 · 反应塔 · 系统指数 1.85%\n2. XX-2 · 低安 · 反应厂 · 系统指数 1.00%')
     expect(buttonRows(first)).toEqual([['XX-1=>反应 碳化钨 XX-1 高级', 'XX-2=>反应 碳化钨 XX-2 高级'], ['默认直接出结果=>反应 碳化钨 XX-1']])
     expect(card(await e.h.group('2'))).toContain('XX-2 · 反应厂（该地点唯一） · 低安 · 1 流程（10,000 个）\n改装件 未装')
     const listed = await e.h.group('反应 碳化钨 XX-1 建筑:? 高级')

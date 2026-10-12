@@ -61,7 +61,7 @@ export function priceCard(): Card {
 }
 
 export const PRICE_MARKDOWN = [
-  '**乌鸦级** Raven · 战列舰',
+  '**乌鸦级 Raven · 战列舰**',
   '',
   '**Jita**',
   '',
@@ -75,7 +75,7 @@ export const PRICE_MARKDOWN = [
   '- 中间 `255,000,000 ISK`（255.00M）',
   '- 收购 `240,000,000 ISK`（240.00M）▼3.6%',
   '',
-  '**联盟市场B** · 18 分钟前',
+  '**联盟市场B · 18 分钟前**',
   '',
   '- 出售 `275,000,000 ISK`（275.00M）▲6.4%',
   '- 中间 —',
@@ -124,7 +124,7 @@ export function batchCard(): Card {
 }
 
 export const BATCH_MARKDOWN = [
-  '**批量估价** · 联盟市场A · 出售价 -5%',
+  '**批量估价 · 联盟市场A · 出售价 -5%**',
   '',
   '**合计** `524,400,000 ISK`（524.40M）',
   '调整前 552.00M · 3 种 · 1,500,002 件',

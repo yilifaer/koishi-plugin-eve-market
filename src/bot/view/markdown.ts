@@ -18,6 +18,19 @@ export interface QQMarkdown {
 
 const NESTED = '    - '
 
+// QQ 会吃掉粗体结束标记后面的空格（「**乌鸦级** Raven」显示成「乌鸦级Raven」），粗体里面的空格不受影响。
+// 所以一行里最后一段粗体后面如果只剩普通文字，就把这些文字一起放进粗体
+const TRAILING_BOLD = /^(.*)\*\*([^*\n]*[^*\s])\*\*( +)([^*`<>[\]\n]*\S)$/
+
+export function keepBoldSpacing(line: string): string {
+  const m = TRAILING_BOLD.exec(line)
+  return m ? `${m[1]}**${m[2]}${m[3]}${m[4]}**` : line
+}
+
+function fixLines(text: string): string {
+  return text.split('\n').map(keepBoldSpacing).join('\n')
+}
+
 export function styledNumber(text: string, style: NumberStyle): string {
   if (style === 'code') return `\`${text}\``
   if (style === 'bold') return `**${text}**`
@@ -87,7 +100,8 @@ export function markdownLayout(card: Card, opts: CardRenderOptions): Layout {
   for (const s of o.sections) blocks.push({ items: sectionItems(s, opts.numberStyle), counted: true })
   if (o.choices.length) blocks.push({ items: choiceItems(card, o.choices, opts), counted: false })
   if (o.warnings.length) blocks.push({ items: o.warnings.map((w) => `⚠ ${w}`), counted: false })
-  return { joiner: '\n\n', blocks, tail: tail(card, opts, o.footer, o.notices) }
+  for (const block of blocks) block.items = block.items.map(fixLines)
+  return { joiner: '\n\n', blocks, tail: fixLines(tail(card, opts, o.footer, o.notices)) }
 }
 
 export function toQQMarkdown(card: Card, opts: CardRenderOptions): QQMarkdown {

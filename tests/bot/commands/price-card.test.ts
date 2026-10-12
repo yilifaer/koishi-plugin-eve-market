@@ -40,9 +40,9 @@ describe('priceCard', () => {
       quote('amarr', 638, 275_000_000, null),
     ], { notices: ['联盟市场A 矿石收购按 Jita 收购价 92%，详见群公告'] }))
     expect(md(card)).toBe([
-      '**乌鸦级** Raven · 战列舰',
+      '**乌鸦级 Raven · 战列舰**',
       '**Jita 4-4**\n\n- 出售 `258,400,000 ISK`（258.40M）\n- 中间 `253,700,000 ISK`（253.70M）\n- 收购 `249,000,000 ISK`（249.00M）',
-      '**联盟市场A** · 18 分钟前\n\n- 出售 `270,000,000 ISK`（270.00M）▲4.5%\n- 中间 `255,000,000 ISK`（255.00M）\n- 收购 `240,000,000 ISK`（240.00M）▼3.6%',
+      '**联盟市场A · 18 分钟前**\n\n- 出售 `270,000,000 ISK`（270.00M）▲4.5%\n- 中间 `255,000,000 ISK`（255.00M）\n- 收购 `240,000,000 ISK`（240.00M）▼3.6%',
       '**Amarr**\n\n- 出售 `275,000,000 ISK`（275.00M）▲6.4%\n- 中间 —\n- 收购 暂无买单',
       '***\n欧服 · 更新于 14:20 · ▲▼ 与 Jita 4-4 比较\n> 📢 联盟市场A 矿石收购按 Jita 收购价 92%，详见群公告',
     ].join('\n\n'))
@@ -56,7 +56,7 @@ describe('priceCard', () => {
       base: { market: marketOf(core, 'jita 4-4'), quote: quote('jita 4-4', 638, 258_400_000, 249_000_000) },
     }))
     expect(md(card)).toBe([
-      '**乌鸦级** Raven ×10 · 战列舰',
+      '**乌鸦级 Raven ×10 · 战列舰**',
       '**联盟市场A**\n\n- 出售 `270,000,000 ISK`（270.00M）▲4.5% · 合计 2.70B\n- 中间 `255,000,000 ISK`（255.00M）· 合计 2.55B\n- 收购 `240,000,000 ISK`（240.00M）▼3.6% · 合计 2.40B',
       '***\n欧服 · 联盟市场A 更新于 14:16 · ▲▼ 与 Jita 4-4 比较',
     ].join('\n\n'))
@@ -87,7 +87,7 @@ describe('priceCard', () => {
       base: undefined,
     })
     expect(md(card)).toBe([
-      '**PLEX** ×500 · 伊甸币',
+      '**PLEX ×500 · 伊甸币**',
       '**PLEX 全局市场**\n\n- 出售 `5,012,000 ISK`（5.01M）· 合计 2.51B\n- 中间 `4,936,500 ISK`（4.94M）· 合计 2.47B\n- 收购 `4,861,000 ISK`（4.86M）· 合计 2.43B',
       '***\n欧服 · 更新于 14:20 · PLEX 全宇宙统一交易，不分市场',
     ].join('\n\n'))
@@ -102,7 +102,7 @@ describe('priceCard', () => {
     ]))
     const out = md(card)
     expect(out).toContain('**联盟市场A**\n⚠ 市场数据暂时不可用（ESI 授权或建筑访问权限异常）')
-    expect(out).toContain('**Amarr** · 23 分钟前（缓存）\n\n- 出售 `260,000,000 ISK`（260.00M）▲0.6%')
+    expect(out).toContain('**Amarr · 23 分钟前（缓存）**\n\n- 出售 `260,000,000 ISK`（260.00M）▲0.6%')
     expect(out).toContain('**Jita 4-4**\n\n- 出售 `258,400,000 ISK`')
   })
 
@@ -179,7 +179,7 @@ describe('setCard', () => {
   it('lists every piece for the first market, one total line for the others; a missing piece is counted, not zero', () => {
     const out = md(setCard(envOf(core), setInput()))
     expect(out).toBe([
-      '**高级水晶套装** High-grade Crystal · 6 件',
+      '**高级水晶套装 High-grade Crystal · 6 件**',
       [
         '**Jita 4-4**',
         '',
@@ -192,14 +192,14 @@ describe('setCard', () => {
         '- **合计** 出售 `307,800,000 ISK`（307.80M）',
         '- **合计** 收购 `271,000,000 ISK`（271.00M）',
       ].join('\n'),
-      '**联盟市场A** 合计 出售 318.20M ▲3.4% · 收购 缺 1 件',
+      '**联盟市场A 合计 出售 318.20M ▲3.4% · 收购 缺 1 件**',
       '***\n欧服 · 更新于 14:20 · ▲▼ 与 Jita 4-4 比较',
     ].join('\n\n'))
   })
 
   it('a quantity multiplies the totals', () => {
     const out = md(setCard(envOf(core), setInput({ quantity: 2, markets: [setInput().markets[0]] })))
-    expect(out).toContain('**高级水晶套装** High-grade Crystal ×2 · 6 件')
+    expect(out).toContain('**高级水晶套装 High-grade Crystal ×2 · 6 件')
     expect(out).toContain('- **合计** 出售 `615,600,000 ISK`（615.60M）')
   })
 
@@ -217,12 +217,12 @@ describe('setCard', () => {
     const out = md(setCard(envOf(c), { set, quantity: null, markets: [jita, alliance], base: jita, notices: [], actions: [] }))
     expect(out).toContain(`- 阿尔法型 · 出售 ${piece} · `)
     expect(out).toContain(`- **合计** 出售 ${total}`)
-    expect(out).toContain(`**联盟市场A** 合计 出售 ${other} ▲3.4% · 收购 缺 1 件`)
+    expect(out).toContain(`**联盟市场A 合计 出售 ${other} ▲3.4% · 收购 缺 1 件**`)
   })
 
   it('a market without any price says why', () => {
     const failed = { market: marketOf(core, '联盟市场a'), quotes: null }
     const out = md(setCard(envOf(core), setInput({ markets: [setInput().markets[0], failed] })))
-    expect(out).toContain('**联盟市场A** ⚠ 查询超时，暂时取不到价格')
+    expect(out).toContain('**联盟市场A ⚠ 查询超时，暂时取不到价格')
   })
 })

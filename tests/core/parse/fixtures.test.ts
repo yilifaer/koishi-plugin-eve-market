@@ -154,3 +154,17 @@ describe('hand-written list', () => {
     expect(parsed.lines.slice(-2).map((l) => l.lineNo)).toEqual([20, 20])
   })
 })
+
+// 游戏工业窗口的真实复制：物品名包在 <localized hint="中文名">英文名</localized> 里（QQ 原样送到）
+describe('industry window with localized markup', () => {
+  for (const variant of ['tab', 'spaces']) {
+    it(`reads names inside the tags (${variant})`, () => {
+      const parsed = load(`industry-localized.${variant}.txt`)
+      expect(parsed.format).toBe('industry-window')
+      expect(items(parsed)).toEqual([...MINERALS, ['Morphite', 500], ['Hobgoblin II', 10]])
+      expect(parsed.lines.map((l) => l.lineNo)).toEqual([5, 6, 7, 8, 9, 10, 11, 15, 16])
+      expect(parsed.lines[0].raw.startsWith('Tritanium')).toBe(true)
+      expect(parsed.skipped.map((s) => [s.lineNo, s.reason])).toEqual([[1, 'header'], [2, 'header'], [4, 'header'], [13, 'header']])
+    })
+  }
+})

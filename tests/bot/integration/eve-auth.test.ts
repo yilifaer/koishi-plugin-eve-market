@@ -154,7 +154,7 @@ describe('EVE 授权 → 建筑市场 → 查价', () => {
     // 授权之前：建筑市场写「暂时不可用」，Jita 照常
     const before = card(await e.h.group('查价 乌鸦级'))
     expect(before).toContain('**Jita 4-4**\n\n- 出售 `258,400,000 ISK`')
-    expect(before).toContain('**联盟市场A**')
+    expect(before).toContain('**联盟市场A')
     expect(before).toContain('市场数据暂时不可用（ESI 授权或建筑访问权限异常）')
     expect(card(await e.h.direct('市场状态'))).toContain('联盟市场A：🟡 需要授权（授权页面里的档案 default）')
     expect(e.fake.count(/^\/markets\/structures\//)).toBe(0)
@@ -171,11 +171,11 @@ describe('EVE 授权 → 建筑市场 → 查价', () => {
     const sent = await e.h.group('查价 乌鸦级')
     expect(sent).toHaveLength(1)
     expect(sent[0].markdown).toContain('**联盟市场A**\n\n- 出售 `270,000,000 ISK`（270.00M）▲4.5%\n- 中间 `255,000,000 ISK`（255.00M）\n- 收购 `240,000,000 ISK`（240.00M）▼3.6%')
-    expect(card(await e.h.group('查价 前线 乌鸦级'))).toContain('**联盟市场A**')
+    expect(card(await e.h.group('查价 前线 乌鸦级'))).toContain('**联盟市场A')
 
     // 别的群：和这个市场不存在一样
     const other = card(await e.h.group('查价 乌鸦级', { channelId: GROUP2 }))
-    expect(other).toContain('**Jita 4-4**')
+    expect(other).toContain('**Jita 4-4')
     expect(other).not.toContain('联盟市场A')
     expect(card(await e.h.group('查价 联盟市场A 乌鸦级', { channelId: GROUP2 }))).toContain('未知市场：联盟市场A')
 
@@ -209,7 +209,7 @@ describe('EVE 授权 → 建筑市场 → 查价', () => {
     const sent = await e.h.group('查价 乌鸦级')
     expect(sent).toHaveLength(1)
     expect(sent[0].markdown).toContain('**Jita 4-4**\n\n- 出售 `258,400,000 ISK`')
-    expect(sent[0].markdown).toContain('**联盟市场A**')
+    expect(sent[0].markdown).toContain('**联盟市场A')
     expect(sent[0].markdown).toContain('市场数据暂时不可用（ESI 授权或建筑访问权限异常）')
     expect(sent[0].markdown).not.toContain('270,000,000')
 
@@ -289,7 +289,7 @@ describe('市场状态 / 市场授权', () => {
     // 管理员在授权群里、单聊里：回复
     const status = await e.h.group('市场状态')
     expect(status).toHaveLength(1)
-    expect(card(status)).toMatch(/^\*\*数据状态\*\* · \d\d:\d\d\n\n- Jita 4-4：🟢 正常 · NPC 市场 · 还没有人查/)
+    expect(card(status)).toMatch(/^\*\*数据状态 · \d\d:\d\d\*\*\n\n- Jita 4-4：🟢 正常 · NPC 市场 · 还没有人查/)
     expect(card(status)).toContain('物品数据：SDE build')
     expect(card(status)).toContain('配置问题：市场第 6 行「联盟市场A」使用的授权档案 default 还没有授权')
     expect(card(status)).toContain('命令冲突：无')

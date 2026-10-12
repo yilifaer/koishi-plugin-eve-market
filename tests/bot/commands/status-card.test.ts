@@ -124,7 +124,7 @@ describe('市场状态: the whole card', () => {
       }),
     }), [[{ label: STATUS_TEXT.refresh, command: { id: 'marketStatus', args: '刷新' }, primary: true }]])
     expect(md(card)).toBe([
-      '**数据状态** · 14:20',
+      '**数据状态 · 14:20**',
       '',
       '- Jita 4-4：🟢 正常 · NPC 市场 · 最近请求 14:19',
       '- 联盟市场A：🟢 正常 · 建筑市场 · 同步于 14:16 · 3 页 2,841 单',
@@ -153,7 +153,7 @@ describe('市场状态: the whole card', () => {
       conflicts: [{ id: 'search', name: '搜索', kind: 'name' }],
     }), [])
     const out = md(card)
-    expect(out).toContain('**数据状态** · 14:20\n刷新结果：物品数据在线确认是最新\n\n')
+    expect(out).toContain('**数据状态 · 14:20**\n刷新结果：物品数据在线确认是最新\n\n')
     expect(out).toContain('- 授权页面：需要 Koishi 的 server 插件')
     expect(out).toContain('- ⚠ 物品数据已经 16 天没更新（eve-cn-slang 的每周更新可能没合并或没运行）\n    - SDE build 3579973 · 来自在线\n    - 最近一次在线检查失败：HTTP 503')
     expect(out).toContain('- ESI 配额：market-order 暂停到 14:25 · 错误额度 0\n    - ⚠ 错误太多（420），全部请求暂停到 14:21')
@@ -212,6 +212,6 @@ describe('市场授权', () => {
   })
 
   it('escapes names that look like Markdown', () => {
-    expect(text(profileLines(profile({ characterName: '**粗体**' }), NOW, false))[0]).not.toContain('**粗体**')
+    expect(text(profileLines(profile({ characterName: '**粗体**' }), NOW, false))[0]).not.toContain('**粗体')
   })
 })
