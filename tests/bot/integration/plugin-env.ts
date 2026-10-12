@@ -154,13 +154,15 @@ interface InstallSetup {
   clock: Clock
   scheduler?: Scheduler
   watchdogScheduler?: Scheduler
+  /** 本插件每次停用（包括测试里重载）时拿到「停完了」的 Promise */
+  onStop?: (done: Promise<void>) => void
   /** 装好以后记下本插件 */
   installed?: (fork: ForkScope) => void
 }
 
 function pluginInstaller(setup: InstallSetup, config: Record<string, unknown>) {
   const data = bundledDir(makeVersion())
-  const { fake, store, logger, clock, scheduler, watchdogScheduler } = setup
+  const { fake, store, logger, clock, scheduler, watchdogScheduler, onStop } = setup
   return (app: Context) => {
     const fork = app.plugin({
       name: 'eve-market',
@@ -175,6 +177,7 @@ function pluginInstaller(setup: InstallSetup, config: Record<string, unknown>) {
         clock,
         ...scheduler ? { scheduler } : {},
         ...watchdogScheduler ? { watchdogScheduler } : {},
+        ...onStop ? { onStop } : {},
       }),
     // 控制台的原始值，由 Schema 补默认值、normalize 逐行检查
     }, baseConfig(config) as unknown as Config)
@@ -197,13 +200,17 @@ export async function startPlugin(options: EnvOptions = {}): Promise<PluginEnv> 
   const store = createModuleStore()
   const logger = new RecordingLogger()
   let plugin: ForkScope | undefined
+  // 删临时目录以前等本插件停完（Koishi 不等异步的停用，建筑市场的缓存可能还在写）
+  const stopping: Array<Promise<void>> = []
   const install = pluginInstaller({
-    fake, store, logger, clock, scheduler: options.scheduler, watchdogScheduler: options.watchdogScheduler, installed: (fork) => { plugin = fork },
+    fake, store, logger, clock, scheduler: options.scheduler, watchdogScheduler: options.watchdogScheduler,
+    onStop: (done) => stopping.push(done), installed: (fork) => { plugin = fork },
   }, options.config ?? {})
   let server: ForkScope | undefined
   const h = await startHarness({
     help: options.help,
     onebot: options.onebot,
+    beforeCleanup: () => Promise.all(stopping),
     setup: (app) => {
       if (options.serverPort) server = app.plugin(ServerPlugin, { host: '127.0.0.1', port: options.serverPort })
       if (options.puppeteer) app.plugin(puppeteerPlugin(options.puppeteer))
@@ -240,8 +247,9 @@ export async function startRealPlugin(options: EnvOptions = {}): Promise<RealEnv
   const clock = options.clock ?? testClock()
   const fake = await fakeEsi(clock, options.esi)
   const logger = new RecordingLogger()
-  const install = pluginInstaller({ fake, store: createModuleStore(), logger, clock, scheduler: options.scheduler }, options.config ?? {})
-  const qq = await startRealQQ({ help: options.help, setup: install })
+  const stopping: Array<Promise<void>> = []
+  const install = pluginInstaller({ fake, store: createModuleStore(), logger, clock, scheduler: options.scheduler, onStop: (done) => stopping.push(done) }, options.config ?? {})
+  const qq = await startRealQQ({ help: options.help, setup: install, beforeCleanup: () => Promise.all(stopping) })
   return {
     qq,
     fake,

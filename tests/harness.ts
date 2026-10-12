@@ -241,6 +241,8 @@ export interface HarnessOptions {
   onebot?: boolean
   /** app.start() 之前调用：装被测的插件、注册测试用的中间件 */
   setup?: (app: Context) => void | Promise<void>
+  /** app.stop() 以后、删临时目录以前等它（被测插件异步的停用：缓存还在写） */
+  beforeCleanup?: () => Promise<unknown>
 }
 
 export interface Harness {
@@ -297,6 +299,7 @@ export async function startHarness(options: HarnessOptions = {}): Promise<Harnes
       // 先停机器人（app.stop() 时 satori 的机器人列表已经没了，机器人自己的清理会报错）
       for (const bot of app.bots.filter((b): b is FakeBot => b instanceof FakeBot)) bot.ctx.scope.dispose()
       await app.stop()
+      await options.beforeCleanup?.()
       await cleanup()
     },
   }
@@ -311,6 +314,8 @@ export const REAL_USER = 'BEEF000000000000000000000000000A'
 export interface RealQQOptions {
   help?: boolean
   setup?: (app: Context) => void | Promise<void>
+  /** 同 HarnessOptions.beforeCleanup */
+  beforeCleanup?: () => Promise<unknown>
 }
 
 export interface RealQQMessageOptions {
@@ -386,6 +391,7 @@ export async function startRealQQ(options: RealQQOptions = {}): Promise<RealQQ> 
     async stop() {
       bot.ctx.scope.dispose()
       await app.stop()
+      await options.beforeCleanup?.()
       await api.stop()
       await cleanup()
     },

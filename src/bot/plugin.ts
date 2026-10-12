@@ -56,6 +56,8 @@ export interface PluginOptions {
   scheduler?: Scheduler
   /** 看门狗每分钟检查用的定时器；不写 = ctx.setTimeout（不跟着上面测试用的 scheduler 走，免得测试里多出一个定时器） */
   watchdogScheduler?: Scheduler
+  /** 停用时拿到「停完了」的 Promise：Koishi 不等异步的停用，测试要等缓存写完再删临时目录 */
+  onStop?: (done: Promise<void>) => void
 }
 
 interface CoreSetup {
@@ -123,6 +125,8 @@ export function installPlugin(ctx: Context, config: Config, options: PluginOptio
 
   ctx.on('ready', () => runtime.start(() => buildCore(ctx, { settings, auth, store, logger, clock, scheduler }, options)))
   ctx.on('dispose', async () => {
-    await Promise.all([runtime.stop(), media.dispose()])
+    const done = Promise.all([runtime.stop(), media.dispose()]).then(() => undefined)
+    options.onStop?.(done)
+    await done
   })
 }
