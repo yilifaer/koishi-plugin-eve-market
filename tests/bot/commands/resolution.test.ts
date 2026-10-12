@@ -119,7 +119,8 @@ describe('other resolution cards', () => {
     const fake = unknownMarketCard(core, { ok: false, code: 'UNKNOWN_MARKET', token: 'TEST' }, PUBLIC, command)
     expect(md(hidden).replace('前线', 'TEST')).toBe(md(fake))
     expect(md(fake)).toBe('未知市场：TEST\n\n当前可用市场：Jita 4-4 · Amarr · Dodixie · Rens · Hek')
-    expect(buttons(fake)).toEqual([['Jita=>查价 Jita 乌鸦级', 'Amarr=>查价 Amarr 乌鸦级', 'Dodixie=>查价 Dodixie 乌鸦级', 'Rens=>查价 Rens 乌鸦级']])
+    // 可用市场都有按钮（以前只有前 4 个）
+    expect(buttons(fake)).toEqual([['Jita=>查价 Jita 乌鸦级', 'Amarr=>查价 Amarr 乌鸦级', 'Dodixie=>查价 Dodixie 乌鸦级'], ['Rens=>查价 Rens 乌鸦级', 'Hek=>查价 Hek 乌鸦级']])
     expect(md(unknownMarketCard(core, { ok: false, code: 'UNKNOWN_MARKET', token: 'TEST' }, ALLOWED, command))).toContain('联盟市场A')
   })
 

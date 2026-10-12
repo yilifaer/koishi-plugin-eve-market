@@ -81,10 +81,11 @@ export function markdownCard(): Card {
 export function buttonsCard(inv: Pick<Invocation, 'commands'>): Card {
   const has = (id: CommandId) => inv.commands.registry.has(id)
   const button = (id: CommandId, args?: string): Action => ({ label: args ? `${name(inv, id)} ${args}` : name(inv, id), command: args ? { id, args } : { id } })
+  // 每行都按标签宽度排好（字长的一行少放几个），发出去和这里一模一样
   const plan: Array<Array<[CommandId, string?]>> = [
-    [['help'], ['serverStatus'], ['incursion']],
-    [['price', 'PLEX'], ['search', '乌鸦'], ['translate', '三钛合金'], ['groupId']],
-    [['influenceMap'], ['coalitionMap']],
+    [['help'], ['serverStatus'], ['coalitionMap']],
+    [['incursion'], ['influenceMap'], ['groupId'], ['translate', 'Hek']],
+    [['price', 'PLEX'], ['search', '三钛合金']],
     [['selfTest', '2']],
   ]
   const rows = plan
@@ -96,6 +97,7 @@ export function buttonsCard(inv: Pick<Invocation, 'commands'>): Card {
   const lines: Line[] = [
     { text: `下面应该有 ${rows.length} 行按钮：${counts}，行和行之间没有空行` },
     { text: '第 1 行第 1 个是蓝色的，其他是灰色的' },
+    { text: '按钮上的字都完整显示；出现「…」（比如「服务器…」）就不正常' },
     { text: '点任意一个，输入框里应该出现「@机器人 命令」（不会自动发送，可以直接删掉）' },
   ]
   if (inv.commands.settings.display.clickable === 'none') lines.push({ text: '控制台「可点元素」设成了不发按钮：这一项看不到按钮，跳过' })

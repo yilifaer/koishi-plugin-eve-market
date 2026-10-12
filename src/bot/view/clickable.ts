@@ -2,11 +2,11 @@
 // 命令或标签里像网址的按钮一律不发（群里发网址会被拒绝，40054010）；生成卡片的一方本来就不该放进来，这里再兜一层。
 
 import {
-  MAX_ACTION_ROWS, MAX_ACTIONS_PER_ROW, MAX_BUTTON_COMMAND_CHARS, MAX_BUTTON_LABEL, MAX_CHOICES_PER_ROW,
+  MAX_ACTIONS_PER_ROW, MAX_BUTTON_COMMAND_CHARS, MAX_BUTTON_LABEL, MAX_CHOICES_PER_ROW,
   MAX_KEYBOARD_ROWS, PENDING_MINUTES, TEXT_ACTION_LINES,
 } from '../../constants'
 import type { Action, Card, CardRenderOptions, CommandRef, KeyboardButton, KeyboardRow } from './card'
-import { hasUrl, stripMarkdown, truncate } from './escape'
+import { hasUrl, stripMarkdown } from './escape'
 
 export type CommandNamer = Pick<CardRenderOptions, 'commandName'>
 
@@ -22,19 +22,65 @@ export function actionCommand(action: Action, opts: CommandNamer): string {
   return action.fillOnly ? `${opts.commandName(action.command.id)} ` : commandText(action.command, opts)
 }
 
-/** 按钮标签：纯文字，不超过 8 个字；尖括号和 & 换成全角（适配器取标签时会把它们转义成实体） */
+/** 按钮标签：纯文字，不超过 8 个汉字宽（英文数字算半个）；尖括号和 & 换成全角（适配器取标签时会把它们转义成实体） */
 export function buttonLabel(label: string): string {
   const plain = stripMarkdown(label)
     .replace(/\s+/g, ' ')
     .trim()
     .replace(/[<>&"]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) + 0xfee0))
-  return truncate(plain, MAX_BUTTON_LABEL)
+  if (labelWidth(plain) <= MAX_BUTTON_LABEL) return plain
+  let out = ''
+  for (const ch of plain) {
+    if (labelWidth(out + ch) > MAX_BUTTON_LABEL - 1) break
+    out += ch
+  }
+  return `${out.trimEnd()}…`
 }
 
 function chunk<T>(items: T[], size: number): T[][] {
   const rows: T[][] = []
   for (let i = 0; i < items.length; i += size) rows.push(items.slice(i, i + size))
   return rows
+}
+
+/** 标签的显示宽度：汉字等全角字符算 1，其他算 0.5 */
+export function labelWidth(label: string): number {
+  let width = 0
+  for (const ch of label) width += /[\u0000-\u00ff]/.test(ch) ? 0.5 : 1
+  return width
+}
+
+/**
+ * 一行能放几个按钮：QQ 上一行 4 个时每个大约只显示 4 个汉字宽，再长就被截断成「查价 PL…」。
+ * 按这一行里最长的标签决定：≤ 4 宽放 4 个，≤ 6 宽放 3 个，再长放 2 个
+ */
+function perRow(buttons: KeyboardButton[], max: number): number {
+  const widest = Math.max(0, ...buttons.map((b) => labelWidth(b.label)))
+  const fit = widest <= 4 ? 4 : widest <= 6 ? 3 : 2
+  return Math.min(max, fit)
+}
+
+/** 平均分成 k 行，前面的行多放一个 */
+function split<T>(items: T[], k: number): T[][] {
+  const base = Math.floor(items.length / k)
+  const extra = items.length % k
+  const rows: T[][] = []
+  let start = 0
+  for (let i = 0; i < k; i++) {
+    const size = base + (i < extra ? 1 : 0)
+    rows.push(items.slice(start, start + size))
+    start += size
+  }
+  return rows
+}
+
+/** 按标签宽度切行：找最少的行数，平均分开后每行都放得下（不会剩一个孤零零的按钮） */
+function chunkByWidth(buttons: KeyboardButton[], max: number): KeyboardButton[][] {
+  for (let k = Math.ceil(buttons.length / max); k < buttons.length; k++) {
+    const rows = split(buttons, k)
+    if (rows.every((row) => row.length <= perRow(row, max))) return rows
+  }
+  return buttons.map((b) => [b])
 }
 
 /** 命令超过 100 字的按钮不发（生成卡片的一方应当先换成 #typeID）；像网址的也不发 */
@@ -45,7 +91,7 @@ const usable = (button: KeyboardButton) =>
 const labeledChoices = (card: Card) => !!card.choices?.length && card.choices.every((c) => !!c.button && !!buttonLabel(c.button))
 
 /**
- * 选项按钮在前（编号每行 ≤ 5；写了字的和动作按钮一样每行 ≤ 4），动作按钮（≤ 4 行，每行 ≤ 4）在后，总共 ≤ 5 行；
+ * 选项按钮在前（编号每行 ≤ 5；写了字的和动作按钮一样每行 ≤ 4，字长的少放几个），动作按钮在后，总共 ≤ 5 行；
  * clickable = none 时没有按钮
  */
 export function keyboardRows(card: Card, opts: CardRenderOptions): KeyboardRow[] {
@@ -55,13 +101,12 @@ export function keyboardRows(card: Card, opts: CardRenderOptions): KeyboardRow[]
     .map((c): KeyboardButton => ({ label: labeled ? buttonLabel(c.button!) : String(c.no), text: commandText(c.command, opts) }))
     .filter(usable)
   const actions = card.actions
-    .flatMap((row) => chunk(
+    .flatMap((row) => chunkByWidth(
       row.map((a): KeyboardButton => ({ label: buttonLabel(a.label), text: actionCommand(a, opts), ...a.primary ? { primary: true } : {} }))
         .filter((b) => b.label && usable(b)),
       MAX_ACTIONS_PER_ROW,
     ))
-    .slice(0, MAX_ACTION_ROWS)
-  return [...chunk(choices, labeled ? MAX_ACTIONS_PER_ROW : MAX_CHOICES_PER_ROW), ...actions]
+  return [...(labeled ? chunkByWidth(choices, MAX_ACTIONS_PER_ROW) : chunk(choices, MAX_CHOICES_PER_ROW)), ...actions]
     .filter((row) => row.length)
     .slice(0, MAX_KEYBOARD_ROWS)
 }

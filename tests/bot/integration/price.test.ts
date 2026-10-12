@@ -65,7 +65,7 @@ describe('查价: markets and visibility', () => {
     expect(card(hidden).replace('联盟市场A', 'TEST')).toBe(card(missing))
     expect(card(alias).replace('前线', 'TEST')).toBe(card(missing))
     expect(card(missing)).toBe('未知市场：TEST\n\n当前可用市场：Jita 4-4 · Amarr · Dodixie · Rens · Hek')
-    expect(buttonRows(missing)).toEqual([['Jita=>查价 Jita 乌鸦级', 'Amarr=>查价 Amarr 乌鸦级', 'Dodixie=>查价 Dodixie 乌鸦级', 'Rens=>查价 Rens 乌鸦级']])
+    expect(buttonRows(missing)).toEqual([['Jita=>查价 Jita 乌鸦级', 'Amarr=>查价 Amarr 乌鸦级', 'Dodixie=>查价 Dodixie 乌鸦级'], ['Rens=>查价 Rens 乌鸦级', 'Hek=>查价 Hek 乌鸦级']])
     expect(buttonRows(hidden)).toEqual(buttonRows(missing))
     // 授权群里同一个名字照常查价
     expect(card(await e.h.group('查价 联盟市场A 乌鸦级'))).toContain('**联盟市场A')
@@ -136,7 +136,7 @@ describe('查价: items', () => {
     const sent = await e.h.group('查价 Navy Cap Booster 800')
     expect(card(sent)).toContain('**电容注电器装料 800 Cap Booster 800')
     expect(card(sent)).toContain('**Amarr')
-    expect(buttonRows(sent)[0]).toContain('查所有市场=>查价 #32014')
+    expect(buttonRows(sent).flat()).toContain('查所有市场=>查价 #32014')
     expect(card(await e.h.group('查价 #32014'))).toContain('**海军电容注电器装料 800 Navy Cap Booster 800')
   })
 

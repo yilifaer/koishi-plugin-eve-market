@@ -112,7 +112,7 @@ describe('制造: base reference', () => {
 })
 
 describe('制造: result with a location', () => {
-  it('everything written: the job cost breakdown, profit, both update times and two rows of buttons', async () => {
+  it('everything written: the job cost breakdown, profit, both update times and the buttons', async () => {
     const e = await start()
     const sent = await e.h.group('制造 乌鸦级 XX-1 ME10 TE20 建筑:大厂 改装:默认 税:1%')
     expect(sent).toHaveLength(1)
@@ -121,14 +121,16 @@ describe('制造: result with a location', () => {
       [
         '查看材料=>制造 乌鸦级 XX-1 ME10 TE20 建筑:大厂 改装:默认 税:1% 材料',
         '修改ME/TE=>制造 乌鸦级 XX-1 建筑:大厂 改装:默认 税:1% 高级',
+      ],
+      [
         '更换地点=>制造 乌鸦级 ME10 TE20 高级',
         '比较地点=>制造比价 乌鸦级 ME10 TE20',
       ],
       [
         '改建筑/改装件=>制造 乌鸦级 XX-1 ME10 TE20 建筑:? 改装:默认 税:1% 高级',
         '不用改装件=>制造 乌鸦级 XX-1 ME10 TE20 建筑:大厂 改装:无 税:1%',
-        '改税率=>制造 乌鸦级 XX-1 ME10 TE20 建筑:大厂 改装:默认 税:',
       ],
+      ['改税率=>制造 乌鸦级 XX-1 ME10 TE20 建筑:大厂 改装:默认 税:'],
     ])
   })
 

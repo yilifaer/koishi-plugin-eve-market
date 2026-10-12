@@ -179,7 +179,7 @@ describe('批量查价: appraisal ID buttons', () => {
       `清单已保存为 #${id}（24 小时内有效），可以先改用其他市场估价。`,
     ].join('\n\n'))
     expect(buttons(sent)).toEqual([
-      `改用 Jita=>批量查价 #${id} Jita`, `改用 Amarr=>批量查价 #${id} Amarr`, `改用 Dodi…=>批量查价 #${id} Dodixie`, `改用 Rens=>批量查价 #${id} Rens`,
+      `改用 Jita=>批量查价 #${id} Jita`, `改用 Amarr=>批量查价 #${id} Amarr`, `改用 Dodixie=>批量查价 #${id} Dodixie`, `改用 Rens=>批量查价 #${id} Rens`,
     ])
     expect(card(await e.h.group(`批量查价 #${id} Jita`))).toContain('**批量估价 · Jita 4-4 · 出售价 -5%')
   })

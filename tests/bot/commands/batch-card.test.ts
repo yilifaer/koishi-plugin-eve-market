@@ -344,9 +344,11 @@ describe('other batch cards', () => {
       '⚠ 联盟市场A 市场数据暂时不可用（ESI 授权或建筑访问权限异常）',
       '清单已保存为 #K7Q2（24 小时内有效），可以先改用其他市场估价。',
     ].join('\n\n'))
-    expect(buttons(card)).toEqual([[
-      '改用 Jita=>批量查价 #K7Q2 Jita', '改用 Amarr=>批量查价 #K7Q2 Amarr', '改用 Dodi…=>批量查价 #K7Q2 Dodixie', '改用 Rens=>批量查价 #K7Q2 Rens',
-    ]])
+    // 标签比 4 个字宽，一行最多 3 个，平均分成两行
+    expect(buttons(card)).toEqual([
+      ['改用 Jita=>批量查价 #K7Q2 Jita', '改用 Amarr=>批量查价 #K7Q2 Amarr'],
+      ['改用 Dodixie=>批量查价 #K7Q2 Dodixie', '改用 Rens=>批量查价 #K7Q2 Rens'],
+    ])
     expect(md(unavailableCard(env(), { ...failure, quoteReason: 'sync_error' }, { side: 'sell', modifierPct: 0 }))).toContain('（同步异常）')
   })
 

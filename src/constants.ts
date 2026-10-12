@@ -160,14 +160,15 @@ export const TRANSLATE_LIMIT = 10
 /** @机器人 但没有命中命令时，不超过这么多字才问「你是想查价吗？」 */
 export const FALLBACK_SHORT_CHARS = 20
 
-/** 按钮：标签不超过 8 个汉字；命令不超过 100 字（超过时把物品名换成 #typeID） */
+/** 按钮：标签不超过 8 个汉字宽（英文数字算半个）；命令不超过 100 字（超过时把物品名换成 #typeID） */
 export const MAX_BUTTON_LABEL = 8
 export const MAX_BUTTON_COMMAND_CHARS = 100
-/** 平台上限 5 行 × 5 个；动作按钮最多 4 行、每行 4 个，编号按钮每行 5 个 */
+/** 平台上限 5 行 × 5 个；动作按钮每行最多 4 个（字长的少放），编号按钮每行 5 个 */
 export const MAX_KEYBOARD_ROWS = 5
-export const MAX_ACTION_ROWS = 4
 export const MAX_ACTIONS_PER_ROW = 4
 export const MAX_CHOICES_PER_ROW = 5
+/** 「未知市场」最多给几个市场按钮（按标签宽度排成 2–3 行） */
+export const MAX_MARKET_BUTTONS = 8
 /** 纯文字降级时动作按钮最多写几行 */
 export const TEXT_ACTION_LINES = 2
 

@@ -1,7 +1,7 @@
 // 认不出唯一物品时的卡片（§2.0.4、§2.2.6、§2.2.7）：候选、没有找到、套装等级、未知市场、不能上市场。
 // 候选的每一项都是一条完整命令（原来的市场、数量照样保留，只把物品名换成精确名），同时记编号待办。
 
-import { CANDIDATE_OVERFLOW, MAX_ACTIONS_PER_ROW, MAX_CANDIDATES, OVERFLOW_EXAMPLES } from '../../constants'
+import { CANDIDATE_OVERFLOW, MAX_CANDIDATES, MAX_MARKET_BUTTONS, OVERFLOW_EXAMPLES } from '../../constants'
 import type { Access, CoreFailure, EveCore, ImplantSet, ItemInfo, MarketDef, Resolution } from '../../core/types'
 import type { Card, Choice, CommandRef } from '../view/card'
 import { escapeMarkdown, hasUrl, safeEcho } from '../view/escape'
@@ -129,7 +129,7 @@ export function unknownMarketCard(
     .filter((m): m is MarketDef => !!m && usable(m))
   const card = emptyCard(SAY.unknownMarket(safeEcho(failure.token ?? '')))
   card.sections.push({ style: 'plain', lines: [{ text: markets.length ? SAY.marketsHere(marketNames(markets)) : SAY.noMarketsHere }] })
-  const buttons = markets.slice(0, MAX_ACTIONS_PER_ROW).map((m) => ({ label: shortName(m), command: command(m) }))
+  const buttons = markets.slice(0, MAX_MARKET_BUTTONS).map((m) => ({ label: shortName(m), command: command(m) }))
   if (buttons.length) card.actions.push(buttons)
   return card
 }

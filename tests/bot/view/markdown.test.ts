@@ -140,7 +140,8 @@ describe('keyboardRows', () => {
     const card = candidateCard(5)
     card.choices = card.choices!.map((c) => ({ ...c, button: `地点${c.no}号很长的名字` }))
     const rows = keyboardRows(card, renderOptions())
-    expect(rows.map((r) => r.map((b) => b.label))).toEqual([['地点1号很长的…', '地点2号很长的…', '地点3号很长的…', '地点4号很长的…'], ['地点5号很长的…']])
+    // 标签 8 个字宽，一行只放 2 个，不会被 QQ 截断
+    expect(rows.map((r) => r.map((b) => b.label))).toEqual([['地点1号很长的…', '地点2号很长的…'], ['地点3号很长的…', '地点4号很长的…'], ['地点5号很长的…']])
     expect(toQQMarkdown(card, renderOptions()).md).toContain('点按钮，或者 @我 回复编号（5 分钟内有效）')
     // 只要有一项没写，全部用编号
     card.choices![2] = { ...card.choices![2], button: undefined }
@@ -148,10 +149,11 @@ describe('keyboardRows', () => {
     expect(toQQMarkdown(card, renderOptions()).md).toContain('点下面的编号，或者 @我 回复编号（5 分钟内有效）')
   })
 
-  it('wraps rows wider than 4 actions and keeps at most 4 action rows', () => {
-    const card = bare({ actions: [[1, 2, 3, 4, 5, 6].map((n) => action(`动作${n}`)), [action('x')], [action('y')], [action('z')]] })
+  it('wraps rows wider than 4 actions evenly and keeps at most 5 rows', () => {
+    const card = bare({ actions: [[1, 2, 3, 4, 5, 6].map((n) => action(`动作${n}`)), [action('x')], [action('y')], [action('z')], [action('w')]] })
     const rows = keyboardRows(card, renderOptions())
-    expect(rows.map((r) => r.length)).toEqual([4, 2, 1, 1])
+    expect(rows.map((r) => r.length)).toEqual([3, 3, 1, 1, 1])
+    expect(rows.flat().map((b) => b.label)).not.toContain('w')
   })
 
   it('fillOnly fills the command name and a space', () => {
@@ -159,9 +161,12 @@ describe('keyboardRows', () => {
     expect(keyboardRows(card, renderOptions())).toEqual([[{ label: '输入物品', text: '查价 ' }]])
   })
 
-  it('cuts long labels to 8 characters and makes them safe for the adapter', () => {
+  it('cuts labels wider than 8 Chinese characters and makes them safe for the adapter', () => {
     const card = bare({ actions: [[action('第7行：乌鸦级海军型', 'x'), action('R&D <1>', 'y'), action('**粗体**', 'z')]] })
-    expect(keyboardRows(card, renderOptions())[0].map((b) => b.label)).toEqual(['第7行：乌鸦级…', 'R＆D ＜1＞', '粗体'])
+    expect(keyboardRows(card, renderOptions()).flat().map((b) => b.label)).toEqual(['第7行：乌鸦级…', 'R＆D ＜1＞', '粗体'])
+    // 英文数字算半个字宽
+    const latin = bare({ actions: [[action('改用 Dodixie', 'a'), action('Raven Navy Issue', 'b'), action('Large Shield Extender II', 'c')]] })
+    expect(keyboardRows(latin, renderOptions()).flat().map((b) => b.label)).toEqual(['改用 Dodixie', 'Raven Navy Issue', 'Large Shield E…'])
   })
 
   it('drops buttons whose command is longer than 100 characters', () => {

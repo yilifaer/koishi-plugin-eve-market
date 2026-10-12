@@ -45,7 +45,7 @@ describe('help topics of 0.0.3', () => {
     const e = await start()
     const sent = await e.h.group('帮助 势力图')
     expect(card(sent).split('\n')[0]).toBe('**入侵 · 势力图 · 联盟势力图 · 服务器状态**')
-    expect(buttonRows(sent)).toEqual([['入侵=>入侵', '势力图=>势力图', '联盟势力图=>联盟势力图', '服务器状态=>服务器状态'], ['全部帮助=>帮助']])
+    expect(buttonRows(sent)).toEqual([['入侵=>入侵', '势力图=>势力图'], ['联盟势力图=>联盟势力图', '服务器状态=>服务器状态'], ['全部帮助=>帮助']])
     expect(card(await e.h.group('帮助 服务器状态'))).toBe(card(sent))
   })
 })
