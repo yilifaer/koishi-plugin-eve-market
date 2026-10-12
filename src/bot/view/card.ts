@@ -52,6 +52,8 @@ export interface Choice {
   label: string
   detail?: string
   command: CommandRef
+  /** 按钮上写的字（纯文字）；不给时按钮上是编号 */
+  button?: string
 }
 
 export interface Action {

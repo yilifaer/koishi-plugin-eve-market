@@ -1,6 +1,6 @@
 // 帮助（§2.14）：注册成隐藏的 eve-market.help [主题]，前置中间件把「帮助」「菜单」「帮助 查价」「帮助查价」改写过来，
 // plugin-help 的快捷方式就不会再匹配；「帮助 <别的插件的命令>」原样交给 plugin-help。
-// 只列已经注册的命令（还没有工业），命令名按当前注册的名字。管理命令只写给管理员看
+// 只列已经注册的命令，命令名按当前注册的名字（工业部分在 industry-help.ts）。管理命令只写给管理员看
 // （单聊或授权群里；样式自检在哪个群都行），别人发「帮助 市场状态」得到的是主卡片。
 
 import { Command } from 'koishi'
@@ -11,6 +11,7 @@ import type { Action, Card, Line, Section } from '../view/card'
 import { escapeMarkdown } from '../view/escape'
 import { emptyCard, invoke, sendCard } from './context'
 import type { CommandContext, Invocation } from './context'
+import { INDUSTRY_TOPICS, industryHelpLines } from './industry-help'
 import { marketNames, marketPrefix } from './names'
 
 export function registerHelp(commands: CommandContext): void {
@@ -63,13 +64,7 @@ function priceLines(env: HelpEnv): Line[] {
   return lines
 }
 
-function industryLines(env: HelpEnv): Line[] {
-  const lines: Line[] = []
-  if (has(env, 'manufacture')) lines.push({ text: `${nameOf(env, 'manufacture')} 乌鸦级：材料成本和制造时间` })
-  if (has(env, 'manufactureCompare')) lines.push({ text: `${nameOf(env, 'manufactureCompare')} 乌鸦级：比较各个制造地点` })
-  if (has(env, 'reaction')) lines.push({ text: `${nameOf(env, 'reaction')} 富勒化合物：反应成本` })
-  return lines
-}
+const industryLines = industryHelpLines
 
 function universeLines(env: HelpEnv): Line[] {
   const simple = (['incursion', 'influenceMap', 'coalitionMap', 'serverStatus'] as const).filter((id) => has(env, id))
@@ -385,6 +380,7 @@ const TOPICS: Partial<Record<CommandId, (env: HelpEnv) => Card>> = {
   coalitionMap: universeTopic,
   serverStatus: universeTopic,
   groupId: groupIdTopic,
+  ...INDUSTRY_TOPICS,
 }
 
 const ADMIN_TOPICS: Partial<Record<CommandId, (env: HelpEnv) => Card>> = {

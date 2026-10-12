@@ -6,7 +6,7 @@ import { normalizeConfig } from '../../../src/config/normalize'
 import { createEveCore, describeIssue } from '../../../src/core'
 import { createModuleStore } from '../../../src/core/ports'
 import type { AuthRecord, HttpClient, HttpRequest } from '../../../src/core/ports'
-import type { EveCore } from '../../../src/core/types'
+import type { EveCore, IndustryRequest } from '../../../src/core/types'
 import { FakeEsi, rawOrder } from '../../fakes/fake-esi'
 import { NodeHttpClient } from '../../fakes/node-http-client'
 import { bundledDir, cleanupDirs, FakeHttp, makeVersion, MemoryCache } from '../data/helpers'
@@ -164,7 +164,7 @@ describe('createEveCore: configuration problems that need the data', () => {
   })
 })
 
-describe('createEveCore: EVE authorization, and the industry placeholder until 0.2.0', () => {
+describe('createEveCore: EVE authorization, and industry', () => {
   it('structure markets need EVE authorization', async () => {
     const { core } = await make({ markets: [...PRESET_MARKETS, ...STRUCTURE_ROWS], sso: { clientId: 'test-client-id', clientSecret: 'x' } })
     await core.start()
@@ -201,14 +201,40 @@ describe('createEveCore: EVE authorization, and the industry placeholder until 0
     expect(texts).toEqual(['市场第 6 行「联盟市场A」使用的授权档案 default 还没有授权（「EVE 授权」里还没填 Client ID）'])
   })
 
-  it('industry', async () => {
-    const { core } = await make()
+  it('industry without locations: the base reference works, the rest needs locations', async () => {
+    const { core, fake } = await make()
     await core.start()
     const req = { typeId: RAVEN, activity: 'manufacturing' as const, mode: 'base' as const, materials: false, access: PUBLIC }
-    expect(await core.industry.plan(req)).toMatchObject({ ok: false, code: 'NOT_CONFIGURED' })
-    expect(await core.industry.compare(req)).toMatchObject({ ok: false, code: 'NOT_CONFIGURED' })
+    expect(await core.industry.plan(req)).toMatchObject({ product: { typeId: RAVEN }, runs: 1, applied: { me: 0, te: 0 } })
+    expect(await core.industry.compare(req)).toMatchObject({ ok: false, code: 'NOT_CONFIGURED', locations: [] })
     expect(core.industry.locations(PUBLIC)).toEqual([])
-    expect(core.parse.industryArgs('乌鸦级', 'manufacturing', PUBLIC)).toMatchObject({ ok: false, code: 'NOT_CONFIGURED' })
+    expect(core.parse.industryArgs('乌鸦级*2', 'manufacturing', PUBLIC)).toMatchObject({ typeId: RAVEN, quantity: 2, mode: 'base' })
+    expect(core.parse.industryArgs('乌鸦级 XX-1', 'manufacturing', PUBLIC)).toMatchObject({ ok: false, code: 'UNKNOWN_LOCATION', token: 'XX-1' })
+    // 没配地点：不预取系统指数和调整价，「市场状态」里也不列
+    expect(core.status().industry).toBeUndefined()
+    expect(fake.count(/^\/industry\/systems$/)).toBe(0)
+  })
+
+  it('industry with a location: config problems, system index and adjusted prices from ESI', async () => {
+    const { core } = await make({
+      industry: {
+        locations: [{ name: 'XX-1', system: 'NIH-02', visibility: 'public' }],
+        structures: [{ location: 'XX-1', name: '大厂', structureType: 'Sotiyo', rigs: '37180, 不存在的改装件', facilityTaxPct: 1 }],
+      },
+    }, (fake) => {
+      fake.industrySystems = [{ solar_system_id: 30000900, cost_indices: [{ activity: 'manufacturing', cost_index: 0.0231 }] }]
+      fake.prices = [{ type_id: 34, adjusted_price: 4 }, { type_id: 35, adjusted_price: 10 }]
+    })
+    await core.start()
+    expect(core.status().issues.map(describeIssue)).toEqual(['工业建筑第 1 行改装件「不存在的改装件」在数据里找不到，已忽略'])
+    const req = core.parse.industryArgs('乌鸦级 XX-1', 'manufacturing', PUBLIC)
+    expect(req).toMatchObject({ typeId: RAVEN, location: 'XX-1', mode: 'advanced' })
+    const r = await core.industry.plan(req as IndustryRequest)
+    expect(r).toMatchObject({
+      applied: { location: 'XX-1', structure: '大厂', sci: 0.0231, facilityTaxPct: 1, me: 10, te: 20 },
+      jobCost: { eiv: 5_200_000 * 4 + 2_600_000 * 10, missingAdjusted: 8 },
+    })
+    expect(core.status().industry).toEqual({ indicesAt: expect.any(Number), adjustedPricesAt: expect.any(Number) })
   })
 })
 

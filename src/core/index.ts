@@ -2,27 +2,28 @@
 // 生命周期：start() 读回 ESI 的暂停窗口 → 读模块级存储、缓存或自带快照 → ready → 后台在线检查；stop() 取消一切。
 // 需要数据的配置检查（市场位置、配置里引用的市场、物品别名、默认数量）每次数据更新后重跑，新出现的问题写一次日志。
 // EVE 授权档案在 start() 时同时从数据库读入（ready 也等它）；数据和档案都好了以后从缓存恢复建筑市场的订单簿、排上后台同步。
-// 工业在 0.2.0 之前是占位：回复 NOT_CONFIGURED。
+// 工业：地点和建筑的配置问题和别的配置问题一起报；配了工业地点时，系统指数和调整价在数据加载后排上后台预取，
+// 「市场状态」也列出它们的更新时间（没配地点时用不到这两份数据：基础参考不算安装费用）。
 
 import { MAX_NOTICES } from '../constants'
 import { createAppraisalService } from './appraisal'
 import { createDataService } from './data'
 import { createEsi } from './esi'
 import { createPriceFormatter } from './format'
+import { createIndustryIndices, createIndustryLocations, createIndustryService } from './industry'
+import type { IndustryLocations } from './industry'
 import { createItemResolver } from './items'
 import type { ManagedItemResolver } from './items'
 import { createHistoryService, createMarketRegistry, createMarketService, createStructureMarkets } from './market'
 import type { ManagedMarketRegistry } from './market'
-import { createQueryParser } from './parse'
+import { createIndustryArgs, createQueryParser } from './parse'
 import type { CorePorts, Logger } from './ports'
 import { createAuthService } from './sso'
 import type {
-  Access, AuthService, ConfigIssue, ConfigSection, CoreFailure, CoreOverrides, CoreStatus, DataService,
-  EveCore, IndustryService, ItemIndexStats, Settings,
+  Access, AuthService, ConfigIssue, ConfigSection, CoreOverrides, CoreStatus, DataService, EveCore, ItemIndexStats, Settings,
 } from './types'
 import { createIncursions, createInfluenceMaps, createServerStatus, createUniverseService } from './universe'
 
-const NO_INDUSTRY_YET = '工业计算在 0.2.0 提供'
 const EMPTY_STATS: ItemIndexStats = { items: 0, marketItems: 0, adminAliases: 0, glossaryAliases: 0, sets: 0 }
 
 /** 日志里的分组名（和控制台一致） */
@@ -49,18 +50,6 @@ export function describeIssue(issue: ConfigIssue): string {
   return `${label}${issue.table ? ` · ${issue.table}` : ''}：${issue.message}`
 }
 
-// ------------------------------------------------------------------ 占位（0.2.0 工业）
-
-function pendingIndustry(): IndustryService {
-  const notConfigured: CoreFailure = { ok: false, code: 'NOT_CONFIGURED', message: NO_INDUSTRY_YET }
-  return {
-    locations: () => [],
-    plan: async () => notConfigured,
-    compare: async () => notConfigured,
-    multibuy: () => [],
-  }
-}
-
 // ------------------------------------------------------------------ 需要数据的配置检查
 
 interface CheckDeps {
@@ -68,6 +57,7 @@ interface CheckDeps {
   data: Pick<DataService, 'status'>
   items: ManagedItemResolver
   markets: ManagedMarketRegistry
+  industry: Pick<IndustryLocations, 'issues'>
   auth: Pick<AuthService, 'profiles'>
   logger: Logger
 }
@@ -110,9 +100,9 @@ class ConfigChecks {
 
   /** 要有数据才能做的检查；数据还没加载好时为空 */
   dataIssues(): ConfigIssue[] {
-    const { settings, data, items, markets } = this.deps
+    const { settings, data, items, markets, industry } = this.deps
     if (!data.status().ready) return []
-    return [...markets.issues(), ...items.issues(), ...quantityIssues(settings, items)]
+    return [...markets.issues(), ...items.issues(), ...quantityIssues(settings, items), ...industry.issues()]
   }
 
   all(): ConfigIssue[] {
@@ -150,7 +140,13 @@ export function createEveCore(ports: CorePorts, settings: Settings, overrides: C
   const auth = createAuthService({ ports, settings, esi, ssoBase: overrides.ssoBase })
   const structures = createStructureMarkets({ esi, auth, registry: markets, cache, clock, scheduler, logger, store, random: overrides.random })
   const prices = createMarketService({ registry: markets, esi, clock, scheduler, logger, store, structures })
-  const checks = new ConfigChecks({ settings, data, items, markets, auth, logger })
+  const locations = createIndustryLocations(settings.industry, data)
+  const industryUsed = settings.industry.locations.length > 0
+  const indices = createIndustryIndices({ esi, clock, scheduler, logger, store, random: overrides.random })
+  const industry = createIndustryService({
+    data, items, markets, prices, locations, indices, settings: settings.industry, clock, scheduler, logger,
+  })
+  const checks = new ConfigChecks({ settings, data, items, markets, industry: locations, auth, logger })
   const maps = createInfluenceMaps({
     http: ports.http,
     cache,
@@ -171,12 +167,12 @@ export function createEveCore(ports: CorePorts, settings: Settings, overrides: C
     ready,
     data,
     items,
-    parse: createQueryParser({ items, markets, scheduler }),
+    parse: createQueryParser({ items, markets, scheduler, industry: createIndustryArgs({ items, locations }) }),
     markets,
     prices,
     history: createHistoryService({ esi, clock }),
     appraisal: createAppraisalService({ items, markets, prices, settings, store, clock, scheduler, logger, random: overrides.random }),
-    industry: pendingIndustry(),
+    industry,
     universe: createUniverseService({
       data, items, store, clock, esi, logger,
       incursions: createIncursions({ esi, data, clock, logger }),
@@ -204,6 +200,7 @@ export function createEveCore(ports: CorePorts, settings: Settings, overrides: C
         markets: prices.sources(),
         auth: auth.profiles(),
         esi: esi.client.status(),
+        ...(industryUsed ? { industry: indices.status() } : {}),
         issues: checks.all(),
       }
     },
@@ -211,13 +208,17 @@ export function createEveCore(ports: CorePorts, settings: Settings, overrides: C
     start(): Promise<void> {
       // 势力图先读本地缓存，过一会儿再预取，不和数据加载抢
       maps.start()
-      started ??= Promise.all([esi.client.start().then(() => data.start()), auth.start().finally(authLoaded)]).then(() => structures.start())
+      started ??= Promise.all([
+        esi.client.start().then(() => data.start()).then(() => { if (industryUsed) indices.start() }),
+        auth.start().finally(authLoaded),
+      ]).then(() => structures.start())
       return started
     },
 
     async stop(): Promise<void> {
       unsubscribe()
       maps.stop()
+      indices.stop()
       structures.stop()
       auth.stop()
       items.dispose()

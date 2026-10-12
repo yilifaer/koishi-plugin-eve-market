@@ -62,14 +62,16 @@ describe('help next to plugin-help', () => {
   it('the main card lists only the commands of this version, with buttons to fill in and topics', async () => {
     const e = await start()
     const sent = await e.h.group('帮助')
-    expect(sent[0].markdown).not.toContain('工业')
+    // 本群看不到工业地点：只写「制造」「反应」（基础参考不需要地点），不写「制造比价」
+    expect(sent[0].markdown).toContain('**工业**\n\n- 制造 乌鸦级：材料成本和制造时间\n- 反应 富勒化合物：反应成本')
+    expect(sent[0].markdown).not.toContain('制造比价')
     expect(sent[0].markdown).toContain('- 走势 乌鸦级：近 30 天价格图')
     expect(sent[0].markdown).toContain('**宇宙**\n\n- 入侵 · 势力图 · 联盟势力图 · 服务器状态\n- 战报 + BR 链接（直接 @我 发链接也行）')
     expect(sent[0].markdown).toContain('**其他**\n\n- 搜索 乌鸦 · 翻译 三钛合金 · 本群ID')
     expect(buttonRows(sent)).toEqual([
-      ['查价=>查价 ', '批量查价=>批量查价 ', '走势=>走势 '],
+      ['查价=>查价 ', '批量查价=>批量查价 ', '走势=>走势 ', '制造=>制造 '],
       ['入侵=>入侵', '势力图=>势力图', '战报=>战报 ', '服务器状态=>服务器状态'],
-      ['查价说明=>帮助 查价', '批量说明=>帮助 批量查价', '走势说明=>帮助 走势'],
+      ['查价说明=>帮助 查价', '批量说明=>帮助 批量查价', '走势说明=>帮助 走势', '制造说明=>帮助 制造'],
     ])
   })
 })

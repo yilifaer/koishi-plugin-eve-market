@@ -5,7 +5,7 @@
 import { BASE_COMPARE_WAIT_MS, DEADLINE_GUARD_MS, GLOBAL_MARKET_TYPES, QUERY_DEADLINE_MS } from '../../constants'
 import { describeError } from '../../core/util'
 import { isFailure } from '../../core/types'
-import type { CoreFailure, ImplantSet, ItemInfo, MarketDef, ParsedQuery, PriceQuote, Resolution, TypeId } from '../../core/types'
+import type { CoreFailure, ImplantSet, IndustryData, ItemInfo, MarketDef, ParsedQuery, PriceQuote, Resolution, TypeId } from '../../core/types'
 import type { Action, Card, CommandRef } from '../view/card'
 import { escapeMarkdown, hasUrl } from '../view/escape'
 import { runBatch } from './batch'
@@ -64,7 +64,7 @@ async function answer(inv: Invocation, parsed: ParsedQuery): Promise<void> {
       await sendCard(inv, candidatesCard(inv.core, res, choiceOptions(inv, parsed)), { quantity: true })
       return
     case 'out-of-scope':
-      await inv.reply.text(notTradableText(res.item))
+      await notTradable(inv, res.item)
       return
     case 'none': {
       // 「搜索 乌鸦机」什么都搜不到：提示换成搜得到的关键词（「搜索 乌鸦」），没有就不提
@@ -170,7 +170,7 @@ async function quoteItem(inv: Invocation, parsed: ParsedQuery, res: Extract<Reso
     global,
     meta,
     notices: notices(inv),
-    actions: itemActions(inv, item, parsed.market, parsed.alt),
+    actions: itemActions(inv, item, parsed.market, parsed.alt, parsed.quantity),
   })
   await sendCard(inv, card)
 }
@@ -209,14 +209,51 @@ function trendActions(inv: Invocation, args: (range: string) => string): Action[
   return inv.commands.registry.has('trend') ? trendButtons(['month', 'quarter'], args) : []
 }
 
-function itemActions(inv: Invocation, item: ItemInfo, market: MarketDef | undefined, alt: ItemInfo | undefined): Action[][] {
+function itemActions(inv: Invocation, item: ItemInfo, market: MarketDef | undefined, alt: ItemInfo | undefined, quantity: number | null): Action[][] {
   const named = (id: 'trend' | 'search', compose: (name: string) => string) => itemArgs(inv.core, inv.render, id, item, compose)
   const row: Action[] = trendActions(inv, (range) => named('trend', (name) => `${trendPrefix(market)}${name} ${range}`))
   if (inv.commands.registry.has('search')) {
     row.push({ label: '相关物品', command: { id: 'search', args: named('search', (name) => `${marketPrefix(market)}${name}`) }, ...row.length ? {} : { primary: true } })
   }
   if (alt) row.push({ label: '查所有市场', command: { id: 'price', args: `#${alt.typeId}` } })
+  const cost = costAction(inv, item, quantity)
+  if (cost) row.push(cost)
   return row.length ? [row] : []
+}
+
+// ------------------------------------------------------------------ 制造成本（§2.2.2、§2.2.7、§11.2）
+
+function industryData(inv: Invocation): IndustryData | undefined {
+  try {
+    return inv.core.data.current().industry
+  } catch {
+    return undefined
+  }
+}
+
+/** 有制造蓝图或反应配方的物品：「制造成本」填入基础参考（反应产物用「反应」）；命令没注册时不给 */
+function costAction(inv: Invocation, item: ItemInfo, quantity: number | null): Action | undefined {
+  const industry = industryData(inv)
+  if (!industry) return undefined
+  const id = industry.reactions.has(item.typeId) ? 'reaction' : industry.manufacturing.has(item.typeId) ? 'manufacture' : undefined
+  if (!id || !inv.commands.registry.has(id)) return undefined
+  const qty = quantity && quantity > 1 ? `*${quantity}` : ''
+  return { label: '制造成本', command: { id, args: itemArgs(inv.core, inv.render, id, item, (name) => `${name}${qty}`) } }
+}
+
+/** 不能在市场上交易的蓝图、配方（例如 T2 蓝图）：说明，能算成本时配「制造成本」（按它的产品） */
+async function notTradable(inv: Invocation, item: ItemInfo): Promise<void> {
+  const recipe = industryData(inv)?.byBlueprint.get(item.typeId)
+  const productId = (recipe?.m ?? recipe?.r)?.products[0]?.typeId
+  const product = productId === undefined ? item : inv.core.items.byId(productId)
+  const cost = product && costAction(inv, product, null)
+  if (!cost) {
+    await inv.reply.text(notTradableText(item))
+    return
+  }
+  const card = emptyCard(escapeMarkdown(notTradableText(item)))
+  card.actions.push([{ ...cost, primary: true }])
+  await sendCard(inv, card)
 }
 
 function setActions(inv: Invocation, set: ImplantSet, market: MarketDef | undefined): Action[][] {

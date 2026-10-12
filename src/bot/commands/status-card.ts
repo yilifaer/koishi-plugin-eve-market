@@ -198,6 +198,14 @@ function dataLines(status: CoreStatus, now: number): Line[] {
   return lines
 }
 
+/** 系统指数：13:00 更新 · 调整价：13:05 更新（配了工业地点时才有） */
+function industryLines(status: CoreStatus, now: number): Line[] {
+  const i = status.industry
+  if (!i) return []
+  const at = (ms: number | null) => (ms === null ? '还没有' : `${clock(ms, now)} 更新`)
+  return [{ text: `系统指数：${at(i.indicesAt)} · 调整价：${at(i.adjustedPricesAt)}` }]
+}
+
 function esiLine(status: CoreStatus, now: number): Line[] {
   const e = status.esi
   const parts: string[] = []
@@ -239,6 +247,7 @@ export function statusCard(view: StatusView, actions: Action[][]): Card {
     ...status.auth.flatMap((p) => profileLines(p, now, true)),
     ...view.web ? [] : [{ text: `授权页面：${STATUS_TEXT.noServer}` }],
     ...dataLines(status, now),
+    ...industryLines(status, now),
     ...esiLine(status, now),
     messageLine(view.breaker, now),
     ...listLines('配置问题', status.issues.map((i) => escapeMarkdown(describeIssue(i)))),

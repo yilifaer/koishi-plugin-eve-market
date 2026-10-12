@@ -163,6 +163,16 @@ describe('市场状态: the whole card', () => {
     expect(out).toContain('- 命令冲突：「搜索」和别的插件的命令重名，没有注册')
   })
 
+  it('with industry locations: when the system indices and adjusted prices were updated (§2.16)', () => {
+    const industry = { indicesAt: NOW - 80 * MINUTE, adjustedPricesAt: NOW - 75 * MINUTE }
+    const out = md(statusCard(view({ status: coreStatus({ industry }) }), []))
+    expect(out).toContain('- 黑话表：在线 · 325 条 · 别名接入 612 个\n- 系统指数：13:00 更新 · 调整价：13:05 更新\n- ESI 配额：')
+    const none = md(statusCard(view({ status: coreStatus({ industry: { indicesAt: null, adjustedPricesAt: null } }) }), []))
+    expect(none).toContain('- 系统指数：还没有 · 调整价：还没有')
+    // 没配工业地点时不写这一行
+    expect(md(statusCard(view(), []))).not.toContain('系统指数')
+  })
+
   it('before the data is loaded', () => {
     const out = md(statusCard(view({ status: coreStatus({ ready: false, data: { ...coreStatus().data, ready: false } }) }), []))
     expect(out).toContain('- 物品数据：加载中')

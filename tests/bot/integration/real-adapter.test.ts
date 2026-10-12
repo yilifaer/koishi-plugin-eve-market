@@ -36,7 +36,7 @@ describe('the whole plugin on the real QQ adapter', () => {
     expect(msg.body.content).toBeUndefined()
     expect(msg.body.markdown?.content).toMatch(/^\*\*乌鸦级\*\* Raven · 战列舰\n\n\*\*Jita 4-4\*\*\n\n- 出售 `258,400,000 ISK`（258\.40M）/)
     const row = msg.body.keyboard!.content.rows[0].buttons
-    expect(row.map((b) => b.render_data.label)).toEqual(['月度走势', '季度走势', '相关物品'])
+    expect(row.map((b) => b.render_data.label)).toEqual(['月度走势', '季度走势', '相关物品', '制造成本'])
     expect(row[0].action).toMatchObject({ type: 2, permission: { type: 2 }, data: '走势 乌鸦级 月' })
     expect(row[2].action).toMatchObject({ type: 2, permission: { type: 2 }, data: '搜索 乌鸦级' })
   })

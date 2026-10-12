@@ -52,6 +52,14 @@ export type FailureReason =
   | 'modifier-range'
   /** UPSTREAM_UNAVAILABLE：图片超过大小上限（势力图） */
   | 'too-large'
+  /** 工业：流程数超过 MAX_RUNS（N流程，或 *N 换算出来的流程数） */
+  | 'runs-range'
+  /** 工业：「税:」后面不是 0–100 的数字 */
+  | 'tax-range'
+  /** 工业：「改装:」后面不是「默认」或「无」 */
+  | 'rig-option'
+  /** UNKNOWN_LOCATION：地点存在，但不能做这种活动（没有对应的建筑） */
+  | 'activity'
 
 export interface CoreFailure {
   ok: false
@@ -66,9 +74,12 @@ export interface CoreFailure {
   locations?: string[]
   /** MARKET_UNAVAILABLE / UNKNOWN_MARKET 时带上保存好的估价编号 */
   appraisalId?: string
-  /** 用户写的、没认出来的那个词（未知市场、未知地点），原样，回显前要经过 safeEcho */
+  /** 用户写的、没认出来的那个词（未知市场、未知地点；制造、反应认不出的物品名），原样，回显前要经过 safeEcho */
   token?: string
-  /** UNKNOWN_MARKET / UNKNOWN_LOCATION 时：去掉那个词以后剩下的部分，按钮里保留原来的物品和数量 */
+  /**
+   * UNKNOWN_MARKET / UNKNOWN_LOCATION 时：去掉那个词以后剩下的部分，按钮里保留原来的物品和数量。
+   * 制造、反应的物品认不出、不唯一、不在范围里时：物品名后面的参数（空，或以「*」、空格开头），候选按钮是「精确名 + rest」
+   */
   rest?: string
   /** MARKET_UNAVAILABLE 时：不可用的那个市场的 key（markets 里不含它） */
   marketKey?: string
@@ -923,6 +934,10 @@ export interface IndustryResult {
     facilityTaxPct?: number
     sccPct?: number
     defaulted: Array<'location' | 'me' | 'te' | 'structure' | 'rigs' | 'tax'>
+    /** 自动选中的建筑是这个地点唯一能做这种活动的一座 */
+    structureOnly?: boolean
+    /** 改装件的情况（有地点时给，见 IndustryRigState） */
+    rigState?: IndustryRigState
   }
   materials: Array<{ item: ItemInfo; baseQuantity: number; quantity: number; unit: number | null; total: number | null; manufacturable: boolean; fallback?: boolean }>
   materialCost: number
@@ -930,18 +945,42 @@ export interface IndustryResult {
   jobCost?: { eiv: number; grossSci: number; bonuses: number; facility: number; scc: number; extra: number; extraLabel?: string; total: number; missingAdjusted: number }
   timeSeconds: number
   timeSecondsMaxSkill?: number
-  productValue?: { marketKey: string; side: PriceSide; unit: number | null; total: number | null }
+  productValue?: { marketKey: string; side: PriceSide; unit: number | null; total: number | null; fallback?: boolean }
   profit?: { value: number; marginPct: number } | null
   formulaRevision: string
   warnings: string[]
+  /** 材料按哪个市场、哪种价格算（配置的市场）；整个市场不可用时 unavailable；用到的回退市场是 fallbackKey（行上标 fallback） */
+  materialPrices?: { marketKey: string; side: PriceSide; unavailable?: boolean; fallbackKey?: string }
+  /** 计入的报价里最旧的数据时间 */
+  pricesAt?: number | null
+  /** 系统指数的数据时间（ESI 的 Last-Modified）；没有算安装费时不给 */
+  indicesAt?: number | null
+  /** 系统指数是更新失败前的旧数据（卡片上标「缓存」） */
+  indicesStale?: boolean
+  /** 调整价的数据时间；没有算安装费时不给 */
+  adjustedPricesAt?: number | null
+  /** 调整价是更新失败前的旧数据 */
+  adjustedStale?: boolean
 }
+
+/**
+ * 改装件的情况：applied 有生效的；disabled 命令里写了「改装:无」；not-installed 没装（装的尺寸不对、已经在配置检查里去掉的也算）；
+ * not-applicable 装了但对这个产品不生效（或在这个安全等级不生效）；impossible 没有建筑加成（「建筑:无」、NPC 空间站），装不了
+ */
+export type IndustryRigState = 'applied' | 'disabled' | 'not-installed' | 'not-applicable' | 'impossible'
 
 export interface IndustryStep {
   /** 选「6 步」时加 'rigs' | 'tax'，'mete' 拆成 'me' | 'te' */
   step: 'location' | 'mete' | 'structure'
-  /** command：命令名后面的参数（例如「乌鸦级 XX-1 高级」），命令名由 bot 渲染时加上 */
-  options: Array<{ label: string; detail?: string; command: string }>
+  /** command：命令名后面的参数（例如「乌鸦级 XX-1 高级」），命令名由 bot 渲染时加上；button：按钮上的字（不给时用 label） */
+  options: Array<{ label: string; detail?: string; command: string; button?: string }>
   summary: string[]
+  /** 「其余默认」：不再逐步问、直接出结果的参数；没有默认地点时不给 */
+  defaults?: string
+  /** 第 2 步「自定义」：填进输入框、用户在末尾补数字的参数（以「ME」结尾）；编号待办的 ME7、TE14 接在去掉末尾「ME」的那段后面 */
+  custom?: string
+  /** 这一步要先说明的事（例如写的建筑在这个地点找不到） */
+  notice?: string
 }
 
 export interface LocationComparison {
@@ -953,6 +992,10 @@ export interface LocationComparison {
   rows: Array<{ location: string; structure?: string; noRigs: boolean; result: IndustryResult; cheapest: boolean; fastest: boolean }>
   materialMarketKey: string
   materialSide: PriceSide
+  /** 命令里写了「改装:无」：各地点都不用改装件 */
+  rigsOff?: boolean
+  /** 命令里写的设施税：各地点都按它算 */
+  facilityTaxPct?: number
 }
 
 export interface IndustryLocationInfo {

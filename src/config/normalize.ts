@@ -3,6 +3,7 @@
 // 原则：写错一行只影响那一行；坏行跳过并报告，插件照常加载。
 
 import { MAX_ME, MAX_QUANTITY, MAX_TE, NOTICE_MAX_CHARS, PRICE_TYPE_WORDS, SSO_CALLBACK_PATH } from '../constants'
+import { FORMULA_DEFAULTS } from '../core/industry'
 import type {
   AccessSettings, AdvancedSettings, AppraisalSettings, ConfigIssue, ConfigSection, DefaultQuantitySetting, DisplaySettings,
   FreightRoute, IndustryActivity, IndustryLocationSetting, IndustrySettings, IndustryStructureSetting, ItemAliasSetting,
@@ -495,7 +496,7 @@ function normalizeNotices(raw: Raw, issues: IssueList): NoticeSetting[] {
 function normalizeIndustry(raw: Raw, allIssues: IssueList): IndustrySettings {
   const s: ConfigSection = 'industry'
   const ind = obj(raw.industry)
-  // 0.1.0 的控制台里还没有这个分组：没写时全部用默认值，不报告
+  // 0.1.x 存下的配置里没有这个分组：没写时全部用默认值，不报告
   const issues = isMissing(raw.industry) ? new IssueList() : allIssues
   const sides = ['sell', 'mid', 'buy'] as const
 
@@ -506,12 +507,17 @@ function normalizeIndustry(raw: Raw, allIssues: IssueList): IndustrySettings {
   const locTable = '工业地点'
   const locations: IndustryLocationSetting[] = []
   const locationKeys = new Map<string, IndustryLocationSetting>()
+  // 停用的地点（名称和别名）：它的建筑跟着不生效，不报告
+  const disabledKeys = new Set<string>()
   tableRows(issues, s, ind.locations, [], locTable).forEach((rawRow, i) => {
     const row = i + 1
     const at = { table: locTable, row }
     if (isInvalidRow(rawRow)) return invalidRow(issues, s, row, locTable)
     const r = rawRow as Raw
-    if (!bool(r.enabled, true)) return
+    if (!bool(r.enabled, true)) {
+      for (const n of [line(r.name), ...splitList(text(r.aliases))]) if (n) disabledKeys.add(nameKey(n))
+      return
+    }
     const name = line(r.name)
     if (!name) return issues.add(s, '「名称」为空，已跳过', { ...at, field: 'name' })
     const reserved = reservedReason(name)
@@ -566,8 +572,10 @@ function normalizeIndustry(raw: Raw, allIssues: IssueList): IndustrySettings {
     if (isInvalidRow(rawRow)) return invalidRow(issues, s, row, stTable)
     const r = rawRow as Raw
     if (!bool(r.enabled, true)) return
+    // 地点按名称找，也认地点的别名
     const locName = line(r.location)
-    const loc = locationKeys.get(nameKey(locName))
+    const loc = locOwner.get(nameKey(locName))
+    if (!loc && disabledKeys.has(nameKey(locName))) return
     if (!loc) return issues.add(s, `地点「${locName}」不在工业地点表里，已跳过`, { ...at, field: 'location' })
     const name = line(r.name)
     if (!name) return issues.add(s, '「名称」为空，已跳过', { ...at, field: 'name' })
@@ -610,8 +618,8 @@ function normalizeIndustry(raw: Raw, allIssues: IssueList): IndustrySettings {
     materialPriceType: pick(issues, s, '材料价格', ind.materialPriceType, sides, 'sell', { field: 'materialPriceType' }),
     productPriceType: pick(issues, s, '成品价格', ind.productPriceType, sides, 'sell', { field: 'productPriceType' }),
     meTeChoices,
-    sccSurchargePct: clampNumber(issues, s, 'SCC 附加费', ind.sccSurchargePct, 4, 0, 100, { field: 'sccSurchargePct' }),
-    npcFacilityTaxPct: clampNumber(issues, s, 'NPC 空间站设施税', ind.npcFacilityTaxPct, 0.25, 0, 100, { field: 'npcFacilityTaxPct' }),
+    sccSurchargePct: clampNumber(issues, s, 'SCC 附加费', ind.sccSurchargePct, FORMULA_DEFAULTS.sccSurchargePct, 0, 100, { field: 'sccSurchargePct' }),
+    npcFacilityTaxPct: clampNumber(issues, s, 'NPC 空间站设施税', ind.npcFacilityTaxPct, FORMULA_DEFAULTS.npcFacilityTaxPct, 0, 100, { field: 'npcFacilityTaxPct' }),
     sellFeesPct: clampNumber(issues, s, '销售税和经纪费', ind.sellFeesPct, 0, 0, 100, { field: 'sellFeesPct' }),
     multibuyLanguage: pick(issues, s, '多买清单语言', ind.multibuyLanguage, ['en', 'zh'] as const, 'en', { field: 'multibuyLanguage' }),
     locations,

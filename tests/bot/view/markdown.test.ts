@@ -136,6 +136,18 @@ describe('keyboardRows', () => {
     expect(rows.map((r) => r.map((b) => b.label))).toEqual([['1', '2', '3', '4', '5'], ['6', '7', '8'], ['a'], ['b'], ['c']])
   })
 
+  it('choices with their own button text are labeled with it, 4 to a row, and the hint says so', () => {
+    const card = candidateCard(5)
+    card.choices = card.choices!.map((c) => ({ ...c, button: `地点${c.no}号很长的名字` }))
+    const rows = keyboardRows(card, renderOptions())
+    expect(rows.map((r) => r.map((b) => b.label))).toEqual([['地点1号很长的…', '地点2号很长的…', '地点3号很长的…', '地点4号很长的…'], ['地点5号很长的…']])
+    expect(toQQMarkdown(card, renderOptions()).md).toContain('点按钮，或者 @我 回复编号（5 分钟内有效）')
+    // 只要有一项没写，全部用编号
+    card.choices![2] = { ...card.choices![2], button: undefined }
+    expect(keyboardRows(card, renderOptions())[0].map((b) => b.label)).toEqual(['1', '2', '3', '4', '5'])
+    expect(toQQMarkdown(card, renderOptions()).md).toContain('点下面的编号，或者 @我 回复编号（5 分钟内有效）')
+  })
+
   it('wraps rows wider than 4 actions and keeps at most 4 action rows', () => {
     const card = bare({ actions: [[1, 2, 3, 4, 5, 6].map((n) => action(`动作${n}`)), [action('x')], [action('y')], [action('z')]] })
     const rows = keyboardRows(card, renderOptions())

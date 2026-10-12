@@ -1,15 +1,18 @@
 import { Schema } from 'koishi'
-import type { Clickable, ListPriceDisplayMode, MarketType, NumberStyle, OutputMode, PriceDisplayMode, PriceSide } from '../core/types'
+import { FORMULA_DEFAULTS } from '../core/industry'
+import type {
+  Clickable, Lang, ListPriceDisplayMode, MarketType, NumberStyle, OutputMode, PriceDisplayMode, PriceSide, Visibility,
+} from '../core/types'
 import { INVALID_ROW_KEY } from './normalize'
 import {
-  DEFAULT_BASE_MARKET, DEFAULT_CALLBACK_URL, DEFAULT_COALITION_MAP_URL, DEFAULT_GLOSSARY_URL, DEFAULT_INFLUENCE_MAP_URL,
-  DEFAULT_MANIFEST_URL, DEFAULT_QUANTITIES, PRESET_MARKETS,
+  DEFAULT_BASE_MARKET, DEFAULT_CALLBACK_URL, DEFAULT_COALITION_MAP_URL, DEFAULT_EXTRA_FEE_LABEL, DEFAULT_GLOSSARY_URL,
+  DEFAULT_INFLUENCE_MAP_URL, DEFAULT_MANIFEST_URL, DEFAULT_ME_TE_CHOICES, DEFAULT_QUANTITIES, PRESET_MARKETS,
 } from './presets'
 
 // Schema 校验失败会让整个插件加载失败，所以每个字段只做宽松的声明并加 .loose()（类型不对时回到默认值），
 // 具体检查放到 normalize.ts。表格的每一行整体 loose：类型、启用这类选项写错时整行变成 INVALID_ROW，
 // 由 normalize 标成无效并跳过，只影响这一行。
-// 「工业」分组 0.2.0 才加进来；没有这个分组的配置按默认值处理。
+// 「工业」分组 0.2.0 加入；0.1.x 存下的配置里没有这个分组，按默认值处理。
 
 export interface GroupRow { groupId: string; note: string; enabled: boolean }
 export interface UserRow { userId: string; note: string; enabled: boolean }
@@ -43,6 +46,50 @@ export interface FreightRow {
 
 export interface NoticeRow { text: string; visibility: 'all' | 'allowed'; until: string; enabled: boolean }
 
+export interface IndustryLocationRow {
+  name: string
+  aliases: string
+  system: string
+  visibility: Visibility
+  isDefault: boolean
+  defaultME: number
+  defaultTE: number
+  sysCostBonusPct: number
+  enabled: boolean
+  note: string
+}
+
+export interface IndustryStructureRow {
+  location: string
+  name: string
+  structureType: string
+  structureId: string
+  activities: 'manufacturing' | 'reaction' | 'both'
+  rigs: string
+  facilityTaxPct: number
+  extraFeePct: number
+  extraFeeIsk: number
+  extraFeeLabel: string
+  isDefault: boolean
+  enabled: boolean
+  note: string
+}
+
+export interface IndustryConfig {
+  materialMarket: string
+  materialPriceType: PriceSide
+  productMarket: string
+  productPriceType: PriceSide
+  fallbackMarket: string
+  meTeChoices: string
+  sccSurchargePct: number
+  npcFacilityTaxPct: number
+  sellFeesPct: number
+  multibuyLanguage: Lang
+  locations: IndustryLocationRow[]
+  structures: IndustryStructureRow[]
+}
+
 export interface Config {
   general: { requireAt: boolean; allowSandbox: boolean }
   display: {
@@ -62,6 +109,7 @@ export interface Config {
   appraisal: { defaultMarket: string; defaultPriceType: PriceSide; fallbackMarket: string }
   freight: { routes: FreightRow[] }
   notices: { list: NoticeRow[] }
+  industry: IndustryConfig
   sso: { clientId: string; clientSecret: string; callbackUrl: string; adminKey: string }
   render: { influenceMapUrl: string; coalitionMapUrl: string; brAuto: boolean }
   advanced: { manifestUrl: string; glossaryUrl: string; esiContact: string }
@@ -226,6 +274,73 @@ export const Config: Schema<Config> = Schema.intersect([
         .description('附在查价、批量查价结果下面的告示，最多显示前 2 条。内容一行、不超过 80 字，不能带网址（QQ 群里不允许发网址，带了会跳过）。截止时间写成 `2026-12-31 23:59`（北京时间），留空 = 一直显示。'),
     }).default({} as Config['notices']).loose(),
   }).description('查价告示'),
+
+  Schema.object({
+    industry: Schema.object({
+      materialMarket: str(DEFAULT_BASE_MARKET)
+        .description('材料按哪个市场的价格算（填市场表格里的名称或别名）。本群看不到这个市场时改用基准市场。'),
+      materialPriceType: priceSide().default('sell').loose()
+        .description('材料按哪个价格算。'),
+      productMarket: str(DEFAULT_BASE_MARKET)
+        .description('成品价值（用来算利润）按哪个市场的价格算。'),
+      productPriceType: priceSide().default('sell').loose()
+        .description('成品按哪个价格算。'),
+      fallbackMarket: str()
+        .description('材料在材料市场没有价格、或者材料市场整个暂时不可用时，改用哪个市场，并用 † 标出；留空 = 列为「缺价格」，总成本标「不完整」。'),
+      meTeChoices: str(DEFAULT_ME_TE_CHOICES)
+        .description('高级计算第 2 步列出的蓝图 ME/TE 组合，每组写成「ME/TE」，用逗号分隔。ME 是 0–10，TE 是 0–20。'),
+      sccSurchargePct: num(FORMULA_DEFAULTS.sccSurchargePct)
+        .description('SCC 附加费（%），按预估物品价值收。游戏调整了这个税率时改这里。'),
+      npcFacilityTaxPct: num(FORMULA_DEFAULTS.npcFacilityTaxPct)
+        .description('在 NPC 空间站制造（或者命令里写「建筑:无」）时的设施税（%）。游戏调整了这个税率时改这里。'),
+      sellFeesPct: num(0)
+        .description('算利润时从成品价值里扣掉的销售税和经纪费（%）。填 0 = 不扣，卡片上注明「未计销售税和经纪费」。'),
+      multibuyLanguage: choice<Lang>([['en', '英文名'], ['zh', '中文名']]).default('en').loose()
+        .description('「查看材料」另外发的清单（可以粘进游戏的「多重购买」窗口）用英文名还是中文名。'),
+      locations: table(Schema.object({
+        name: str().description('名称'),
+        aliases: str().description('别名'),
+        system: str().description('星系'),
+        visibility: choice<Visibility>([['public', '所有群'], ['allowed', '只在授权群']]).default('allowed').description('谁能看到'),
+        isDefault: strictBool(false).description('默认地点'),
+        defaultME: num(10).description('默认 ME'),
+        defaultTE: num(20).description('默认 TE'),
+        sysCostBonusPct: num(0).description('星系费用加成 %'),
+        enabled: strictBool(true).description('启用'),
+        note: str().description('备注'),
+      }))
+        .description([
+          '**工业地点**：「制造」「反应」命令里写的地点，一行一个。**名称**不能重复，例如「XX-1」；**别名**用逗号分隔，地点所在星系的中英文名自动算别名。**星系**填星系名或星系 ID。',
+          '**谁能看到**：只在授权群 = 其他群看不到这个地点。**默认地点**只能勾一个，卡片上的「快速计算」用它。**默认 ME/TE**：在这里计算、命令里又没写 ME/TE 时用。',
+          '**星系费用加成**：这个星系对安装费的额外加成（%，例如 -50），一般填 0。高安地点不能做反应。写错的行会被跳过，并在「市场状态」里标出来。',
+        ].join('\n')),
+      structures: table(Schema.object({
+        location: str().description('地点'),
+        name: str().description('名称'),
+        structureType: str().description('建筑类型'),
+        structureId: str().description('建筑 ID'),
+        activities: choice<IndustryStructureRow['activities']>([
+          ['manufacturing', '制造'],
+          ['reaction', '反应'],
+          ['both', '制造和反应'],
+        ]).default('manufacturing').description('用途'),
+        rigs: str().description('改装件'),
+        facilityTaxPct: num(0).description('设施税 %'),
+        extraFeePct: num(0).description('其他费用 %'),
+        extraFeeIsk: num(0).description('其他费用 ISK'),
+        extraFeeLabel: str(DEFAULT_EXTRA_FEE_LABEL).description('其他费用的名称'),
+        isDefault: strictBool(false).description('默认建筑'),
+        enabled: strictBool(true).description('启用'),
+        note: str().description('备注'),
+      }))
+        .description([
+          '**工业建筑**：一行一座，一个地点可以有几座。**地点**填上面「工业地点」里的名称；**名称**是建筑的简称，命令里用（例如「建筑:大工厂」），同一个地点里不能重复。',
+          '**建筑类型**填 Raitaru（莱塔卢）、Azbel（阿兹贝尔）、Sotiyo（索迪约）、Athanor（阿塔诺）、Tatara（塔塔拉）、势力铁壁等的名字或 typeID；在 NPC 空间站填「NPC」；不要建筑加成填「无」。建筑和改装件的加成数值来自物品数据，不用填。**用途**：反应只能在精炼厂（阿塔诺、塔塔拉）做，高安不能做反应。',
+          '**改装件**填建筑上实际装的改装件，名字或 typeID，用逗号分隔，例如「屹立超大型舰船制造效率 II」。插件按产品自动判断哪个生效；尺寸和建筑不符、或者在这个安全等级不生效的，会在「市场状态」里报告。',
+          '**设施税**：游戏里建筑主人设的税率（%）。**其他费用**：联盟另外收的钱，按预估物品价值的 % 和/或每个工作固定多少 ISK，**其他费用的名称**显示在卡片上；没有就填 0。**默认建筑**：这个地点默认用哪座，没勾时用第一座。',
+        ].join('\n')),
+    }).default({} as Config['industry']).loose(),
+  }).description('工业'),
 
   Schema.object({
     sso: Schema.object({

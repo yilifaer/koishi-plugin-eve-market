@@ -5,8 +5,8 @@ import { PRESET_MARKETS } from '../../../src/config/presets'
 import { rawOrder } from '../../fakes/fake-esi'
 import { GROUP, GROUP2, FakeBot } from '../../harness'
 import {
-  ALLIANCE_MARKET, AMARR_STATION, DOMAIN, MARKETS_WITH_ALLIANCE, PLEX, RAVEN, STRUCTURE_ID, THE_FORGE, addOrders, buttonRows, card, jitaOrders,
-  startPlugin, testClock,
+  ALLIANCE_MARKET, AMARR_STATION, DOMAIN, MARKETS_WITH_ALLIANCE, PLEX, RAVEN, STRUCTURE_ID, THE_FORGE, addOrders, buttonRows, buttons, card,
+  jitaOrders, startPlugin, testClock,
 } from './plugin-env'
 import type { EnvOptions, PluginEnv } from './plugin-env'
 
@@ -42,7 +42,7 @@ describe('查价: markets and visibility', () => {
     expect(sent[0].markdown).toMatch(/^\*\*乌鸦级\*\* Raven · 战列舰\n\n\*\*Jita 4-4\*\*\n\n- 出售 `258,400,000 ISK`（258\.40M）/)
     expect(sent[0].markdown).toContain('**联盟市场A**\n\n- 出售 `270,000,000 ISK`（270.00M）▲4.5%\n- 中间 `255,000,000 ISK`（255.00M）\n- 收购 `240,000,000 ISK`（240.00M）▼3.6%')
     expect(sent[0].markdown).toMatch(/\*\*\*\n欧服 · 更新于 \d\d:\d\d · ▲▼ 与 Jita 4-4 比较\n> 📢 矿石收购按 Jita 收购价 92%$/)
-    expect(buttonRows(sent)).toEqual([['月度走势=>走势 乌鸦级 月', '季度走势=>走势 乌鸦级 季', '相关物品=>搜索 乌鸦级']])
+    expect(buttonRows(sent)).toEqual([['月度走势=>走势 乌鸦级 月', '季度走势=>走势 乌鸦级 季', '相关物品=>搜索 乌鸦级', '制造成本=>制造 乌鸦级']])
   })
 
   it('another group sees only public markets and public notices', async () => {
@@ -77,7 +77,7 @@ describe('查价: markets and visibility', () => {
     expect(sent[0].markdown).toContain('**乌鸦级** Raven ×10 · 战列舰\n\n**联盟市场A**\n\n- 出售 `270,000,000 ISK`（270.00M）▲4.5% · 合计 2.70B')
     expect(sent[0].markdown).toMatch(/欧服 · 联盟市场A 更新于 \d\d:\d\d · ▲▼ 与 Jita 4-4 比较/)
     // 玩家建筑没有成交历史：走势按钮不带市场
-    expect(buttonRows(sent)).toEqual([['月度走势=>走势 乌鸦级 月', '季度走势=>走势 乌鸦级 季', '相关物品=>搜索 联盟市场A 乌鸦级']])
+    expect(buttonRows(sent)).toEqual([['月度走势=>走势 乌鸦级 月', '季度走势=>走势 乌鸦级 季', '相关物品=>搜索 联盟市场A 乌鸦级', '制造成本=>制造 乌鸦级*10']])
   })
 
   it('an older market is marked, a failing market says ESI did not answer, the others are fine', async () => {
@@ -193,7 +193,10 @@ describe('查价: items', () => {
 
   it('items that cannot be traded say so', async () => {
     const e = await start()
-    expect((await e.h.group('查价 Warrior II Blueprint'))[0].text).toBe('武士蓝图 II 不能在市场上交易（T2 蓝图一般通过发明获得）。')
+    // 0.2.0 起配「制造成本」（按它的产品，§2.2.7）
+    const sent = await e.h.group('查价 Warrior II Blueprint')
+    expect(card(sent)).toBe('武士蓝图 II 不能在市场上交易（T2 蓝图一般通过发明获得）。')
+    expect(buttons(sent)).toEqual(['制造成本=>制造 武士 II'])
   })
 
   it('a bad quantity asks for a positive integer', async () => {

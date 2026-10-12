@@ -41,11 +41,18 @@ function chunk<T>(items: T[], size: number): T[][] {
 const usable = (button: KeyboardButton) =>
   button.text.trim().length > 0 && button.text.length <= MAX_BUTTON_COMMAND_CHARS && !hasUrl(button.text) && !hasUrl(button.label)
 
-/** 编号按钮（每行 ≤ 5）在前，动作按钮（≤ 4 行，每行 ≤ 4）在后，总共 ≤ 5 行；clickable = none 时没有按钮 */
+/** 选项按钮都写了字（不是编号） */
+const labeledChoices = (card: Card) => !!card.choices?.length && card.choices.every((c) => !!c.button && !!buttonLabel(c.button))
+
+/**
+ * 选项按钮在前（编号每行 ≤ 5；写了字的和动作按钮一样每行 ≤ 4），动作按钮（≤ 4 行，每行 ≤ 4）在后，总共 ≤ 5 行；
+ * clickable = none 时没有按钮
+ */
 export function keyboardRows(card: Card, opts: CardRenderOptions): KeyboardRow[] {
   if (opts.clickable === 'none') return []
+  const labeled = labeledChoices(card)
   const choices = (card.choices ?? [])
-    .map((c): KeyboardButton => ({ label: String(c.no), text: commandText(c.command, opts) }))
+    .map((c): KeyboardButton => ({ label: labeled ? buttonLabel(c.button!) : String(c.no), text: commandText(c.command, opts) }))
     .filter(usable)
   const actions = card.actions
     .flatMap((row) => chunk(
@@ -54,7 +61,7 @@ export function keyboardRows(card: Card, opts: CardRenderOptions): KeyboardRow[]
       MAX_ACTIONS_PER_ROW,
     ))
     .slice(0, MAX_ACTION_ROWS)
-  return [...chunk(choices, MAX_CHOICES_PER_ROW), ...actions]
+  return [...chunk(choices, labeled ? MAX_ACTIONS_PER_ROW : MAX_CHOICES_PER_ROW), ...actions]
     .filter((row) => row.length)
     .slice(0, MAX_KEYBOARD_ROWS)
 }
@@ -72,7 +79,7 @@ export function textActions(card: Card, opts: CommandNamer): Array<{ label: stri
  */
 export function choiceHint(card: Card, opts: CommandNamer, mode: 'buttons' | 'none' | 'text'): string {
   const valid = `${PENDING_MINUTES} 分钟内有效`
-  if (mode === 'buttons') return `点下面的编号，或者 @我 回复编号（${valid}）`
+  if (mode === 'buttons') return `${labeledChoices(card) ? '点按钮' : '点下面的编号'}，或者 @我 回复编号（${valid}）`
   const first = card.choices?.[0]
   const example = first ? `，也可以直接发送「${commandText(first.command, opts)}」` : ''
   return mode === 'none' ? `@我 回复编号（${valid}）${example}` : `编号 ${valid}${example}`

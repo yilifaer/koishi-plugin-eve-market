@@ -8,8 +8,8 @@ import { REMOTE_LOOKUP_MS } from '../../constants'
 import { DataNotReadyError } from '../data'
 import type { Scheduler } from '../ports'
 import type {
-  Access, CoreFailure, IndustryRequest, ItemInfo, ItemResolver, MarketRegistry, MarketSplit, ParsedQuery, QueryOptions,
-  QueryParser, Resolution, Scope,
+  Access, CoreFailure, IndustryActivity, IndustryRequest, ItemInfo, ItemResolver, MarketRegistry, MarketSplit, ParsedQuery,
+  QueryOptions, QueryParser, Resolution, Scope,
 } from '../types'
 import { withDeadline } from '../util'
 import { chooseHypothesis } from './choose'
@@ -23,6 +23,8 @@ export interface QueryParserDeps {
   markets: Pick<MarketRegistry, 'split' | 'visible'>
   /** 新物品兜底的时限用；不给时一直等到有结果 */
   scheduler?: Scheduler
+  /** 制造、反应的参数（createIndustryArgs）；不给时回复 NOT_CONFIGURED */
+  industry?: (text: string, activity: IndustryActivity, access: Access) => IndustryRequest | CoreFailure
 }
 
 /** 一种读法识别得多好：exact = 0–2 档（含套装、组名、不在范围里）；prefix = 3 档；none = 认不出或要用户确认 */
@@ -86,9 +88,9 @@ class Parser implements QueryParser {
     }
   }
 
-  /** 工业命令在 0.2.0 才有 */
-  industryArgs(): IndustryRequest | CoreFailure {
-    return failure('NOT_CONFIGURED', { message: '工业计算在 0.2.0 提供' })
+  industryArgs(text: string, activity: IndustryActivity, access: Access): IndustryRequest | CoreFailure {
+    const parse = this.deps.industry
+    return parse ? parse(text, activity, access) : failure('NOT_CONFIGURED', { message: '没有接上工业地点' })
   }
 
   // ---------------------------------------------------------------- 查询
