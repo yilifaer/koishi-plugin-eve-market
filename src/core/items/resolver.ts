@@ -254,6 +254,9 @@ class Resolver implements ManagedItemResolver {
         return { suggestion: resolution.candidates[0], candidates: resolution.candidates, total: resolution.total }
       case 'set':
         return { candidates: resolution.set.items.slice(0, UNRESOLVED_CANDIDATES), total: resolution.set.items.length }
+      // 名字对得上，但不能上市场（礼包、活动道具等）
+      case 'out-of-scope':
+        return { notTradable: resolution.item, total: 0 }
       // 什么都没匹配到：total 是 0，容错的建议只作「是不是：X」
       case 'none':
         return { suggestion: resolution.suggestions[0], candidates: resolution.suggestions, total: 0 }

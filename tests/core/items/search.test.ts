@@ -109,7 +109,8 @@ describe('resolveLine', () => {
   it('gives candidates for ambiguous names and groups', () => {
     expect(items.resolveLine('rav')).toMatchObject({ unresolved: true, suggestion: { en: 'Raven' }, total: 4 })
     expect(items.resolveLine('无畏')).toMatchObject({ unresolved: true, total: 2 })
-    expect(items.resolveLine('Damage Control II Blueprint')).toEqual({ unresolved: true, total: 0 })
+    // 名字对得上、但不能上市场的（T2 蓝图、礼包）单独说
+    expect(items.resolveLine('Damage Control II Blueprint')).toMatchObject({ unresolved: true, notTradable: { typeId: 2049 }, total: 0 })
   })
 
   it('works out the suggestion only when it is read, and the fields survive spreading', () => {

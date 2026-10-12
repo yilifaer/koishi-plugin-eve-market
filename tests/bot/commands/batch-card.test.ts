@@ -71,14 +71,14 @@ describe('detailed layout (≤ 10 types)', () => {
     expect(buttons(resultCards(env(), plain, options())[0])).toEqual([['改用收购价=>批量查价 #K7Q2 buy', '改用中间价=>批量查价 #K7Q2 mid']])
   })
 
-  it('names follow the language of the pasted line; prefix matches get ≈, fallback rows get †', () => {
+  it('names are always Chinese, even when pasted in English; prefix matches get ≈, fallback rows get †', () => {
     const rows2 = [
       row(item('Raven'), 1, 1e6, { lang: 'en' }),
       row(item('Raven Navy Issue'), 1, 2e6, { approx: true }),
       row(item('Tritanium'), 1, 3, { fallback: { marketKey: 'jita 4-4', side: 'sell' } }),
     ]
     const out = md(resultCards(env(), appraisal(alliance, rows2), options())[0])
-    expect(out).toContain('1. **Raven** ×1')
+    expect(out).toContain('1. **乌鸦级** ×1')
     expect(out).toContain('2. ≈**乌鸦级海军型** ×1')
     expect(out).toContain('3. **三钛合金**† ×1')
     expect(out).toContain('† 标记的物品 联盟市场A 没有价格，已改用 Jita 4-4 出售价')
@@ -209,6 +209,22 @@ describe('warnings', () => {
       '第 7 行：Raven Navy Issue=>#K7Q2 7=#17636',
       '第 9 行：大型护盾扩展装置 II=>#K7Q2 9=#3841',
     ])
+  })
+
+  it('items that exist but cannot be traded say so; when nothing matched it says why that may be', () => {
+    const result = appraisal(jita, [row(item('Raven'), 1, 270e6, { sourceLines: [1] })], {
+      unresolved: [
+        { lineNo: 2, raw: 'Damage Control II Blueprint', notTradable: item('Damage Control II Blueprint'), total: 0 },
+        { lineNo: 3, raw: 'AIR Agility Booster II', total: 0 },
+      ],
+    })
+    expect(warningLines(result)).toEqual([
+      '第 2 行「Damage Control II Blueprint」不能在市场上交易',
+      '第 3 行「AIR Agility Booster II」没有找到',
+    ])
+    expect(md(resultCards(env(), result, options())[0])).toContain('没有找到的可能是活动物品或者改过名的船，插件的数据里暂时没有')
+    const tradableOnly = appraisal(jita, result.rows, { unresolved: [result.unresolved[0]] })
+    expect(md(resultCards(env(), tradableOnly, options())[0])).not.toContain('活动物品')
   })
 
   it('a line matching several items asks for the full name; a lone fuzzy guess asks「是不是」', () => {

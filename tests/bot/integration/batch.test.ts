@@ -43,7 +43,7 @@ describe('批量查价: header and pending list', () => {
     ].join('\n\n'))
     const result = await e.h.group('Raven*2\nTritanium 1000000\nPyerite 500000')
     expect(result[0].markdown).toContain('**批量估价 · Jita 4-4 · 出售价 -5%**\n\n**合计** `524,400,000 ISK`（524.40M）\n调整前 552.00M · 3 种 · 1,500,002 件')
-    expect(result[0].markdown).toContain('1. **Raven** ×2 · `513.00M`\n    - 单价 270.00M → 256.50M')
+    expect(result[0].markdown).toContain('1. **乌鸦级** ×2 · `513.00M`\n    - 单价 270.00M → 256.50M')
   })
 
   it('the header can be on the second line', async () => {
@@ -120,7 +120,7 @@ describe('批量查价: header and pending list', () => {
     const sent = await e.h.group('批量查价 Amarr -5%\nRaven*2\nTritanium*10')
     const out = card(sent)
     expect(out).toContain('**批量估价 · Amarr · 出售价 -5%**\n\n**合计 —**\n没有取到任何价格')
-    expect(out).toContain('- 第 1 行 Raven：Amarr 无有效卖单')
+    expect(out).toContain('- 第 1 行 乌鸦级：Amarr 无有效卖单')
     expect(out).not.toMatch(/\b0(\.00)? ISK|调整前|0 种/)
     const id = idOf(sent)
     expect(id).toMatch(/^[A-Z0-9]{4}$/)
@@ -192,6 +192,14 @@ describe('批量查价: appraisal ID buttons', () => {
     expect(buttons(sent).slice(0, 3)).toEqual([`1=>批量查价 #${id} 2=#380`, `2=>批量查价 #${id} 2=#3831`, `3=>批量查价 #${id} 2=#3841`])
     // 回复编号和点按钮一样
     expect(card(await e.h.group('3'))).toContain('大型护盾扩展装置 II')
+  })
+
+  it('an item that exists but is not on the market says so instead of「没有找到」', async () => {
+    const e = await start({ esi: prices })
+    const out = card(await e.h.group('批量查价\nRaven*2\nDamage Control II Blueprint\nAIR Agility Booster II'))
+    expect(out).toContain('第 2 行「Damage Control II Blueprint」不能在市场上交易')
+    expect(out).toContain('第 3 行「AIR Agility Booster II」没有找到')
+    expect(out).toContain('没有找到的可能是活动物品或者改过名的船')
   })
 })
 

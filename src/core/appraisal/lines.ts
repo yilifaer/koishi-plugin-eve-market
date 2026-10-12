@@ -36,6 +36,8 @@ export interface Entry {
   suggestion?: TypeId
   candidates?: TypeId[]
   total?: number
+  /** 名字对得上，但不能上市场 */
+  notTradable?: TypeId
 }
 
 /** 估价编号保存的就是它 */
@@ -69,7 +71,7 @@ export function chargesPerModule(module: ItemInfo | undefined, charge: ItemInfo,
   return Math.max(1, Math.floor(capacity / charge.volume + EPSILON))
 }
 
-type HintFields = Pick<Entry, 'suggestion' | 'candidates' | 'total'>
+type HintFields = Pick<Entry, 'suggestion' | 'candidates' | 'total' | 'notTradable'>
 
 /** 还能给几个未识别的物品找建议（超出的只记「没有找到」，卡片上本来也列不出来） */
 class HintBudget {
@@ -83,6 +85,8 @@ class HintBudget {
 }
 
 function unresolvedFields(r: Unresolved, hints: HintBudget): HintFields {
+  // 不能上市场的是精确命中的，不用扫描，不占建议的名额
+  if (r.notTradable) return { notTradable: r.notTradable.typeId, total: 0 }
   if (!hints.take()) return {}
   const out: HintFields = { total: r.total }
   if (r.suggestion) out.suggestion = r.suggestion.typeId
@@ -157,6 +161,7 @@ function settle(entry: Entry, item: ItemInfo): void {
   delete entry.suggestion
   delete entry.candidates
   delete entry.total
+  delete entry.notTradable
 }
 
 /**

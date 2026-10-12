@@ -56,13 +56,13 @@ const rowAmount = (env: BatchEnv, value: number) => amountText(env.core.format, 
 const listIsk = (env: BatchEnv, value: number) => env.core.format.isk(value, { mode: listPriceMode(env.display) })
 const qty = (env: BatchEnv, n: number) => env.core.format.quantity(n)
 
-/** 名称跟着输入的语言走；装配估价一律中文 */
-function rowName(row: AppraisalRow, fitting: boolean): string {
-  return escapeMarkdown(itemName(row.item, fitting ? 'zh' : row.lang))
+/** 名称一律中文（没有中文名的写英文），粘贴的是英文也一样 */
+function rowName(row: AppraisalRow): string {
+  return escapeMarkdown(itemName(row.item))
 }
 
-function rowLabel(row: AppraisalRow, fitting: boolean, bold: boolean): string {
-  const name = bold ? `**${rowName(row, fitting)}**` : rowName(row, fitting)
+function rowLabel(row: AppraisalRow, bold: boolean): string {
+  const name = bold ? `**${rowName(row)}**` : rowName(row)
   return `${row.approx ? '≈' : ''}${name}${row.fallback ? '†' : ''}`
 }
 
@@ -113,7 +113,7 @@ function subtotalSection(env: BatchEnv, result: AppraisalResult): Section | unde
     if (!rows.length) continue
     const total = rows.reduce((sum, r) => sum + r.total, 0)
     const units = rows.reduce((sum, r) => sum + r.quantity, 0)
-    const what = group === 'hull' ? `${GROUP_LABEL.hull} ${rowName(rows[0], true)}`
+    const what = group === 'hull' ? `${GROUP_LABEL.hull} ${rowName(rows[0])}`
       : group === 'module' ? `${GROUP_LABEL.module} ${qty(env, units)} 件`
         : GROUP_LABEL[group]
     lines.push({ label: `${what} ·`, price: listIsk(env, total) })
@@ -129,7 +129,7 @@ function detailedLines(env: BatchEnv, rows: ReadonlyArray<AppraisalRow & { total
     const unit = row.unit === null ? '—' : rowAmount(env, row.unit)
     const adjusted = modifier && row.adjustedUnit !== null ? ` → ${rowAmount(env, row.adjustedUnit)}` : ''
     return [
-      { label: `${rowLabel(row, false, true)} ×${qty(env, row.quantity)} ·`, price: listIsk(env, row.total) },
+      { label: `${rowLabel(row, true)} ×${qty(env, row.quantity)} ·`, price: listIsk(env, row.total) },
       { text: `单价 ${unit}${adjusted}`, indent: 1 },
     ]
   })
@@ -137,9 +137,9 @@ function detailedLines(env: BatchEnv, rows: ReadonlyArray<AppraisalRow & { total
 
 /** 紧凑排版：- 乌鸦级 ×2 · 256.50M · **513.00M**（装配估价：1. 名称 ×6 · `12.60M`） */
 function compactLine(env: BatchEnv, row: AppraisalRow & { total: number }, fitting: boolean): Line {
-  if (fitting) return { label: `${rowLabel(row, true, false)} ×${qty(env, row.quantity)} ·`, price: listIsk(env, row.total) }
+  if (fitting) return { label: `${rowLabel(row, false)} ×${qty(env, row.quantity)} ·`, price: listIsk(env, row.total) }
   const unit = row.adjustedUnit ?? row.unit
-  return { text: `${rowLabel(row, false, false)} ×${qty(env, row.quantity)} · ${unit === null ? '—' : rowAmount(env, unit)} · **${rowAmount(env, row.total)}**` }
+  return { text: `${rowLabel(row, false)} ×${qty(env, row.quantity)} · ${unit === null ? '—' : rowAmount(env, unit)} · **${rowAmount(env, row.total)}**` }
 }
 
 function rowsSection(env: BatchEnv, result: AppraisalResult, rows: ReadonlyArray<AppraisalRow & { total: number }>, detailed: boolean): Section {
@@ -160,6 +160,7 @@ function noPriceText(result: AppraisalResult, reason: AppraisalResult['noPrice']
 /** 匹配到几种物品时请写完整名称；只有模糊的建议时「是不是：X」 */
 function unresolvedText(entry: AppraisalResult['unresolved'][number]): string {
   const head = `第 ${entry.lineNo} 行「${safeEcho(entry.raw)}」`
+  if (entry.notTradable) return `${head}不能在市场上交易`
   if (entry.total > 1) return `${head}可能是 ${entry.total} 种物品，请写完整名称`
   if (!entry.suggestion) return `${head}没有找到`
   return `${head}没有找到，是不是：${escapeMarkdown(itemName(entry.suggestion, langOf(entry.raw)))}？`
@@ -182,13 +183,19 @@ export function warningLines(result: AppraisalResult): string[] {
   for (const n of result.noPrice) {
     const row = result.rows.find((r) => r.item.typeId === n.item.typeId)
     const no = row?.sourceLines[0]
-    const name = escapeMarkdown(itemName(n.item, row?.lang ?? 'zh'))
+    const name = escapeMarkdown(itemName(n.item))
     entries.push({ no: no ?? 0, text: `${no === undefined ? '' : `第 ${no} 行 `}${name}：${noPriceText(result, n.reason)}` })
   }
   return entries.sort((a, b) => a.no - b.no).map((e) => e.text)
 }
 
 const warningHead = (count: number): Section => ({ style: 'plain', lines: [{ text: `⚠ 有 ${count} 行没有计入合计：` }] })
+
+/** 有物品什么都没匹配到时，在警告后面说一句可能的原因（数据里没有的多半是这两种） */
+function unknownNote(result: AppraisalResult): Section[] {
+  const unknown = result.unresolved.some((u) => !u.notTradable && u.total === 0)
+  return unknown ? [{ style: 'plain', lines: [{ text: '没有找到的可能是活动物品或者改过名的船，插件的数据里暂时没有' }] }] : []
+}
 
 /** 没计入合计的行最多列 15 行；more = 剩下的在哪里能看到 */
 function warningSections(env: BatchEnv, result: AppraisalResult, more = ''): Section[] {
@@ -197,7 +204,7 @@ function warningSections(env: BatchEnv, result: AppraisalResult, more = ''): Sec
   if (lines.length) {
     const shown = lines.slice(0, MAX_WARNING_LINES).map((text): Line => ({ text }))
     if (lines.length > shown.length) shown.push({ text: `…另有 ${lines.length - shown.length} 行${more}` })
-    sections.push(warningHead(lines.length), { lines: shown })
+    sections.push(warningHead(lines.length), { lines: shown }, ...unknownNote(result))
   }
   return [...sections, ...fallbackSection(env, result)]
 }
@@ -419,6 +426,7 @@ function fullCards(env: BatchEnv, result: AppraisalResult, options: ResultOption
   }
   const last = cards[cards.length - 1]
   const actions: Action[][] = [sideActions(env, result)]
+  if (at >= entries.length && warnings.length) last.sections.push(...unknownNote(result))
   if (at < entries.length) {
     last.sections.push({ style: 'plain', lines: [{ text: `…还有 ${entries.length - at} 项，点「下一页」接着看` }] })
     actions.unshift([{ label: '下一页', command: { id: 'batch', args: `#${result.id} 全部 从${at + 1}` }, primary: true }])

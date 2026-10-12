@@ -302,6 +302,8 @@ class Service implements AppraisalService {
     if (suggestion) out.suggestion = suggestion
     const candidates = (entry.candidates ?? []).flatMap((id) => this.o.items.byId(id) ?? [])
     if (candidates.length) out.candidates = candidates
+    const notTradable = entry.notTradable === undefined ? undefined : this.o.items.byId(entry.notTradable)
+    if (notTradable) out.notTradable = notTradable
     return out
   }
 

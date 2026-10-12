@@ -596,8 +596,8 @@ export interface ItemResolver {
   resolve(query: string, opts: { scope: Scope; limit?: number }): Resolution
   /** resolve 返回 none 且查询像完整名字时调用：ESI 精确名兜底，结果缓存 7 天 */
   resolveRemote(query: string): Promise<ItemInfo | null>
-  /** 批量估价逐行用：0–2 档和唯一前缀接受（前缀带 approx 标记），其余返回未识别和一个建议 */
-  resolveLine(name: string): { item: ItemInfo; approx: boolean } | { unresolved: true; suggestion?: ItemInfo; candidates?: ItemInfo[]; total: number }
+  /** 批量估价逐行用：0–2 档和唯一前缀接受（前缀带 approx 标记），其余返回未识别和一个建议；notTradable = 名字对得上但不能上市场 */
+  resolveLine(name: string): { item: ItemInfo; approx: boolean } | { unresolved: true; suggestion?: ItemInfo; candidates?: ItemInfo[]; notTradable?: ItemInfo; total: number }
   /** 「搜索」：按名字列出全部匹配，分页 */
   search(query: string, opts: { scope: Scope; offset: number; limit: number }): ItemSearchResult
   byId(id: TypeId): ItemInfo | undefined
@@ -853,7 +853,8 @@ export interface AppraisalResult {
   modifierPct: number
   /** 粘贴顺序 */
   rows: AppraisalRow[]
-  unresolved: Array<{ lineNo: number; raw: string; suggestion?: ItemInfo; candidates?: ItemInfo[]; total: number }>
+  /** notTradable：名字对得上，但这个物品不能在市场上交易 */
+  unresolved: Array<{ lineNo: number; raw: string; suggestion?: ItemInfo; candidates?: ItemInfo[]; notTradable?: ItemInfo; total: number }>
   noPrice: Array<{ item: ItemInfo; reason: 'no-orders' | 'timeout' | 'market-unavailable' }>
   skipped: PasteParse['skipped']
   truncated: number
