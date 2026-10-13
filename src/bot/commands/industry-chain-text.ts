@@ -12,10 +12,6 @@ export const LAYER_NAME: Record<ChainNode['layer'], string> = {
 export const MODE_NAME: Record<LayerMode, string> = { build: '造', buy: '买' }
 export const ALCHEMY_NAME: Record<AlchemyMode, string> = { auto: '自动', normal: '不用', alchemy: '能用就用' }
 
-/** 引擎写的警告里，总览卡自己换了说法的两句（按开头认） */
-export const T2_WARNING_PREFIX = 'T2 蓝图一般来自发明'
-export const FALLBACK_WARNING_PREFIX = '命令里的地点没有能做这些反应的建筑'
-
 export const CH = {
   // ---------------------------------------------------------------- 标题和按钮
   overviewTitle: '拆到原料',
@@ -55,6 +51,7 @@ export const CH = {
   noPrice: '缺价格',
   timeLine: (parts: string[]) => `时间（未计技能，每层一条线）：${parts.join(' · ')}`,
   timeTotal: (time: string) => `合计 ${time}`,
+  profitIncomplete: '价格不全，利润不计算',
   inventionNote: 'T2 发明成本不计入',
   scrapNote: (pct: string) => `炼金按废料 ${pct}% 规则计算`,
 

@@ -27,7 +27,7 @@ async function start(options: IndustryEnvOptions = {}): Promise<PluginEnv> {
 const OVERVIEW = [
   '**猎犬级 Hound · 拆到原料**',
   '',
-  'XX-1 · 蓝图 ME 2 / TE 4（T2 常见值） · 1 流程（1 艘）',
+  'XX-1 · 00 · 蓝图 ME 2 / TE 4（T2 常见值） · 1 流程（1 艘）',
   '反应 造 · 组件 造 · 其他 买 · 炼金 自动',
   '',
   '成品 自动选择：大厂 · 安装费和税 3,066 ISK',
@@ -123,6 +123,16 @@ describe('拆到原料：总览卡', () => {
     expect(out).not.toContain('半成品')
     // 全部都造了：没有可以继续拆的
     expect(buttons(await e.h.group(command)).join()).not.toContain('继续拆')
+  })
+
+  it('继续拆 flips only the bought layers that still have buildable items, not every bought layer', async () => {
+    const e = await start()
+    // 组件、反应都是买，但反应层在组件下面，根本没有东西停在那里；只有组件和其他有可造的
+    const sent = await e.h.group(`制造 ${HOUND} XX-1 组件:买 反应:买 其他:造`)
+    const more = buttons(sent).find((b) => b.startsWith('继续拆='))!.split('=>')[1]
+    // 组件改回造（默认，不写），反应还是买
+    expect(more).not.toContain('组件:买')
+    expect(more).toContain('反应:买')
   })
 
   it('反应:买 shows the other option 反应:造; reaction layers are bought as 半成品', async () => {
@@ -240,7 +250,7 @@ describe('拆到原料：高级、出错、慢提示', () => {
     const e = await start()
     const sent = await e.h.direct(`制造 ${HOUND} XX-2 拆到原料`, { userId: USER })
     expect(sent).toHaveLength(1)
-    expect(card(sent)).toContain('XX-2 · 蓝图 ME 2 / TE 4（T2 常见值） · 1 流程（1 艘）')
+    expect(card(sent)).toContain('XX-2 · 低安 · 蓝图 ME 2 / TE 4（T2 常见值） · 1 流程（1 艘）')
     expect(buttons(sent)[0]).toBe(`分层明细=>制造 ${HOUND} XX-2 拆到原料 明细`)
     expectLimits(sent)
   })

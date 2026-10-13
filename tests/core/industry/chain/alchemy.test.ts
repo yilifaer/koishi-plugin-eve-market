@@ -108,7 +108,8 @@ describe('alchemy: picking the route', () => {
     expect(node(auto, FERROFLUID).alchemy?.other.cost).toBeNull()
     const forced = chainResult(await go({ on: true, alchemy: 'alchemy' }))
     expect(leaf(forced, CADMIUM)).toMatchObject({ unit: null, total: null })
-    expect(forced.totals.missingPrices).toBeGreaterThan(0)
+    // 镉既是缺价格的原料、又让提炼税算不出来：只算一项
+    expect(forced.totals.missingPrices).toBe(1)
   })
 
   it('forced alchemy where most reactions have no unrefined recipe: those stay normal, with a note', async () => {

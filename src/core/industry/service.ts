@@ -41,6 +41,9 @@ import type { Ranked } from './pick'
 /** 第 1 步列地点时，星系成本指数最多等多久（拿不到就不写指数） */
 export const STEP_INDICES_WAIT_MS = 1500
 /** 反应写了「建筑:无」：重新问建筑时的说明 */
+/** located() 只探路（probe）时，参数都问完了的标记 */
+const READY = Symbol('ready')
+
 const REACTION_NEEDS_REFINERY = '反应只能在精炼厂里进行（不能用「建筑:无」），请选择建筑'
 
 type Defaulted = IndustryResult['applied']['defaulted'][number]
@@ -249,8 +252,9 @@ class Service implements IndustryService {
       if (!CHAIN_ENABLED) return failure('NOT_CONFIGURED', { message: '拆到原料暂时不可用' })
       const job = this.job(req)
       if ('ok' in job) return job
-      const asked = req.mode === 'steps' ? await this.located(job, req) : null
-      if (asked && !('applied' in asked)) return asked
+      // 高级：只看参数问完没有（probe），不取价；问完了由 resolveTop 定下一切
+      const asked = req.mode === 'steps' ? await this.located(job, req, true) : null
+      if (asked && asked !== READY) return asked
       const top = resolveTop(job, req, {
         locations: this.o.locations,
         findLocation: (token) => this.findLocation(job, token),
@@ -314,7 +318,9 @@ class Service implements IndustryService {
 
   // ------------------------------------------------------------------ 有地点：逐步或直接出结果
 
-  private async located(job: Job, req: IndustryRequest): Promise<IndustryResult | IndustryStep | CoreFailure> {
+  private async located(job: Job, req: IndustryRequest, probe: true): Promise<IndustryStep | CoreFailure | typeof READY>
+  private async located(job: Job, req: IndustryRequest): Promise<IndustryResult | IndustryStep | CoreFailure>
+  private async located(job: Job, req: IndustryRequest, probe = false): Promise<IndustryResult | IndustryStep | CoreFailure | typeof READY> {
     const defaulted: Defaulted[] = []
     let location: IndustryLocation | undefined
     let only = false
@@ -366,7 +372,7 @@ class Service implements IndustryService {
     } else if (candidates.length) {
       // 「无建筑加成」不算一个选项：只有一座能造的建筑时直接用它
       if (req.mode === 'steps' && candidates.length > 1) return this.structureStep(job, req, location, only, false)
-      if (candidates.length > 1) return this.autoPicked(job, req, location, candidates, me, te, defaulted)
+      if (candidates.length > 1) return probe ? READY : this.autoPicked(job, req, location, candidates, me, te, defaulted)
       structure = candidates[0]
       defaulted.push('structure')
       onlyStructure = true
@@ -376,6 +382,7 @@ class Service implements IndustryService {
 
     const setup: Setup = { location, structure, rigs: req.rigs ?? 'default', me, te, tax: req.facilityTaxPct, defaulted }
     if (onlyStructure) setup.only = true
+    if (probe) return READY
     const plan = this.production(job, setup, this.modifiers(job, setup))
     const wanted = plan.materials.map((m) => ({ typeId: m.typeId, qty: m.quantity }))
     const [book, costs] = await Promise.all([this.priceBook(job, wanted, this.now() + QUERY_DEADLINE_MS), this.costInputs()])

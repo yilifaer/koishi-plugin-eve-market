@@ -65,7 +65,7 @@ function materialsAt(env: IndustryEnv, r: IndustryResult): string {
 }
 
 /** 「Jita 4-4 出售价」（材料清单、比价的元信息行） */
-function priceSource(env: IndustryEnv, key: string, side: PriceSide): string {
+export function priceSource(env: IndustryEnv, key: string, side: PriceSide): string {
   return `${marketName(env, key)} ${SIDE_LABEL[side]}`
 }
 

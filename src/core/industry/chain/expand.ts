@@ -40,7 +40,7 @@ export interface ChainEnv {
 export interface Place { location: IndustryLocation | null; structures: IndustryStructure[]; fallback: boolean }
 
 /** node = false 是叶子，kind 说明为什么是叶子 */
-export interface PlanEdge { typeId: TypeId; node: boolean; kind?: ChainLeaf['kind'] }
+export interface PlanEdge { typeId: TypeId; node: boolean; kind?: ChainLeaf['kind']; layer?: ChainLayer }
 
 /** 低级反应的炼金配方：粗糙产物的反应配方，和它能用的建筑 */
 export interface AlchemyPlan {
@@ -162,7 +162,11 @@ export function expand(
     const item = itemOf(host, typeId)
     const layer = classifyMaterial(item, consumer, industry)
     if (layer === 'raw') return { typeId, node: false, kind: 'raw' }
-    if (options.layers[layer] === 'buy') return { typeId, node: false, kind: 'bought' }
+    if (options.layers[layer] === 'buy') {
+      // 这一层选了买；记下它能不能造，「继续拆」才知道要改哪几层
+      const buildable = (activityOf(layer) === 'reaction' ? industry.reactions : industry.manufacturing).has(typeId) && !!place(item, activityOf(layer))
+      return buildable ? { typeId, node: false, kind: 'bought', layer } : { typeId, node: false, kind: 'bought' }
+    }
     if (stack.has(typeId)) {
       warnings.add(`${nameOf(item)} 的配方绕回了自己，这一项改成直接买`)
       return { typeId, node: false, kind: 'bought' }

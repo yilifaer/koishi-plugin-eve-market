@@ -143,7 +143,8 @@ describe('chain: where things are made', () => {
     expect(reaction.length).toBeGreaterThan(5)
     expect(reaction.every((n) => n.location === '星点乙' && n.structure === '乙塔塔拉' && n.fallbackLocation === true)).toBe(true)
     expect(r.nodes.filter((n) => n.activity === 'manufacturing').every((n) => n.location === '星点甲' && !n.fallbackLocation)).toBe(true)
-    expect(r.warnings).toContain('命令里的地点没有能做这些反应的建筑，反应改在 星点乙 做')
+    // 换了地点由节点的 fallbackLocation 表达，不再写进警告
+    expect(r.warnings.some((w) => w.includes('命令里的地点'))).toBe(false)
   })
 
   it('the console setting beats "first location that can react"', async () => {
@@ -251,7 +252,51 @@ describe('chain: prices', () => {
   })
 })
 
+describe('chain: structured facts the card relies on', () => {
+  it('location security class, material market and the T2 invention flag are fields, not warning text', async () => {
+    const { run } = setup()
+    const r = chainResult(await run(HOUND))
+    expect(r.secClass).toBe('null')
+    expect(r.materialPrices).toMatchObject({ marketKey: JITA_KEY })
+    expect(r.inventionExcluded).toBe(true)
+    expect(r.warnings.some((w) => w.includes('发明'))).toBe(false)
+    const t1 = chainResult(await setup().run(RAVEN, { on: true }, { structure: 'none' }))
+    expect(t1.inventionExcluded).toBe(false)
+  })
+
+  it('base mode (no location) has no security class', async () => {
+    const { run } = setup()
+    const r = chainResult(await run(RAVEN, { on: true }, { location: undefined, mode: 'base' }))
+    expect(r.location).toBeUndefined()
+    expect(r.secClass).toBeUndefined()
+  })
+
+  it('a bought leaf that could be built records its layer; a raw one does not', async () => {
+    const { run } = setup()
+    const r = chainResult(await run(HOUND))
+    expect(leaf(r, BREACHER)).toMatchObject({ kind: 'bought', layer: 'other' })
+    expect(leaf(r, MORPHITE)?.layer).toBeUndefined()
+    const buy = chainResult(await run(HOUND, { on: true, layers: { component: 'buy' } } as never))
+    expect(leaf(buy, PLASMA_THRUSTER)).toMatchObject({ kind: 'bought', layer: 'component' })
+  })
+
+  it('a leaf bought because it loops back, or cannot be built here, has no layer', async () => {
+    const { run } = ravenOf([[FERNITE_ALLOY, 10]], { [FERNITE_ALLOY]: [[16660, 1]], 16660: [[FERNITE_ALLOY, 1]] })
+    const r = chainResult(await run(RAVEN, { on: true }, { structure: 'none', me: 0, te: 0 }))
+    expect(leaf(r, FERNITE_ALLOY)).toMatchObject({ kind: 'bought' })
+    expect(leaf(r, FERNITE_ALLOY)?.layer).toBeUndefined()
+  })
+})
+
 describe('chain: asking for the missing steps', () => {
+  it('高级 with a complete command goes straight to the chain without an extra single-product price fetch', async () => {
+    const { service, req, prices } = setup()
+    const r = chainResult(await service.chain({ ...req(HOUND), mode: 'steps', structure: '甲莱塔卢' }))
+    expect(r.nodes[0].structure).toBe('甲莱塔卢')
+    // 只有整棵树的一次材料报价和一次成品报价
+    expect(prices.calls).toHaveLength(2)
+  })
+
   it('高级 (steps) without a location: the location step; every option carries the chain words', async () => {
     const { service, req } = setup({ industry: { structures: [...STRUCTURES, { location: '星点乙', name: '乙莱塔卢', structureType: 'Raitaru' }] } })
     const r = await service.chain({ ...req(HOUND, { on: true, layers: { component: 'buy' } } as never), mode: 'steps', location: undefined })

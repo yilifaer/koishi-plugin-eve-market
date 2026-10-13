@@ -4,7 +4,7 @@
 import { CHAIN_COMPONENT_ME_TE, CHAIN_MAX_TYPES } from '../../../constants'
 import { roundHalfAway } from '../../format'
 import type {
-  Access, ChainLeaf, ChainNode, ChainOptions, ChainResult, CoreFailure, IndustryRequest, IndustryResult, IndustrySettings, TypeId,
+  Access, ChainLayer, ChainLeaf, ChainNode, ChainOptions, ChainResult, CoreFailure, IndustryRequest, IndustryResult, IndustrySettings, TypeId,
 } from '../../types'
 import { FORMULA_REVISION, runsForQuantity } from '../formulas'
 import { alchemyRoute, chooseRoute } from './alchemy'
@@ -120,11 +120,12 @@ export async function runChain(
 
   // 消费者先于生产者：轮到一个节点时，它的需求已经聚合完
   const demand = new Map<TypeId, number>([[top.item.typeId, top.demand]])
-  const bought = new Map<TypeId, { quantity: number; kind: ChainLeaf['kind'] }>()
+  const bought = new Map<TypeId, { quantity: number; kind: ChainLeaf['kind']; layer?: ChainLayer }>()
   const pool = new Map<TypeId, number>()
   const nodes: ChainNode[] = []
   let reprocessTax = 0
-  let missingPrices = 0
+  // 缺价格的物品，每种只数一次
+  const missing = new Set<TypeId>()
   for (const id of exp.order) {
     const need = demand.get(id) ?? 0
     if (need <= 0) continue
@@ -138,11 +139,13 @@ export async function runChain(
       }
       const got = bought.get(input.typeId)
       if (got) got.quantity += input.quantity
-      else bought.set(input.typeId, { quantity: input.quantity, kind: edge?.kind ?? 'bought' })
+      else bought.set(input.typeId, { quantity: input.quantity, kind: edge?.kind ?? 'bought', ...edge?.layer ? { layer: edge.layer } : {} })
     }
     for (const b of built.byproducts) pool.set(b.typeId, (pool.get(b.typeId) ?? 0) + b.quantity)
     if (built.alchemy) {
-      if (built.tax === null) missingPrices++
+      if (built.tax === null) {
+        for (const id of [built.node.item.typeId, ...built.byproducts.map((b) => b.typeId)]) if (unitOf(prices, id) === null) missing.add(id)
+      }
       else reprocessTax += built.tax
     }
   }
@@ -158,22 +161,33 @@ export async function runChain(
       total: buy === 0 ? 0 : price ? roundHalfAway(price.unit * buy, 2) : null, kind: b.kind,
     }
     if (price?.fallback) leaf.fallback = true
-    if (leaf.total === null) missingPrices++
+    if (b.layer) leaf.layer = b.layer
+    if (leaf.total === null) missing.add(typeId)
     return leaf
   })
   leaves.sort((a, b) => (b.total ?? -1) - (a.total ?? -1))
   const surplusByproducts = [...pool].filter(([, q]) => q > 0).map(([typeId, quantity]) => ({ item: itemOf(host, typeId), quantity }))
 
+  const missingPrices = missing.size
   const leavesTotal = leaves.reduce((sum, l) => sum + (l.total ?? 0), 0)
   const jobsTotal = nodes.reduce((sum, n) => sum + (n.jobCost?.total ?? 0), 0)
   const total = leavesTotal + jobsTotal + reprocessTax
   const result: ChainResult = {
-    product: top.item, runs: top.runs, outputQuantity, options, nodes,
+    product: top.item, runs: top.runs, outputQuantity, options, nodes, inventionExcluded: top.t2,
     layers: layerRows(nodes, options), leaves, surplusByproducts,
     totals: { leaves: leavesTotal, jobs: jobsTotal, reprocessTax, total, missingPrices },
     warnings: [], indicesAt: costs.indices?.dataTime ?? null, formulaRevision: FORMULA_REVISION,
   }
-  if (top.location) result.location = top.location.name
+  if (top.location) {
+    result.location = top.location.name
+    result.secClass = top.location.system.secClass
+  }
+  const material = prices.material
+  if (material.market) {
+    result.materialPrices = { marketKey: material.market.key, side: material.side }
+    if (material.unavailable) result.materialPrices.unavailable = true
+    if (material.fallback) result.materialPrices.fallbackKey = material.fallback.key
+  }
   addProduct(host, prices.product, top, result)
   result.pricesAt = oldest([...leaves.map((l) => prices.material.units.get(l.item.typeId)), prices.product.units.get(top.item.typeId)])
   result.warnings = warningsOf(ctx, options, top, nodes, result)
@@ -228,11 +242,8 @@ function oldest(prices: Array<{ dataTime: number | null } | undefined>): number 
 function warningsOf(ctx: JobCtx, options: ChainOptions, top: ChainTop, nodes: ChainNode[], result: ChainResult): string[] {
   const { host, prices } = ctx
   const out = new Set<string>()
-  if (top.t2) out.add('T2 蓝图一般来自发明（常见 ME 2 / TE 4），发明成本暂不计入')
   const jobs = Math.ceil(top.runs / Math.max(1, top.bp.maxRuns))
   if (top.t2 && jobs > 1) out.add(`单张蓝图最多 ${top.bp.maxRuns} 流程，成品按 ${jobs} 个工作计算`)
-  const away = [...new Set(nodes.filter((n) => n.fallbackLocation).map((n) => n.location))]
-  if (away.length) out.add(`命令里的地点没有能做这些反应的建筑，反应改在 ${away.join('、')} 做`)
   if (options.alchemy === 'alchemy') {
     const reactions = nodes.filter((n) => n.layer === 'reaction1')
     const done = reactions.filter((n) => n.route === 'alchemy').length

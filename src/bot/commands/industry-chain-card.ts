@@ -8,11 +8,12 @@ import type { ChainLeaf, ChainNode, ChainResult, FormattedPrice, IndustryResult,
 import type { Action, Card, Line } from '../view/card'
 import { escapeMarkdown, scrubUrls } from '../view/escape'
 import { emptyCard } from './context'
-import { productTitle } from './industry-card'
+import { priceSource, productTitle } from './industry-card'
 import type { IndustryEnv } from './industry-card'
-import { ALCHEMY_NAME, CH, FALLBACK_WARNING_PREFIX, LAYER_NAME, MODE_NAME, T2_WARNING_PREFIX } from './industry-chain-text'
+import { ALCHEMY_NAME, CH, LAYER_NAME, MODE_NAME } from './industry-chain-text'
 import { IND, SIDE_NONE, SIDE_SHORT } from './industry-text'
 import { amountText, itemName } from './names'
+import { SEC_CLASS } from './text'
 
 /** 舰船大类：数量单位写「艘」 */
 const CATEGORY_SHIP = 6
@@ -47,11 +48,9 @@ function footer(env: IndustryEnv, r: ChainResult): string {
   return parts.join(' · ')
 }
 
-/** 引擎写的警告（已经是完整的句子）；总览卡自己换了说法的两句不重复写 */
+/** 引擎写的警告（已经是完整的句子） */
 function engineWarnings(r: ChainResult): string[] {
-  return r.warnings
-    .filter((w) => !w.startsWith(T2_WARNING_PREFIX) && !w.startsWith(FALLBACK_WARNING_PREFIX))
-    .map((w) => esc(scrubUrls(w)))
+  return r.warnings.map((w) => esc(scrubUrls(w)))
 }
 
 /** 去掉空白后的地点和建筑：「星点甲 甲莱塔卢」 */
@@ -78,6 +77,7 @@ function modesLine(r: ChainResult): string {
 function headLines(env: IndustryEnv, r: ChainResult, meTeDefaulted: boolean): Line[] {
   const top = productNode(r)
   const parts: string[] = [r.location ? esc(r.location) : CH.noPlace]
+  if (r.secClass) parts.push(SEC_CLASS[r.secClass])
   if (top.activity === 'manufacturing') {
     const mark = !meTeDefaulted || !r.location ? '' : r.product.techLevel === 2 ? IND.defaulted.meTeT2 : IND.defaulted.meTe
     parts.push(`${IND.blueprint(top.me, top.te)}${mark}`)
@@ -168,10 +168,12 @@ function valueLines(env: IndustryEnv, r: ChainResult): Line[] {
   if (v.total === null) return [{ text: IND.productNone(market, SIDE_NONE[v.side]) }]
   const label = IND.product(market, SIDE_SHORT[v.side])
   const lines: Line[] = [v.fallback ? { label, price: isk(env, v.total), extra: IND.fallbackMark } : { label, price: isk(env, v.total) }]
-  if (r.profit) {
+  if (r.totals.missingPrices) {
+    lines.push({ text: CH.profitIncomplete })
+  } else if (r.profit) {
     const fees = env.industry.sellFeesPct > 0 ? IND.profitFees(pctTrim(env.industry.sellFeesPct)) : IND.profitNoFees
     const margin = `${Math.round(r.profit.marginPct * 10) / 10 || 0}%`
-    lines.push({ text: `${IND.profit(amount(env, r.profit.value), margin)}${fees}${r.totals.missingPrices ? IND.profitIncomplete : ''}` })
+    lines.push({ text: `${IND.profit(amount(env, r.profit.value), margin)}${fees}` })
   }
   return lines
 }
@@ -188,7 +190,7 @@ function timeLines(env: IndustryEnv, r: ChainResult): Line[] {
 /** ⚠ T2 发明成本不计入 · 炼金按废料 55% 规则计算 */
 function noteWarning(r: ChainResult): string[] {
   const notes: string[] = []
-  if (r.product.techLevel === 2) notes.push(CH.inventionNote)
+  if (r.inventionExcluded) notes.push(CH.inventionNote)
   const yieldPct = r.nodes.find((n) => n.alchemy)?.alchemy?.yieldPct
   if (yieldPct !== undefined) notes.push(CH.scrapNote(String(Math.round(yieldPct * 100) / 100)))
   return notes.length ? [notes.join(' · ')] : []
@@ -307,6 +309,7 @@ export function materialsChainCard(env: IndustryEnv, r: ChainResult, copies: str
   const card = emptyCard(CH.materialsTitle(nameOf(r.product)))
   const top = productNode(r)
   const meta = [r.location ? esc(r.location) : '', top.structure ? esc(top.structure) : '', `${qty(env, r.runs)} 流程`].filter(Boolean)
+  if (r.materialPrices) meta.push(priceSource(env, r.materialPrices.marketKey, r.materialPrices.side))
   card.meta = [meta.join(' · ')]
   card.sections.push({ style: 'ordered', lines: materialLines(env, r) })
   const missing = r.leaves.filter((l) => l.total === null).length

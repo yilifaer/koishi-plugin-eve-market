@@ -1124,9 +1124,17 @@ export interface AlchemyDetail {
 export interface ChainLeaf {
   item: ItemInfo; quantity: number; offset: number; unit: number | null; total: number | null
   fallback?: boolean; kind: 'raw' | 'bought' | 'unbuildable'
+  /** 能造、但因为这一层选了买才买的：它属于哪一层（「继续拆」只改这些层） */
+  layer?: ChainLayer
 }
 export interface ChainResult {
   product: ItemInfo; runs: number; outputQuantity: number; location?: string; options: ChainOptions
+  /** 地点的安全等级（基础模式没有地点就没有） */
+  secClass?: SecClass
+  /** T2 成品：发明成本没有计入 */
+  inventionExcluded: boolean
+  /** 材料按哪个市场、哪一侧的价格 */
+  materialPrices?: IndustryResult['materialPrices']
   /** 拓扑顺序；按 layer 分组展示 */
   nodes: ChainNode[]
   layers: Array<{ layer: ChainLayer | 'product'; mode: LayerMode; used: boolean; build: number | null; buy: number | null; timeSeconds: number; where?: string }>

@@ -117,11 +117,11 @@ function layerToggle(inv: Invocation, id: ChainCommand, req: IndustryRequest, r:
   return { label: CH.btnLayer(which, mode), command: command(inv, id, r, { ...baseParts(req, r), chain: chainOf(r, layers) }) }
 }
 
-/** 还有买的层、并且买的东西里有能造的：把买的层都改成造 */
+/** 买的东西里有能造的：只把它们所在的层改成造（没有能造的就没有这个按钮） */
 function moreAction(inv: Invocation, id: ChainCommand, req: IndustryRequest, r: ChainResult): Action | undefined {
-  const bought = r.layers.filter((row) => row.layer !== 'product' && row.mode === 'buy').map((row) => row.layer as ChainLayer)
-  if (!bought.length || !r.leaves.some((l) => l.kind === 'bought')) return undefined
-  const layers = Object.fromEntries(bought.map((l) => [l, 'build'])) as Partial<Layers>
+  const buildable = [...new Set(r.leaves.map((l) => l.layer).filter((l): l is ChainLayer => !!l))]
+  if (!buildable.length) return undefined
+  const layers = Object.fromEntries(buildable.map((l) => [l, 'build'])) as Partial<Layers>
   return { label: CH.btnMore, command: command(inv, id, r, { ...baseParts(req, r), chain: chainOf(r, layers) }) }
 }
 

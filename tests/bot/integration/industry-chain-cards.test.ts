@@ -88,7 +88,7 @@ describe('原料清单（走完整个插件）', () => {
     const e = await start()
     const sent = await e.h.group(`制造 ${HOUND} XX-1 拆到原料 材料`)
     expect(sent).toHaveLength(2)
-    expect(sent[0].markdown).toContain('**猎犬级 · 原料清单**\nXX-1 · 大厂 · 1 流程\n\n1. 钒 ×400 · `46.40K`')
+    expect(sent[0].markdown).toContain('**猎犬级 · 原料清单**\nXX-1 · 大厂 · 1 流程 · Jita 4-4 出售价\n\n1. 钒 ×400 · `46.40K`')
     expect(sent[0].markdown).toContain('25. 分裂者级 ×1 · `103.00`')
     expect(sent[0].markdown).toContain('**材料合计** `435,090 ISK`（435.09K）· 3,461 m³\n下一条消息可以直接粘贴到游戏的「多重购买」窗口。')
     expect(sent[1].text).toMatch(/^Vanadium\t400\nSilicates\t400\n/)
@@ -144,7 +144,7 @@ function node(over: Partial<ChainNode> = {}): ChainNode {
 function result(over: Partial<ChainResult> = {}): ChainResult {
   const nodes = [node({ item: HULL, layer: 'product', activity: 'manufacturing', demand: 1, output: 1, structure: '大厂', me: 10, te: 20 }), node()]
   return {
-    product: HULL, runs: 1, outputQuantity: 1, location: 'XX-1',
+    product: HULL, runs: 1, outputQuantity: 1, location: 'XX-1', inventionExcluded: false,
     options: { layers: { reaction1: 'build', reaction2: 'build', component: 'build', other: 'buy' }, alchemy: 'auto' },
     nodes,
     layers: [
@@ -172,6 +172,35 @@ describe('编出来的结果', () => {
     const materials = md(materialsChainCard(env0, r, [], []))
     expect(materials).toContain(`1. ${TRIT.zh || TRIT.en} ×500 · 缺价格`)
     expect(materials).toContain('**材料合计 — （不完整，缺 1 种材料价格）· ')
+  })
+
+  it('with missing prices the overview says the profit is not calculated, never a figure', () => {
+    const leaf: ChainLeaf = { item: TRIT, quantity: 500, offset: 0, unit: null, total: null, kind: 'raw' }
+    const complete = result({
+      productValue: { marketKey: 'jita', side: 'sell', unit: 9000, total: 9000 }, profit: { value: 500, marginPct: 5.5 },
+    })
+    expect(md(overviewCard(env0, complete, [], false))).toContain('预计利润')
+    const r = result({
+      leaves: [leaf], totals: { leaves: 0, jobs: 0, reprocessTax: 0, total: 0, missingPrices: 1 },
+      productValue: { marketKey: 'jita', side: 'sell', unit: 9000, total: 9000 }, profit: { value: 500, marginPct: 5.5 },
+    })
+    const out = md(overviewCard(env0, r, [], false))
+    expect(out).toContain('价格不全，利润不计算')
+    expect(out).not.toContain('预计利润')
+    expect(out).not.toContain('利润率')
+  })
+
+  it('the head line shows the security class of the location; none without a location', () => {
+    expect(md(overviewCard(env0, result({ secClass: 'null' }), [], false))).toContain('XX-1 · 00 · 蓝图 ME 10 / TE 20')
+    expect(md(overviewCard(env0, result({ secClass: 'low' }), [], false))).toContain('XX-1 · 低安 · ')
+    const base = result()
+    delete base.location
+    expect(md(overviewCard(env0, base, [], false))).toContain('没写地点，不计建筑加成和安装费 · 蓝图')
+  })
+
+  it('the T2 invention note follows the result flag, not the item', () => {
+    expect(md(overviewCard(env0, result({ inventionExcluded: true }), [], false))).toContain('T2 发明成本不计入')
+    expect(md(overviewCard(env0, result(), [], false))).not.toContain('T2 发明成本不计入')
   })
 
   it('a fully offset material is listed as not to buy; left-over by-products are listed unpriced', () => {
