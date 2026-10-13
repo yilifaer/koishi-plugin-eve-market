@@ -21,6 +21,10 @@ const CATEGORY_SHIP = 6
 const MIDDLE_NAMES = 3
 /** 「炼金多出」最多列几种 */
 const SURPLUS_LISTED = 5
+/** 自己造比直接买贵过这个倍数，提示量太少 */
+const TOO_SMALL_RATIO = 3
+/** 层对应的「买」按钮、命令里的层词 */
+const LAYER_WORD: Record<ChainNode['layer'], string> = { product: '', component: '组件', other: '其他', reaction2: '反应', reaction1: '反应' }
 
 const esc = escapeMarkdown
 const nameOf = (item: ItemInfo) => esc(itemName(item))
@@ -111,6 +115,8 @@ function layerLines(env: IndustryEnv, r: ChainResult): Line[] {
     if (row.used) {
       const buy = row.buy === null ? undefined : money(env, row.buy)
       lines.push({ text: CH.layerLine(name, nodesOf(r, row.layer).length, money(env, row.build), buy, row.where ? esc(row.where) : '') })
+      // 两个数都知道才比；整批生产的量远超需要时，自己造反而贵得多
+      if (row.build !== null && row.buy !== null && row.buy > 0 && row.build > row.buy * TOO_SMALL_RATIO) lines.push({ text: CH.layerTooSmall(LAYER_WORD[row.layer]) })
       continue
     }
     const reasons = unusedReason(r, row.layer)

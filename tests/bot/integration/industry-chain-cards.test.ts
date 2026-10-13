@@ -227,6 +227,22 @@ describe('编出来的结果', () => {
     expect(note('sell')).toContain('† 部分材料按备用市场出售价')
   })
 
+  it('a built layer costing more than 3x its buy estimate gets a hint naming the layer word; unknown numbers or 3x exactly do not', () => {
+    const layers = (reaction1: { build: number | null; buy: number | null }) =>
+      result().layers.map((l) => (l.layer === 'reaction1' ? { ...l, ...reaction1 } : l))
+    const hint = (o: { build: number | null; buy: number | null }) => md(overviewCard(env0, result({ layers: layers(o) }), [], false))
+    expect(hint({ build: 3001, buy: 1000 })).toContain('低级反应 1 种 · 自己造（材料按市价）3.00K（直接买约 1.00K） · 反应塔\n⚠ 量太少，整批造不划算，可以点「反应:买」')
+    expect(hint({ build: 3000, buy: 1000 })).not.toContain('量太少')
+    expect(hint({ build: 5000, buy: null })).not.toContain('量太少')
+    expect(hint({ build: null, buy: 1000 })).not.toContain('量太少')
+    // 组件、其他层写各自的层词
+    const comp = result({
+      layers: result().layers.map((l) => (l.layer === 'component' ? { ...l, used: true, build: 9000, buy: 1000, where: '小厂' } : l)),
+      nodes: [...result().nodes, node({ layer: 'component', item: TRIT })],
+    })
+    expect(md(overviewCard(env0, comp, [], false))).toContain('可以点「组件:买」')
+  })
+
   it('the unused layer is explained by the bought layer above it', () => {
     const r = result({
       options: { layers: { reaction1: 'build', reaction2: 'build', component: 'buy', other: 'buy' }, alchemy: 'auto' },

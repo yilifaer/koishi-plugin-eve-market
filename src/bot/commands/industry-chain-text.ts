@@ -35,6 +35,7 @@ export const CH = {
   noJobFees: '未计安装费用',
   layerLine: (name: string, count: number, build: string, buy: string | undefined, where: string) =>
     `${name} ${count} 种 · 自己造（材料按市价）${build}${buy ? `（直接买约 ${buy}）` : ''}${where ? ` · ${where}` : ''}`,
+  layerTooSmall: (word: string) => `⚠ 量太少，整批造不划算，可以点「${word}:买」`,
   layerNoSum: '各层金额不能相加，总成本见下',
   layerUnused: (name: string, reasons: string) => `${name}（${reasons}直接买，没有用到）`,
   alchemyLine: (count: number, compare: string) => `炼金 ${count} 种${compare ? `：${compare}` : ''}`,
