@@ -499,7 +499,8 @@ describe('制造: 拆到原料的词跟着按钮走', () => {
     const texts = buttonTexts(sent)
     expect(texts.length).toBeGreaterThan(0)
     for (const t of texts) {
-      if (!t.includes('=>制造 ')) continue
+      // 「组件:造」是把这一层改回去，「只算成品」是不拆了：这两个按钮本来就不带
+      if (!t.includes('=>制造 ') || /^(组件:造|只算成品)=>/.test(t)) continue
       expect(t, t).toContain(' 组件:买')
       expect(t, t).not.toContain('其他:')
     }

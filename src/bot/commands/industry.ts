@@ -20,6 +20,7 @@ import { emptyCard, invoke, sendCard } from './context'
 import type { CommandContext, Invocation } from './context'
 import { baseCard, compareCard, materialsCard, resultCard, stepCard } from './industry-card'
 import type { IndustryEnv } from './industry-card'
+import { sendChain } from './industry-chain'
 import { BAD_ARG, IND } from './industry-text'
 import { itemArgs, itemName } from './names'
 import { candidatesCard, notFoundCard, searchKeyword } from './resolution'
@@ -156,6 +157,7 @@ async function runPlan(inv: Invocation, id: PlanId, text: string): Promise<void>
   }
   const req = inv.core.parse.industryArgs(text, activity, inv.access)
   if (isFailure(req)) return planFailure(inv, id, req)
+  if (req.chain) return sendChain(inv, id, req, { planFailure, sendStep })
   const out = await inv.core.industry.plan(req)
   if (isFailure(out)) return planFailure(inv, id, out, req)
   if (isStep(out)) return sendStep(inv, id, req, out)

@@ -1,9 +1,10 @@
 // 帮助里的工业部分（§2.14）：主卡片的「工业」一节，「帮助 制造」「帮助 制造比价」「帮助 反应」三张分项说明。
 // 本群看不到 2 个以上能制造的地点时不写「制造比价」（基础参考不需要地点，「制造」「反应」总是写）。
 
+import { CHAIN_ENABLED } from '../../constants'
 import type { CommandId } from '../../constants'
 import type { IndustryActivity } from '../../core/types'
-import type { Action, Card, Line } from '../view/card'
+import type { Action, Card, Line, Section } from '../view/card'
 import { escapeMarkdown } from '../view/escape'
 import { emptyCard } from './context'
 import type { Invocation } from './context'
@@ -43,6 +44,19 @@ function example(env: HelpEnv, activity: IndustryActivity): string {
   return locationNames(env, activity)[0] ?? 'XX-1'
 }
 
+/** 拆到原料的用法：先回一张总览卡，细节点按钮看 */
+function chainSection(name: string, place: string): Section {
+  return {
+    heading: '拆到原料',
+    lines: [
+      { text: `${name} 帕拉丁级 ${place} 拆到原料：从原料一路算到成品，先回一张总览卡，再点按钮看「分层明细」「原料清单」` },
+      { text: '每一层造还是买：反应:买 / 反应:造、组件:买 / 组件:造、其他:造（连 T1 船体、R.A.M.、燃料块也自己造）；写了任何一个就是拆到原料' },
+      { text: '低级反应可以走炼金术：反应:炼金（都走炼金）、反应:正常、反应:自动（挑便宜的，默认）' },
+      { text: '加上 明细 直接出分层明细，加上 材料 直接出原料清单和可以粘进游戏的清单；税:1% 只改成品这一步的税' },
+    ],
+  }
+}
+
 function manufactureTopic(env: HelpEnv): Card {
   const name = nameOf(env, 'manufacture')
   const place = example(env, 'manufacturing')
@@ -66,6 +80,7 @@ function manufactureTopic(env: HelpEnv): Card {
         { text: '结果卡片下面的按钮可以改 ME/TE、换地点、改建筑和改装件、改税率' },
       ],
     },
+    ...CHAIN_ENABLED ? [chainSection(name, place)] : [],
     { style: 'plain', lines: [placesLine(env, 'manufacturing'), { text: '想慢慢调参数可以私聊我，不刷群。' }] },
   )
   card.actions = back(env, 'manufacture')
