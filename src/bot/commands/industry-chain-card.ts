@@ -13,7 +13,7 @@ import type { IndustryEnv } from './industry-card'
 import { ALCHEMY_NAME, CH, LAYER_NAME, MODE_NAME } from './industry-chain-text'
 import { IND, SIDE_NONE, SIDE_SHORT } from './industry-text'
 import { amountText, itemName } from './names'
-import { SEC_CLASS } from './text'
+import { SEC_CLASS, SIDE_LABEL } from './text'
 
 /** 舰船大类：数量单位写「艘」 */
 const CATEGORY_SHIP = 6
@@ -318,7 +318,7 @@ export function materialsChainCard(env: IndustryEnv, r: ChainResult, copies: str
   const price: FormattedPrice = r.leaves.length && missing >= r.leaves.length ? { na: true } : isk(env, r.totals.leaves)
   const extra = `${missing ? IND.incomplete(missing) : ''}· ${env.core.format.volume(volume)}`
   const lines: Line[] = [{ label: IND.materialsTotal, price, extra }]
-  if (r.leaves.some((l) => l.fallback)) lines.push({ text: CH.fallbackNote })
+  if (r.leaves.some((l) => l.fallback)) lines.push({ text: CH.fallbackNote(SIDE_LABEL[r.materialPrices?.side ?? 'sell']) })
   if (r.surplusByproducts.length) {
     const shown = r.surplusByproducts.slice(0, SURPLUS_LISTED).map((s) => `${nameOf(s.item)} ${qty(env, s.quantity)}`)
     const more = r.surplusByproducts.length > SURPLUS_LISTED ? '等' : ''

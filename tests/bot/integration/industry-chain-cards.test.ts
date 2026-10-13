@@ -218,6 +218,15 @@ describe('编出来的结果', () => {
     expect(text(materialsChainCard(env0, r, [], []))).not.toContain('下一条消息')
   })
 
+  it('the fallback-market note names the real price side', () => {
+    const leaves: ChainLeaf[] = [{ item: TRIT, quantity: 500, offset: 0, unit: 4, total: 2000, kind: 'raw', fallback: true }]
+    const note = (side: 'sell' | 'mid' | 'buy') =>
+      md(materialsChainCard(env0, result({ leaves, materialPrices: { marketKey: 'jita', side } }), [], []))
+    expect(note('buy')).toContain('† 部分材料按备用市场收购价')
+    expect(note('mid')).toContain('† 部分材料按备用市场中间价')
+    expect(note('sell')).toContain('† 部分材料按备用市场出售价')
+  })
+
   it('the unused layer is explained by the bought layer above it', () => {
     const r = result({
       options: { layers: { reaction1: 'build', reaction2: 'build', component: 'buy', other: 'buy' }, alchemy: 'auto' },

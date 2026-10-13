@@ -74,7 +74,7 @@ export const CH = {
   offsetLine: (name: string, n: string) => `${name} −${n}（炼金副产品）`,
   offsetAll: (name: string, n: string) => `${name} −${n}（炼金副产品，不用买）`,
   surplusLine: (list: string) => `炼金多出（不计价）：${list}`,
-  fallbackNote: '† 部分材料按备用市场出售价',
+  fallbackNote: (side: string) => `† 部分材料按备用市场${side}`,
 
   // ---------------------------------------------------------------- 提示和出错
   slow: '⏳ 正在拆到原料…',
