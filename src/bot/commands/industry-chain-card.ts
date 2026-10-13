@@ -185,7 +185,7 @@ function timeLines(env: IndustryEnv, r: ChainResult): Line[] {
   if (!rows.length) return []
   const parts = rows.map((l) => `${LAYER_NAME[l.layer]} ${duration(env, l.timeSeconds)}`)
   if (rows.length > 1) parts.push(CH.timeTotal(duration(env, rows.reduce((sum, l) => sum + l.timeSeconds, 0))))
-  return [{ text: CH.timeLine(parts) }]
+  return [{ text: CH.timeLine(parts) }, { text: CH.timeNote }]
 }
 
 /** ⚠ T2 发明成本不计入 · 炼金按废料 55% 规则计算 */

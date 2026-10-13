@@ -48,7 +48,7 @@ describe('拆到原料：总览卡', () => {
     expect(sent).toHaveLength(1)
     const out = card(sent)
     expect(out.startsWith(OVERVIEW.join('\n'))).toBe(true)
-    expect(out).toContain('时间（未计技能，每层一条线）：成品 13 小时 · 组件 8 小时 24 分 · 高级反应 1 天 2 小时 · 低级反应 1 天 20 小时 · 合计 3 天 20 小时')
+    expect(out).toContain('时间（未计技能，每层一条线）：成品 13 小时 · 组件 8 小时 24 分 · 高级反应 1 天 2 小时 · 低级反应 1 天 20 小时 · 合计 3 天 20 小时\n按每层 1 条生产线算，多开可以更快')
     expect(out).toContain('⚠ T2 发明成本不计入 · 炼金按废料 55% 规则计算')
     expect(out).toMatch(/\n\*\*\*\n欧服 · 价格更新于 \d\d:\d\d · 星系成本指数更新于 \d\d:\d\d$/)
     expect(buttonRows(sent)).toEqual([
