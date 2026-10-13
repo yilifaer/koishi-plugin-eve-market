@@ -39,6 +39,7 @@ export const CH = {
   layerNoSum: '各层金额不能相加，总成本见下',
   layerUnused: (name: string, reasons: string) => `${name}（${reasons}直接买，没有用到）`,
   alchemyLine: (count: number, compare: string) => `炼金 ${count} 种${compare ? `：${compare}` : ''}`,
+  alchemyAt: (building: string, place: string, pct: string) => `提炼：${building}（${place}）税 ${pct}`,
   alchemyNone: '炼金 0 种：都是正常路线更划算',
   alchemyCheaper: (diff: string) => `比正常省 ${diff}`,
   alchemyDearer: (diff: string) => `比正常贵 ${diff}`,

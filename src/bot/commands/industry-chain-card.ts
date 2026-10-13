@@ -133,12 +133,23 @@ function alchemyLines(env: IndustryEnv, r: ChainResult): Line[] {
   const used = candidates.filter((n) => n.route === 'alchemy')
   if (!used.length) return [{ text: CH.alchemyNone, indent: 1 }]
   const known = used.every((n) => n.buildCost !== null && n.alchemy!.other.cost !== null)
-  if (!known) return [{ text: CH.alchemyLine(used.length, CH.alchemyNoCompare), indent: 1 }]
+  if (!known) return [{ text: CH.alchemyLine(used.length, CH.alchemyNoCompare), indent: 1 }, ...reprocessLines(used)]
   const saved = used.reduce((sum, n) => sum + (n.alchemy!.other.cost! - n.buildCost!), 0)
   const time = used.reduce((sum, n) => sum + (n.timeSeconds - n.alchemy!.other.timeSeconds), 0)
   const parts = [saved >= 0 ? CH.alchemyCheaper(money(env, saved)) : CH.alchemyDearer(money(env, -saved))]
   if (time) parts.push(time > 0 ? CH.alchemyMoreTime(duration(env, time)) : CH.alchemyLessTime(duration(env, -time)))
-  return [{ text: CH.alchemyLine(used.length, parts.join('，')), indent: 1 }]
+  return [{ text: CH.alchemyLine(used.length, parts.join('，')), indent: 1 }, ...reprocessLines(used)]
+}
+
+/** 提炼在哪里做、税多少（没找到提炼建筑时引擎已有警告，这里不写） */
+function reprocessLines(used: ChainNode[]): Line[] {
+  const spots = [...new Set(used.flatMap((n) => {
+    const a = n.alchemy!
+    return a.reprocessAt && a.reprocessLocation !== undefined && a.reprocessPct !== undefined
+      ? [CH.alchemyAt(esc(a.reprocessAt), esc(a.reprocessLocation), pctTrim(a.reprocessPct))]
+      : []
+  }))]
+  return spots.map((text) => ({ text, indent: 1 }))
 }
 
 /** 直接买：原料 N 种 · 半成品 N 种（名字）· 没地方造 N 种 */

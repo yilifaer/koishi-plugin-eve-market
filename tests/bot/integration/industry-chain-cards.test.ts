@@ -243,6 +243,17 @@ describe('编出来的结果', () => {
     expect(md(overviewCard(env0, comp, [], false))).toContain('可以点「组件:买」')
   })
 
+  it('the alchemy line says where the reprocessing is done and the tax; nothing extra without a refinery', () => {
+    const alchemy = (over: object) => ({
+      unrefined: PYERITE, units: 25, runs: 25, yieldPct: 55, perUnit: 40, byproducts: [], reprocessTax: 100,
+      other: { route: 'normal' as const, cost: 900, timeSeconds: 1800 }, ...over,
+    })
+    const withNode = (a: object) => result({ nodes: [...result().nodes.slice(0, 1), node({ route: 'alchemy', alchemy: alchemy(a) })] })
+    const out = md(overviewCard(env0, withNode({ reprocessAt: '甲提炼厂', reprocessLocation: 'XX-1', reprocessPct: 1.5 }), [], false))
+    expect(out).toContain('炼金 1 种：比正常贵 100.00 ISK，多 30 分\n· 提炼：甲提炼厂（XX-1）税 1.5%')
+    expect(md(overviewCard(env0, withNode({}), [], false))).not.toContain('提炼：')
+  })
+
   it('the unused layer is explained by the bought layer above it', () => {
     const r = result({
       options: { layers: { reaction1: 'build', reaction2: 'build', component: 'buy', other: 'buy' }, alchemy: 'auto' },

@@ -86,7 +86,11 @@ function buildNode(ctx: JobCtx, options: ChainOptions, pn: PlanNode, need: numbe
       ? { route: 'normal', cost: ev.cost, timeSeconds: ev.plan.timeSeconds }
       : { route: 'alchemy', cost: alt.cost, timeSeconds: alt.timeSeconds },
   }
-  if (alt.reprocessAt) alchemy.reprocessAt = alt.reprocessAt
+  if (alt.reprocessAt) {
+    alchemy.reprocessAt = alt.reprocessAt
+    alchemy.reprocessLocation = alt.reprocessLocation
+    alchemy.reprocessPct = alt.reprocessPct
+  }
   if (pick === 'normal') {
     if (ev.missingAdjusted) ctx.warnings.add('部分材料缺少调整价，安装费偏低')
     return { node: { ...normal, route: 'normal', alchemy }, edges: pn.edges, byproducts: [], tax: null, alchemy: false }

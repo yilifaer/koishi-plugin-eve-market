@@ -179,7 +179,7 @@ describe('alchemy: byproducts, tax', () => {
     const r = chainResult(await go({ on: true, alchemy: 'alchemy' }))
     // 产出：1,000 个铁磁流体（50）+ 2,375 个铪（100）= 287,500 ISK，税 1%
     expect(r.totals.reprocessTax).toBe(2875)
-    expect(node(r, FERROFLUID).alchemy).toMatchObject({ reprocessTax: 2875, reprocessAt: '甲便宜提炼厂' })
+    expect(node(r, FERROFLUID).alchemy).toMatchObject({ reprocessTax: 2875, reprocessAt: '甲便宜提炼厂', reprocessLocation: '星点甲', reprocessPct: 1 })
     expect(r.totals.total).toBe(r.totals.leaves + r.totals.jobs + 2875)
     expect(r.warnings).not.toContain('未配置提炼建筑，提炼税按 0 算')
   })
@@ -209,6 +209,30 @@ describe('alchemy: byproducts, tax', () => {
     const { go } = ferrofluid({ industry: { structures: stations } })
     const r = chainResult(await go({ on: true, alchemy: 'alchemy' }))
     expect(node(r, FERROFLUID).alchemy?.reprocessAt).toBe('乙提炼厂')
+    expect(r.warnings).not.toContain('未配置提炼建筑，提炼税按 0 算')
+  })
+})
+
+describe('alchemy: refinery lookup by the reaction node\'s own location', () => {
+  it('the command location and the setting have no refinery: the location the reaction fell back to is used, not the first visible one', async () => {
+    const places = [
+      { name: '星点甲', system: 'NIH-02', visibility: 'public', isDefault: true },
+      { name: '星点乙', system: 'Tama', visibility: 'public' },
+      { name: '星点丙', system: 'NIH-02', visibility: 'public' },
+    ]
+    const stations = [
+      { location: '星点甲', name: '甲莱塔卢', structureType: 'Raitaru', facilityTaxPct: 1 },
+      // 乙只有提炼厂（税高）：排在丙前面，按「本群第一个有提炼的地点」会先找到它
+      { location: '星点乙', name: '乙提炼厂', structureType: 'Athanor', activities: 'reprocessing', reprocessingTaxPct: 5 },
+      { location: '星点丙', name: '丙反应堆', structureType: 'Athanor', activities: 'reaction', reactionTaxPct: 2 },
+      { location: '星点丙', name: '丙提炼厂', structureType: 'Athanor', activities: 'reprocessing', reprocessingTaxPct: 1 },
+    ]
+    const prices = new ChainPrices({ [FERROFLUID]: 50, [HAFNIUM]: 100 })
+    const { go } = ferrofluid({ prices, industry: { locations: places, structures: stations } })
+    const r = chainResult(await go({ on: true, alchemy: 'alchemy' }))
+    const n = node(r, FERROFLUID)
+    expect(n).toMatchObject({ location: '星点丙', fallbackLocation: true })
+    expect(n.alchemy).toMatchObject({ reprocessAt: '丙提炼厂', reprocessLocation: '星点丙', reprocessPct: 1, reprocessTax: 2875 })
     expect(r.warnings).not.toContain('未配置提炼建筑，提炼税按 0 算')
   })
 })

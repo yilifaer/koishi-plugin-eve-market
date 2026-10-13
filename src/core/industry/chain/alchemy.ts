@@ -26,19 +26,22 @@ export interface AlchemyRoute {
   /** 提炼税（ISK）；产出缺价格时 null */
   reprocessTax: number | null
   reprocessAt?: string
+  /** 提炼建筑所在的地点和提炼税（%） */
+  reprocessLocation?: string
+  reprocessPct?: number
   /** 比较用的成本：材料（扣掉自己产的副产品）+ 安装费 + 提炼税；缺价格时 null */
   cost: number | null
   timeSeconds: number
 }
 
 /** 提炼税最低的提炼建筑：提炼地点设置 → 命令里的地点 → 低级反应实际做的地点 → 本群第一个有提炼建筑的地点；一座都没有按 0% */
-function reprocessing(ctx: JobCtx, at: IndustryLocation | null): { pct: number; at?: string } {
+function reprocessing(ctx: JobCtx, at: IndustryLocation | null): { pct: number; at?: string; location?: string } {
   const candidates = [ctx.host.locations.reprocessLocation(ctx.access), ctx.location, at, ...ctx.host.locations.visible(ctx.access)]
   for (const location of candidates) {
     const list = location?.structures.filter((s) => s.purposes.includes('reprocessing')) ?? []
     if (!list.length) continue
     const best = list.reduce((a, b) => (b.taxPct.reprocessing < a.taxPct.reprocessing ? b : a))
-    return { pct: best.taxPct.reprocessing, at: best.name }
+    return { pct: best.taxPct.reprocessing, at: best.name, location: location!.name }
   }
   ctx.warnings.add('未配置提炼建筑，提炼税按 0 算')
   return { pct: 0 }
@@ -90,7 +93,11 @@ export function alchemyRoute(ctx: JobCtx, node: PlanNode, plan: AlchemyPlan, dem
   const route: AlchemyRoute = {
     ev, runs, units, output, perUnit, yieldPct: Math.round(y * 1e8) / 1e6, byproducts, reprocessTax, cost, timeSeconds: ev.plan.timeSeconds,
   }
-  if (station.at) route.reprocessAt = station.at
+  if (station.at) {
+    route.reprocessAt = station.at
+    route.reprocessLocation = station.location
+    route.reprocessPct = station.pct
+  }
   return route
 }
 

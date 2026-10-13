@@ -1122,6 +1122,8 @@ export interface ChainNode {
 export interface AlchemyDetail {
   unrefined: ItemInfo; units: number; runs: number; yieldPct: number; perUnit: number
   byproducts: Array<{ typeId: TypeId; quantity: number }>; reprocessTax: number | null; reprocessAt?: string
+  /** 提炼建筑所在的地点和提炼税（%） */
+  reprocessLocation?: string; reprocessPct?: number
   /** 另一条路线 */
   other: { route: 'normal' | 'alchemy'; cost: number | null; timeSeconds: number }
 }
