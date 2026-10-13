@@ -2,6 +2,7 @@
 // 地点、建筑都是编造的（CC-1 ……），星系是公共数据；绝念级（航母）的蓝图在这里补进小数据集。
 
 import { afterEach, describe, expect, it } from 'vitest'
+import { USER } from '../../harness'
 import { buttonRows, buttons, card } from './plugin-env'
 import type { PluginEnv } from './plugin-env'
 import { INDUSTRY, startIndustry } from './industry-env'
@@ -111,6 +112,17 @@ describe('造不了的地点和建筑', () => {
     const e = await start({ ...CARRIER, industry: { locations: LOCATIONS.slice(2), structures: STRUCTURES.slice(4) } })
     const sent = await e.h.group('制造 绝念级 高级')
     expect(card(sent)).toContain(`本群没有能造绝念级的工业地点：需要${NEED}`)
+  })
+
+  it('a private chat says 私聊里 where the group says 本群 (capability texts)', async () => {
+    // 私聊里只看得到公开的地点
+    const open = (list: typeof LOCATIONS) => list.map((l) => ({ ...l, visibility: 'public' }))
+    const e = await start({ ...CARRIER, industry: { locations: open(LOCATIONS.slice(2)), structures: STRUCTURES.slice(4) } })
+    expect(card(await e.h.direct('制造 绝念级 高级', { userId: USER }))).toContain(`私聊里没有能造绝念级的工业地点：需要${NEED}`)
+    expect(card(await e.h.direct('制造比价 绝念级', { userId: USER }))).toContain(`私聊里没有能造绝念级的工业地点：需要${NEED}`)
+    await e.stop()
+    env = await startIndustry({ ...CARRIER, industry: { locations: open(LOCATIONS.slice(1)), structures: STRUCTURES.slice(3) } })
+    expect(card(await env.h.direct('制造比价 绝念级', { userId: USER }))).toContain(`私聊里可比较的工业地点不足 2 个（其余地点造不了：需要${NEED}）`)
   })
 
   it('no capable location: no dead basic button, compare says what is needed, an unbuildable written location too', async () => {

@@ -55,7 +55,7 @@ export function registerIndustry(commands: CommandContext): void {
 const textOf = (args: unknown) => (typeof args === 'string' ? args.replace(/\s+/g, ' ').trim() : '')
 
 function env(inv: Invocation): IndustryEnv {
-  return { core: inv.core, display: inv.commands.settings.display, industry: inv.commands.settings.industry }
+  return { core: inv.core, display: inv.commands.settings.display, industry: inv.commands.settings.industry, direct: inv.access.isDirect }
 }
 
 // ------------------------------------------------------------------ 按钮里的命令
@@ -288,19 +288,22 @@ function locationCard(inv: Invocation, id: PlanId, failure: CoreFailure, req?: I
   const activity = ACTIVITY_OF[id]
   const token = failure.token ?? ''
   const product = req ? inv.core.items.byId(req.typeId) : undefined
+  const direct = inv.access.isDirect
+  const hidden = failure.code === 'UNKNOWN_LOCATION' && !failure.reason && inv.core.industry.locationHidden(token, inv.access)
   const title = failure.code === 'HIGHSEC_REACTION' ? IND.highsec(safeEcho(token))
     : failure.reason === 'capability' && product ? IND.cannotBuild(safeEcho(token), activity, escapeMarkdown(itemName(product)), escapeMarkdown(failure.need ?? ''))
       : failure.reason === 'activity' ? IND.wrongActivity(safeEcho(token), activity)
-      : IND.unknownLocation(safeEcho(token))
+      : hidden ? IND.locationHidden(safeEcho(token))
+        : IND.unknownLocation(safeEcho(token))
   const card = emptyCard(title)
   // 能造的地点一个都没有：说明缺什么，不是「还没有工业地点」
   const noneText = failure.reason === 'capability' && product
-    ? IND.noCapable(activity, escapeMarkdown(itemName(product)), escapeMarkdown(failure.need ?? '')) : IND.noLocationsHere(activity)
+    ? IND.noCapable(activity, escapeMarkdown(itemName(product)), escapeMarkdown(failure.need ?? ''), direct) : IND.noLocationsHere(activity, direct)
   const locations = failure.locations ?? inv.core.industry.locations(inv.access, activity).map((l) => l.name)
   const usable = locations.filter((name) => name !== token)
   card.sections.push({
     style: 'plain',
-    lines: [{ text: usable.length ? IND.locationsHere(activity, usable.map(escapeMarkdown).join(' · ')) : noneText }],
+    lines: [{ text: usable.length ? IND.locationsHere(activity, usable.map(escapeMarkdown).join(' · '), direct) : noneText }],
   })
   // 按钮：parser 给的 rest 是去掉那个词以后的参数；服务给的（地点存在但不能用）按请求重新拼
   const rest = failure.rest ?? (req ? restOf(inv, id, req) : '')
@@ -329,12 +332,13 @@ function noLocationsCard(inv: Invocation, id: PlanId | 'manufactureCompare', fai
   // 本群有地点，但没有一个造得了这个产品：说明缺什么
   const capable = failure.reason === 'capability' && product
   const need = escapeMarkdown(failure.need ?? '')
-  const title = capable && id === 'manufactureCompare' && locations.length ? IND.compareTooFewNeed(need)
-    : capable ? IND.noCapable(activity, escapeMarkdown(itemName(product)), need)
-      : id === 'manufactureCompare' ? IND.compareTooFew
-        : IND.noLocationsHere(activity)
+  const direct = inv.access.isDirect
+  const title = capable && id === 'manufactureCompare' && locations.length ? IND.compareTooFewNeed(need, direct)
+    : capable ? IND.noCapable(activity, escapeMarkdown(itemName(product)), need, direct)
+      : id === 'manufactureCompare' ? IND.compareTooFew(direct)
+        : IND.noLocationsHere(activity, direct)
   const card = emptyCard(title)
-  if (locations.length) card.sections.push({ style: 'plain', lines: [{ text: IND.locationsHere(activity, locations.map(escapeMarkdown).join(' · ')) }] })
+  if (locations.length) card.sections.push({ style: 'plain', lines: [{ text: IND.locationsHere(activity, locations.map(escapeMarkdown).join(' · '), direct) }] })
   const planId: PlanId = activity === 'reaction' ? 'reaction' : 'manufacture'
   if (product && !capable && inv.commands.registry.has(planId)) {
     const base = commandOf(inv, planId, product, { ...amountOf(req!), me: req!.me, te: req!.te })
@@ -399,7 +403,7 @@ function usageCard(inv: Invocation, id: PlanId | 'manufactureCompare'): Card {
   const card = emptyCard(IND.usageTitle(name))
   const lines = id === 'manufactureCompare'
     ? [
-        { text: `${name} ${example}：在本群能用的地点各算一次，按总成本排序` },
+        { text: `${name} ${example}：每个能用的地点各算一次，按总成本排序` },
         { text: `${name} ${example}*10 ME8 TE16：指定数量和蓝图 ME/TE（${IND.compareDefaults}）` },
         { text: `${name} ${example} 改装:无 税:1%：每个地点都不用改装件、按这个税算` },
       ]
@@ -414,7 +418,7 @@ function usageCard(inv: Invocation, id: PlanId | 'manufactureCompare'): Card {
   card.sections.push({ lines })
   card.sections.push({
     style: 'plain',
-    lines: [{ text: locations.length ? IND.locationsHere(activity, locations.map(escapeMarkdown).join(' · ')) : IND.noLocationsHere(activity) }],
+    lines: [{ text: locations.length ? IND.locationsHere(activity, locations.map(escapeMarkdown).join(' · '), inv.access.isDirect) : IND.noLocationsHere(activity, inv.access.isDirect) }],
   })
   const fill: Action = { label: IND.enterItem, command: { id }, fillOnly: true }
   card.actions.push([{ label: `${inv.commands.registry.name(id)} ${example}`, command: { id, args: example }, primary: true }, fill])

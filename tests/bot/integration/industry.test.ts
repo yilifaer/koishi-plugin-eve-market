@@ -307,6 +307,23 @@ describe('制造: advanced steps', () => {
     }
   })
 
+  it('a private chat never says 本群: location lists, missing locations and the only-location mark', async () => {
+    const e = await start()
+    // XX-1 只在授权群：单聊里存在但不能用；XX-9 根本没有
+    expect(card(await e.h.direct('制造 乌鸦级 XX-1'))).toBe('XX-1 在这里不能用。\n\n私聊里可以制造的地点：XX-2 · XX-3')
+    expect(card(await e.h.direct('制造 乌鸦级 XX-9'))).toBe('XX-9 尚未配置为工业地点。\n\n私聊里可以制造的地点：XX-2 · XX-3')
+    expect(card(await e.h.group('制造 乌鸦级 XX-9'))).toContain('本群可以制造的地点：')
+    await e.stop()
+    env = await startIndustry({ industry: { locations: [LOCATIONS[1]], structures: [STRUCTURES[3]] } })
+    const step = await env.h.direct('制造 乌鸦级 高级')
+    expect(card(step)).toContain('已选：XX-2（唯一的地点）')
+    expect(card(step)).not.toContain('本群')
+    expect(card(await env.h.direct('制造比价 乌鸦级*2'))).toBe('私聊里可比较的工业地点不足 2 个。\n\n私聊里可以制造的地点：XX-2')
+    await env.stop()
+    env = await startIndustry({ industry: {} })
+    expect(card(await env.h.direct('制造 乌鸦级 高级'))).toBe('私聊里还没有可以制造的工业地点。')
+  })
+
   it('a location with one structure skips the structure step; one visible location skips the location step', async () => {
     const e = await start({ industry: { locations: [LOCATIONS[1]], structures: [STRUCTURES[3]] } })
     const step = await e.h.group('制造 乌鸦级 高级', { channelId: GROUP2 })
@@ -416,8 +433,10 @@ describe('制造: errors', () => {
     const hidden = await e.h.group('制造 乌鸦级 XX-1', { channelId: GROUP2 })
     const alias = await e.h.group('制造 乌鸦级 联盟工业点A', { channelId: GROUP2 })
     const missing = await e.h.group('制造 乌鸦级 XX-9', { channelId: GROUP2 })
-    expect(card(hidden).replace('XX-1', 'XX-9')).toBe(card(missing))
-    expect(card(alias).replace('联盟工业点A', 'XX-9')).toBe(card(missing))
+    // 存在但这里用不了：不说「尚未配置」，列表和不存在的一样
+    expect(card(hidden)).toBe('XX-1 在这里不能用。\n\n本群可以制造的地点：XX-2 · XX-3')
+    expect(card(alias)).toBe('联盟工业点A 在这里不能用。\n\n本群可以制造的地点：XX-2 · XX-3')
+    expect(buttons(hidden)).toEqual(buttons(missing))
     expect(card(missing)).toBe('XX-9 尚未配置为工业地点。\n\n本群可以制造的地点：XX-2 · XX-3')
     // 建筑名只属于写错的那个地点，按钮里不带；「改装:」「税:」「高级」「材料」照样带着
     const all = await e.h.group('制造 乌鸦级*2 XX-9 ME4 TE8 建筑:大工厂 改装:无 税:1.25% 高级 材料')

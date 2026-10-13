@@ -28,7 +28,7 @@ export interface ChainHooks {
 }
 
 function env(inv: Invocation): IndustryEnv {
-  return { core: inv.core, display: inv.commands.settings.display, industry: inv.commands.settings.industry }
+  return { core: inv.core, display: inv.commands.settings.display, industry: inv.commands.settings.industry, direct: inv.access.isDirect }
 }
 
 /** 拆到原料自己的回复器：额度同「材料」，慢提示、卡片、多买清单共用 */

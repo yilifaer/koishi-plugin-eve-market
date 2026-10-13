@@ -183,6 +183,10 @@ class Service implements IndustryService {
     return this.o.locations.visible(access, activity).map((l) => ({ name: l.name, isDefault: l.isDefault }))
   }
 
+  locationHidden(token: string, access: Access): boolean {
+    return !this.o.locations.match(token, access) && this.o.locations.exists(token)
+  }
+
   locationsFor(access: Access, activity: IndustryActivity, typeId: TypeId): IndustryLocationInfo[] {
     const product = this.o.items.byId(typeId)
     const list = product ? this.o.locations.buildable(access, activity, product).usable : this.o.locations.visible(access, activity)
@@ -494,7 +498,7 @@ class Service implements IndustryService {
   private summary(job: Job, req: IndustryRequest, location?: IndustryLocation, only = false, withStructure = true): string[] {
     const out: string[] = []
     // 筛掉了别的地点时，「本群唯一」会误导
-    const onlyText = this.o.locations.buildable(req.access, job.activity, job.product).unable ? '（唯一能造的地点）' : '（本群唯一的地点）'
+    const onlyText = this.o.locations.buildable(req.access, job.activity, job.product).unable ? '（唯一能造的地点）' : req.access.isDirect ? '（唯一的地点）' : '（本群唯一的地点）'
     if (location) out.push(only ? `${location.name}${onlyText}` : location.name)
     if (job.activity === 'manufacturing') {
       if (req.me !== undefined) out.push(`ME ${req.me}`)

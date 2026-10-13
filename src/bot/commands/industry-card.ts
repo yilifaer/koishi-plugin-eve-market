@@ -20,6 +20,8 @@ export interface IndustryEnv {
   core: Pick<EveCore, 'format' | 'markets'>
   display: Pick<DisplaySettings, 'priceDisplayMode' | 'listPriceDisplayMode'>
   industry: Pick<IndustrySettings, 'sellFeesPct'>
+  /** 私聊里不说「本群」 */
+  direct?: boolean
 }
 
 /** 舰船大类：数量单位写「艘」 */
@@ -136,11 +138,11 @@ function rigsLine(r: IndustryResult): string | undefined {
 }
 
 /** XX-1 · 大厂（默认建筑） · 00 */
-function placeLine(r: IndustryResult): string {
+function placeLine(r: IndustryResult, direct = false): string {
   const { applied } = r
   const d = new Set(applied.defaulted)
   const parts: string[] = []
-  if (applied.location) parts.push(`${esc(applied.location)}${d.has('location') ? (applied.locationFiltered ? IND.defaulted.locationFiltered : IND.defaulted.location) : ''}`)
+  if (applied.location) parts.push(`${esc(applied.location)}${d.has('location') ? (applied.locationFiltered ? IND.defaulted.locationFiltered : direct ? IND.defaulted.locationDirect : IND.defaulted.location) : ''}`)
   const mark = !d.has('structure') ? '' : applied.structureOnly ? (applied.structureFiltered ? IND.defaulted.structureFiltered : IND.defaulted.structureOnly) : IND.defaulted.structure
   // 自动挑的写「自动选择：名称」；地点只有一座时仍是「该地点唯一」
   if (applied.structure && applied.autoPicked) parts.push(IND.autoPicked(esc(applied.structure)))
@@ -318,12 +320,12 @@ export function resultCard(env: IndustryEnv, r: IndustryResult, activity: Indust
   const manufacturing = activity === 'manufacturing'
   const head: Line[] = []
   if (manufacturing) {
-    head.push({ text: placeLine(r) })
+    head.push({ text: placeLine(r, env.direct) })
     const d = new Set(r.applied.defaulted)
     const mark = d.has('me') || d.has('te') ? (r.product.techLevel === 2 ? IND.defaulted.meTeT2 : IND.defaulted.meTe) : ''
     head.push({ text: `${IND.blueprint(r.applied.me, r.applied.te)}${mark} · ${runsText(env, r)}` })
   } else {
-    head.push({ text: `${placeLine(r)} · ${runsText(env, r)}` })
+    head.push({ text: `${placeLine(r, env.direct)} · ${runsText(env, r)}` })
   }
   const rigs = rigsLine(r)
   if (rigs) head.push({ text: rigs })

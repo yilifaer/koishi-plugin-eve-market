@@ -152,6 +152,8 @@ describe('反应', () => {
     const none = await e.h.group('反应 碳化钨 XX-2')
     expect(card(none)).toBe('XX-2 没有可以反应的建筑。\n\n本群还没有可以反应的工业地点。')
     expect(buttons(none)).toEqual(['基础参考=>反应 碳化钨'])
+    // 私聊里不说本群
+    expect(card(await e.h.direct('反应 碳化钨 XX-2'))).toBe('XX-2 没有可以反应的建筑。\n\n私聊里还没有可以反应的工业地点。')
     const manufactured = await e.h.group('反应 乌鸦级*2')
     expect(card(manufactured)).toBe('乌鸦级 不是反应产物，请用：制造 乌鸦级')
     expect(buttons(manufactured)).toEqual(['制造 乌鸦级=>制造 乌鸦级*2'])

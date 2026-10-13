@@ -33,7 +33,7 @@ export function industryHelpLines(env: HelpEnv): Line[] {
 
 function placesLine(env: HelpEnv, activity: IndustryActivity): Line {
   const names = locationNames(env, activity)
-  return { text: names.length ? IND.locationsHere(activity, names.join(' · ')) : IND.noLocationsHere(activity) }
+  return { text: names.length ? IND.locationsHere(activity, names.join(' · '), env.access.isDirect) : IND.noLocationsHere(activity, env.access.isDirect) }
 }
 
 function back(env: HelpEnv, id: IndustryId): Action[][] {
@@ -93,7 +93,7 @@ function compareTopic(env: HelpEnv): Card {
   card.sections.push(
     {
       lines: [
-        { text: `${name} 乌鸦级：在本群能用的每个制造地点各算一次，按总成本排序，标出最便宜和最快的` },
+        { text: `${name} 乌鸦级：每个能用的制造地点各算一次，按总成本排序，标出最便宜和最快的` },
         { text: `${name} 乌鸦级*10 ME8 TE16：指定数量和蓝图 ME/TE（${IND.compareDefaults}）` },
         { text: '每个地点用它的默认建筑、改装件和税；材料价格各地点相同' },
         { text: '加上 改装:无 或 税:1.5%：每个地点都不用改装件、或者都按这个税算' },

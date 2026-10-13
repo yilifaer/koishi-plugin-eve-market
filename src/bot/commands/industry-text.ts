@@ -6,6 +6,9 @@ import type { FailureReason, IndustryActivity, PriceSide } from '../../core/type
 /** 活动的叫法 */
 export const ACTIVITY: Record<IndustryActivity, string> = { manufacturing: '制造', reaction: '反应' }
 
+/** 「本群」只对群聊成立，私聊里说「私聊里」 */
+const scope = (direct: boolean) => (direct ? '私聊里' : '本群')
+
 /** 卡片上的「Jita 4-4 出售」 */
 export const SIDE_SHORT: Record<PriceSide, string> = { sell: '出售', mid: '中间', buy: '收购' }
 
@@ -59,6 +62,7 @@ export const IND = {
   scc: (pct: string) => `SCC 附加费 ${pct}`,
   defaulted: {
     location: '（本群唯一的地点）',
+    locationDirect: '（唯一的地点）',
     meTe: '（地点默认）',
     meTeT2: '（T2 常见值）',
     structure: '（默认建筑）',
@@ -163,15 +167,17 @@ export const IND = {
   isReaction: (name: string, command: string) => `${name} 是反应产物，请用：${command}`,
   notReaction: (name: string, command: string) => `${name} 不是反应产物，请用：${command}`,
   unknownLocation: (token: string) => `${token} 尚未配置为工业地点。`,
+  // 地点存在，但这个群、这个私聊用不了（例如只给授权群用）
+  locationHidden: (token: string) => `${token} 在这里不能用。`,
   wrongActivity: (name: string, activity: IndustryActivity) => `${name} 没有可以${ACTIVITY[activity]}的建筑。`,
   highsec: (name: string) => `高安不能进行反应（${name} 在高安）。`,
-  locationsHere: (activity: IndustryActivity, list: string) => `本群可以${ACTIVITY[activity]}的地点：${list}`,
-  noLocationsHere: (activity: IndustryActivity) => `本群还没有可以${ACTIVITY[activity]}的工业地点。`,
+  locationsHere: (activity: IndustryActivity, list: string, direct = false) => `${scope(direct)}可以${ACTIVITY[activity]}的地点：${list}`,
+  noLocationsHere: (activity: IndustryActivity, direct = false) => `${scope(direct)}还没有可以${ACTIVITY[activity]}的工业地点。`,
   cannotBuild: (place: string, activity: IndustryActivity, name: string, need: string) =>
     `${place} ${activity === 'manufacturing' ? '造' : '反应'}不了${name}：需要${need}`,
-  noCapable: (activity: IndustryActivity, name: string, need: string) =>
-    `本群没有能${activity === 'manufacturing' ? '造' : '反应'}${name}的工业地点：需要${need}`,
-  compareTooFew: '本群可比较的工业地点不足 2 个。',
-  compareTooFewNeed: (need: string) => `本群可比较的工业地点不足 2 个（其余地点造不了：需要${need}）。`,
+  noCapable: (activity: IndustryActivity, name: string, need: string, direct = false) =>
+    `${scope(direct)}没有能${activity === 'manufacturing' ? '造' : '反应'}${name}的工业地点：需要${need}`,
+  compareTooFew: (direct = false) => `${scope(direct)}可比较的工业地点不足 2 个。`,
+  compareTooFewNeed: (need: string, direct = false) => `${scope(direct)}可比较的工业地点不足 2 个（其余地点造不了：需要${need}）。`,
   slowCompare: '⏳ 正在比较各个地点…',
 } as const
