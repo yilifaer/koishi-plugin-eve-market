@@ -67,6 +67,10 @@ describe('normalizeConfig: defaults', () => {
       expect(settings.industry).toEqual({
         materialPriceType: 'sell', productPriceType: 'sell', meTeChoices: [{ me: 10, te: 20 }, { me: 5, te: 10 }, { me: 0, te: 0 }],
         sccSurchargePct: 4, npcFacilityTaxPct: 0.25, sellFeesPct: 0, multibuyLanguage: 'en', locations: [], structures: [],
+        chain: {
+          layers: { reaction1: 'build', reaction2: 'build', component: 'build', other: 'buy' },
+          alchemy: 'auto', reactionLocation: '', reprocessLocation: '', scrapmetalLevel: 5,
+        },
       })
     }
   })

@@ -186,6 +186,8 @@ export function buildIndustry(raw: JsonObject, hasType: (id: TypeId) => boolean)
     structures: readStructures(raw),
     rigs: readRigs(raw, filters),
     filters,
+    services: null,
+    reprocessing: null,
   }
 }
 

@@ -2,7 +2,7 @@
 // 星系名、空间站、别名目标、改装件、对市场的引用这些要等数据加载后由 core 再检查一遍。
 // 原则：写错一行只影响那一行；坏行跳过并报告，插件照常加载。
 
-import { MAX_ME, MAX_QUANTITY, MAX_TE, NOTICE_MAX_CHARS, PRICE_TYPE_WORDS, SSO_CALLBACK_PATH } from '../constants'
+import { DEFAULT_SCRAPMETAL_LEVEL, MAX_ME, MAX_QUANTITY, MAX_TE, NOTICE_MAX_CHARS, PRICE_TYPE_WORDS, SSO_CALLBACK_PATH } from '../constants'
 import { FORMULA_DEFAULTS } from '../core/industry'
 import type {
   AccessSettings, AdvancedSettings, AppraisalSettings, ConfigIssue, ConfigSection, DefaultQuantitySetting, DisplaySettings,
@@ -592,6 +592,7 @@ function normalizeIndustry(raw: Raw, allIssues: IssueList): IndustrySettings {
     }
     const activity = pick(issues, s, '用途', r.activities, ['manufacturing', 'reaction', 'both'] as const, 'manufacturing', { ...at, field: 'activities' })
     const activities: IndustryActivity[] = activity === 'both' ? ['manufacturing', 'reaction'] : [activity]
+    const facilityTaxPct = clampNumber(issues, s, '设施税', r.facilityTaxPct, 0, 0, 100, { ...at, field: 'facilityTaxPct' })
     structures.push({
       row,
       location: loc.name,
@@ -599,8 +600,11 @@ function normalizeIndustry(raw: Raw, allIssues: IssueList): IndustrySettings {
       structureType,
       structureId,
       activities,
+      purposes: [...activities],
       rigs: splitList(text(r.rigs)),
-      facilityTaxPct: clampNumber(issues, s, '设施税', r.facilityTaxPct, 0, 0, 100, { ...at, field: 'facilityTaxPct' }),
+      facilityTaxPct,
+      taxPct: { manufacturing: facilityTaxPct, reaction: facilityTaxPct, reprocessing: 0 },
+      supercapitalShipyard: false,
       extraFeePct: clampNumber(issues, s, '其他费用（%）', r.extraFeePct, 0, 0, 100, { ...at, field: 'extraFeePct' }),
       extraFeeIsk: clampNumber(issues, s, '其他费用（ISK）', r.extraFeeIsk, 0, 0, 1e13, { ...at, field: 'extraFeeIsk' }),
       extraFeeLabel: line(r.extraFeeLabel) || DEFAULT_EXTRA_FEE_LABEL,
@@ -625,6 +629,13 @@ function normalizeIndustry(raw: Raw, allIssues: IssueList): IndustrySettings {
     multibuyLanguage: pick(issues, s, '多买清单语言', ind.multibuyLanguage, ['en', 'zh'] as const, 'en', { field: 'multibuyLanguage' }),
     locations,
     structures,
+    chain: {
+      layers: { reaction1: 'build', reaction2: 'build', component: 'build', other: 'buy' },
+      alchemy: 'auto',
+      reactionLocation: '',
+      reprocessLocation: '',
+      scrapmetalLevel: DEFAULT_SCRAPMETAL_LEVEL,
+    },
   }
 }
 

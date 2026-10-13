@@ -3,6 +3,7 @@
 // 名字以 Pct 结尾的字段都是百分数（-5 表示 -5%），不是小数。
 
 import type { AuthStatus, CorePorts } from './ports'
+import type { JobCostBreakdown } from './industry'
 
 // ------------------------------------------------------------------ 基础
 
@@ -60,6 +61,10 @@ export type FailureReason =
   | 'rig-option'
   /** UNKNOWN_LOCATION：地点存在，但不能做这种活动（没有对应的建筑） */
   | 'activity'
+  /** UNKNOWN_LOCATION：地点能做这种活动，但建筑的能力造不了这个产品 */
+  | 'capability'
+  /** 工业：拆到原料涉及的物品超过 CHAIN_MAX_TYPES */
+  | 'chain-size'
 
 export interface CoreFailure {
   ok: false
@@ -253,6 +258,8 @@ export interface IndustryLocationSetting {
 }
 
 export type IndustryActivity = 'manufacturing' | 'reaction'
+/** 建筑的用途：造、反应，或提炼（炼金术） */
+export type StructurePurpose = IndustryActivity | 'reprocessing'
 
 export interface IndustryStructureSetting {
   row: number
@@ -263,9 +270,16 @@ export interface IndustryStructureSetting {
   structureType: string
   structureId: string
   activities: IndustryActivity[]
+  /** 用途含提炼的完整列表；activities 只含造和反应 */
+  purposes: StructurePurpose[]
   /** 改装件名称或 typeID，原样 */
   rigs: string[]
+  /** 制造税，兼容旧代码；等于 taxPct.manufacturing */
   facilityTaxPct: number
+  /** 各活动的税；反应税没填时等于制造税，提炼税没填时为 0 */
+  taxPct: { manufacturing: number; reaction: number; reprocessing: number }
+  /** 有超旗舰船坞（只在 00 生效） */
+  supercapitalShipyard: boolean
   extraFeePct: number
   extraFeeIsk: number
   extraFeeLabel: string
@@ -283,6 +297,14 @@ export interface IndustrySettings {
   multibuyLanguage: Lang
   locations: IndustryLocationSetting[]
   structures: IndustryStructureSetting[]
+  /** 拆到原料的默认设置 */
+  chain: {
+    layers: Record<ChainLayer, LayerMode>
+    alchemy: AlchemyMode
+    reactionLocation: string
+    reprocessLocation: string
+    scrapmetalLevel: number
+  }
 }
 
 export interface SsoSettings {
@@ -447,6 +469,33 @@ export interface IndustryData {
   structures: Map<TypeId, StructureTypeInfo>
   rigs: Map<TypeId, RigInfo>
   filters: Map<number, TargetFilter>
+  /** 建筑服务表；数据里没有这张表时为 null */
+  services: ServiceInfo[] | null
+  /** 提炼表（炼金术用）；数据里没有这张表时为 null */
+  reprocessing: Map<TypeId, ReprocessInfo> | null
+}
+
+/** 建筑服务：activity m 制造、r 反应、rp 提炼 */
+export interface ServiceInfo {
+  id: TypeId
+  key: string | null
+  en: string
+  zh: string
+  activity: 'm' | 'r' | 'rp'
+  groups: number[]
+  categories: number[]
+  fitGroups: number[]
+  fitTypes: TypeId[]
+  sec: { h: boolean; l: boolean; n: boolean }
+}
+
+export interface ReprocessInfo {
+  id: TypeId
+  portion: number
+  skill: TypeId | null
+  materials: Array<{ typeId: TypeId; quantity: number }>
+  /** 推导出来的：反应产物那一个产出；其余是副产品 */
+  main: TypeId | null
 }
 
 export interface RegionInfo { id: number; en: string; zh: string }
@@ -916,6 +965,8 @@ export interface IndustryRequest {
   me?: number
   te?: number
   facilityTaxPct?: number
+  /** 拆到原料：命令里写的层设置，没写的用控制台默认 */
+  chain?: Partial<ChainOptions>
   /** 命令里的 ME 或 TE 后面没写数字：回到 ME/TE 这一步并提醒（只对制造） */
   meteMissing?: 'me' | 'te'
   access: Access
@@ -945,6 +996,8 @@ export interface IndustryResult {
     defaulted: Array<'location' | 'me' | 'te' | 'structure' | 'rigs' | 'tax'>
     /** 自动选中的建筑是这个地点唯一能做这种活动的一座 */
     structureOnly?: boolean
+    /** 建筑是自动挑的：在这么多座能做的里选了最合适的 */
+    autoPicked?: { among: number }
     /** 改装件的情况（有地点时给，见 IndustryRigState） */
     rigState?: IndustryRigState
   }
@@ -982,7 +1035,7 @@ export interface IndustryStep {
   /** 选「6 步」时加 'rigs' | 'tax'，'mete' 拆成 'me' | 'te' */
   step: 'location' | 'mete' | 'structure'
   /** command：命令名后面的参数（例如「乌鸦级 XX-1 高级」），命令名由 bot 渲染时加上；button：按钮上的字（不给时用 label） */
-  options: Array<{ label: string; detail?: string; command: string; button?: string }>
+  options: Array<{ label: string; detail?: string; command: string; button?: string; recommended?: boolean; cost?: number }>
   summary: string[]
   /** 「其余默认」：不再逐步问、直接出结果的参数；没有默认地点时不给 */
   defaults?: string
@@ -990,6 +1043,8 @@ export interface IndustryStep {
   custom?: string
   /** 这一步要先说明的事（例如写的建筑在这个地点找不到） */
   notice?: string
+  /** 这一步的补充说明 */
+  note?: string
 }
 
 export interface LocationComparison {
@@ -1005,6 +1060,10 @@ export interface LocationComparison {
   rigsOff?: boolean
   /** 命令里写的设施税：各地点都按它算 */
   facilityTaxPct?: number
+  /** 按产品筛过地点：自动挑的（count 个里选了这些）；不能做的地点数和原因 */
+  autoPicked?: { count: number; need: string }
+  among?: { count: number; need: string }
+  unable?: { count: number; need: string }
 }
 
 export interface IndustryLocationInfo {
@@ -1020,6 +1079,49 @@ export interface IndustryService {
   compare(req: Omit<IndustryRequest, 'location' | 'structure' | 'mode'>): Promise<LocationComparison | CoreFailure>
   /** 按长度切好的纯文本块 */
   multibuy(result: IndustryResult): string[]
+}
+
+// 拆到原料
+
+/** 层：低级反应、高级反应、组件、其他 */
+export type ChainLayer = 'reaction1' | 'reaction2' | 'component' | 'other'
+export type LayerMode = 'build' | 'buy'
+export type AlchemyMode = 'auto' | 'normal' | 'alchemy'
+export interface ChainOptions { layers: Record<ChainLayer, LayerMode>; alchemy: AlchemyMode }
+/** 命令里写的；没写的用控制台默认 */
+export interface ChainRequest extends IndustryRequest { chain: Partial<ChainOptions> }
+export interface ChainNode {
+  item: ItemInfo; layer: ChainLayer | 'product'; activity: IndustryActivity
+  /** surplus = output - demand（整批） */
+  demand: number; runs: number; output: number; surplus: number
+  location: string; structure: string | null; autoPicked: boolean; fallbackLocation?: boolean
+  me: number; te: number; inputs: Array<{ typeId: TypeId; quantity: number }>
+  /** 输入按市场价，加上本节点的安装费和税 */
+  jobCost: JobCostBreakdown | null; buildCost: number | null
+  /** demand x 市场单价（同一层「直接买」约数） */
+  buyCost: number | null
+  timeSeconds: number; timeSecondsMaxSkill: number
+  route?: 'normal' | 'alchemy'; alchemy?: AlchemyDetail
+}
+export interface AlchemyDetail {
+  unrefined: ItemInfo; units: number; runs: number; yieldPct: number; perUnit: number
+  byproducts: Array<{ typeId: TypeId; quantity: number }>; reprocessTax: number | null; reprocessAt?: string
+  /** 另一条路线 */
+  other: { route: 'normal' | 'alchemy'; cost: number | null; timeSeconds: number }
+}
+export interface ChainLeaf {
+  item: ItemInfo; quantity: number; offset: number; unit: number | null; total: number | null
+  fallback?: boolean; kind: 'raw' | 'bought' | 'unbuildable'
+}
+export interface ChainResult {
+  product: ItemInfo; runs: number; outputQuantity: number; location?: string; options: ChainOptions
+  /** 拓扑顺序；按 layer 分组展示 */
+  nodes: ChainNode[]
+  layers: Array<{ layer: ChainLayer | 'product'; mode: LayerMode; used: boolean; build: number | null; buy: number | null; timeSeconds: number; where?: string }>
+  leaves: ChainLeaf[]; surplusByproducts: Array<{ item: ItemInfo; quantity: number }>
+  totals: { leaves: number; jobs: number; reprocessTax: number; total: number; missingPrices: number }
+  productValue?: IndustryResult['productValue']; profit?: IndustryResult['profit']
+  warnings: string[]; pricesAt?: number | null; indicesAt?: number | null; formulaRevision: string
 }
 
 // ------------------------------------------------------------------ 金额格式（core 里唯一的金额格式化）

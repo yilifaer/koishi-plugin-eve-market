@@ -453,3 +453,24 @@ export const ADMIN_SESSION_HOURS = 12
 /** 按名字搜建筑至少几个字、最多几个字 */
 export const STRUCTURE_SEARCH_MIN_CHARS = 3
 export const STRUCTURE_SEARCH_MAX_CHARS = 100
+
+// ------------------------------------------------------------------ 拆到原料（0.0.5）
+
+/** 「拆到原料」总开关 */
+export const CHAIN_ENABLED = true
+/** 一次拆解最多等多久（毫秒），超过就用已有的价格出结果 */
+export const CHAIN_QUERY_DEADLINE_MS = 12000
+/** 一次拆解最多涉及多少种物品 */
+export const CHAIN_MAX_TYPES = 200
+/** 中间层（组件、反应）的 ME、TE 固定值 */
+export const CHAIN_COMPONENT_ME_TE = { me: 10, te: 20 }
+/** 炼金术：废料提炼的基础产出率 */
+export const SCRAP_BASE = 0.5
+/** 炼金术：废料处理技能每级加多少产出率 */
+export const SCRAP_PER_LEVEL = 0.02
+/** 废料处理技能默认等级 */
+export const DEFAULT_SCRAPMETAL_LEVEL = 5
+/** 提炼取整方式：还没在游戏里核对，核对后改这里 */
+export const REPROCESS_ROUNDING = 'per-unit' as const
+/** 提炼税的算法：还没在游戏里核对，核对后改这里 */
+export const REPROCESS_TAX_MODE = 'isk' as const
