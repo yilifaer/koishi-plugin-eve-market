@@ -325,6 +325,8 @@ export interface RealQQMessageOptions {
   /** 事件里作者的 union_openid */
   unionId?: string
   memberId?: string
+  /** 附带几张图片（适配器把附件接在文字后面，不加空格） */
+  images?: number
 }
 
 export interface RealQQ {
@@ -374,6 +376,7 @@ export async function startRealQQ(options: RealQQOptions = {}): Promise<RealQQ> 
       timestamp: new Date(Date.now() - (opts.ageSec ?? 0) * 1000).toISOString(),
       author,
       ...direct ? {} : { group_id: REAL_GROUP, group_openid: REAL_GROUP },
+      ...opts.images ? { attachments: Array.from({ length: opts.images }, () => ({ content_type: 'image/png', url: 'https://example.com/x.png', width: 849, height: 500 })) } : {},
     }
     const session = await adaptSession(bot, { op: 0, s: eventSeq, t: type, id: `REAL-EVT-${eventSeq}`, d } as never)
     if (!session) throw new Error('adapter ignored the event')

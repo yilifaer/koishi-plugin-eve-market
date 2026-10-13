@@ -27,7 +27,7 @@ import { SAY, TREND } from './text'
 import { within } from './wait'
 
 export function registerTrend(commands: CommandContext): void {
-  commands.registry.register('trend', { args: '[query:text]', description: '走势：近 30 / 90 / 365 天的价格图' })
+  commands.registry.register('trend', { args: '[query:text]', needsArgs: true, description: '走势：近 30 / 90 / 365 天的价格图' })
     ?.action(async ({ session }, query) => {
       if (!session) return
       await invoke(commands, 'trend', session, (inv) => runTrend(inv, typeof query === 'string' ? query : ''))

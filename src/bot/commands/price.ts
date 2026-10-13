@@ -21,7 +21,7 @@ import { trendButtons, trendPrefix } from './trend'
 import { within } from './wait'
 
 export function registerPrice(commands: CommandContext): void {
-  commands.registry.register('price', { args: '[query:text]', description: '查价：默认市场的出售、中间、收购价' })
+  commands.registry.register('price', { args: '[query:text]', needsArgs: true, description: '查价：默认市场的出售、中间、收购价' })
     ?.action(async ({ session }, query) => {
       if (!session) return
       await invoke(commands, 'price', session, (inv) => runPrice(inv, typeof query === 'string' ? query : ''))

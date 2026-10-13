@@ -160,3 +160,16 @@ export function buildAccess(session: AccessSession, settings: AccessSettings): A
   if (unionId) access.unionId = unionId
   return access
 }
+
+// 命令的参数只因为去掉了图片等元素而变空：前置中间件记一笔，命令回复用法时补一句提示（只补一次）。
+// 会话对象在中间件和命令之间会被包一层，按会话编号记；没人取走的记录最多留一小批
+const droppedImages = new Set<number>()
+
+export function markImagesDropped(session: Pick<Session, 'id'>): void {
+  if (droppedImages.size >= 200) droppedImages.clear()
+  droppedImages.add(session.id)
+}
+
+export function takeImagesDropped(session: Pick<Session, 'id'>): boolean {
+  return droppedImages.delete(session.id)
+}

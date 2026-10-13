@@ -12,7 +12,7 @@ import { choicesOf, pendingKey } from '../pending'
 import type { Media } from '../media'
 import type { PendingStore } from '../pending'
 import type { CommandRegistry } from '../register'
-import { buildAccess } from '../scope'
+import { buildAccess, takeImagesDropped } from '../scope'
 import { createReplier, replyBudget, sendState } from '../send/replier'
 import type { Replier } from '../send/replier'
 import type { Card, CardRenderOptions } from '../view/card'
@@ -92,6 +92,7 @@ export async function invoke(commands: CommandContext, id: CommandId, session: S
 
 /** 发一张卡片；卡片上有编号选项时记下编号待办（quantity：编号后面可以带 *数量） */
 export async function sendCard(inv: Invocation, card: Card, options: { quantity?: boolean } = {}): Promise<boolean> {
+  if (takeImagesDropped(inv.session)) card.sections.push({ style: 'plain', lines: [{ text: SAY.imageOnly }] })
   const sent = await inv.reply.card(card)
   if (card.choices?.length) {
     inv.commands.pending.setChoices(pendingKey(inv.session), choicesOf(card, inv.commands.registry.namer()), { quantity: !!options.quantity })

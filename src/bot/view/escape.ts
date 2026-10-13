@@ -46,7 +46,8 @@ export function truncate(text: string, max: number): string {
 
 /** 回显用户的文字：合成一行、去掉网址、截到约 30 字、转义 Markdown */
 export function safeEcho(text: string, max = ECHO_MAX_CHARS): string {
-  const line = text.replace(/\s+/g, ' ').trim()
+  // 图片、表情等元素的标记不回显
+  const line = text.replace(/<\/?[a-zA-Z][\w:-]*(?:\s[^<>]*)?\/?>/g, ' ').replace(/\s+/g, ' ').trim()
   return escapeMarkdown(truncate(scrubUrls(line), max))
 }
 

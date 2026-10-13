@@ -249,7 +249,7 @@ export async function startRealPlugin(options: EnvOptions = {}): Promise<RealEnv
   const logger = new RecordingLogger()
   const stopping: Array<Promise<void>> = []
   const install = pluginInstaller({ fake, store: createModuleStore(), logger, clock, scheduler: options.scheduler, onStop: (done) => stopping.push(done) }, options.config ?? {})
-  const qq = await startRealQQ({ help: options.help, setup: install, beforeCleanup: () => Promise.all(stopping) })
+  const qq = await startRealQQ({ help: options.help, setup: (app) => { options.before?.(app); install(app); options.setup?.(app) }, beforeCleanup: () => Promise.all(stopping) })
   return {
     qq,
     fake,

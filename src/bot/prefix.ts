@@ -14,7 +14,7 @@ import type { Logger, ModuleStore } from '../core/ports'
 import { applyChoice, parseChoiceReply, pendingKey } from './pending'
 import type { ChoicesPending, ListPending, Pending, PendingStore } from './pending'
 import type { CommandName, CommandRegistry } from './register'
-import { isAddressed, messageKey } from './scope'
+import { isAddressed, markImagesDropped, messageKey } from './scope'
 import type { MessageDedupe } from './scope'
 import { createReplier, replyBudget, sendState } from './send/replier'
 import { REPLY } from './text'
@@ -33,15 +33,27 @@ const keyOf = (name: string) => Command.normalize(name)
 const LEADING_SLASH = /^[/／]+\s*/
 
 /**
+ * 消息里的文字：图片、表情、@ 等元素各换成一个空格（前后已经是空白就不加），免得词粘在一起。
+ * 输入输出都是转义过的文字，游戏里复制的 &lt;localized…&gt; 原样保留
+ */
+export function textOnly(content: string): string {
+  if (!content.includes('<')) return content
+  // 转义过的文字里 < > 只会出现在元素标签上（属性值里的 < > 也是实体），不能用在已经还原的文字上
+  return content.replace(/(\s?)(?:<[^<>]*>)+(\s?)/g, (_m, a: string, b: string) => (a || b ? (a === ' ' && b === ' ' ? ' ' : a + b) : ' '))
+}
+
+/**
  * 「/」面板和粘在一起的命令名：去掉开头的 / 和 ／；命令名部分做 NFKC，后面的全角空格换成普通空格；
  * 命令名后面没写空格时，按本插件带参数的命令名从长到短匹配开头，补上空格（不带参数的命令必须完全相同才算，
  * 「入侵者是谁」不会变成「入侵 者是谁」）。命令名后面的文字原样保留（Tab 和换行是清单的格式）
  */
 export function normalizeIncoming(content: string, options: NormalizeOptions): string {
   const text = content.trim().replace(LEADING_SLASH, '')
-  const m = /^(\S+)([\s\S]*)$/.exec(text)
   // 开头是元素（图片、表情……）：不是文字命令，原样交给后面
-  if (!m || m[1].startsWith('<')) return text
+  if (text.startsWith('<')) return text
+  // 其余元素去掉，只看文字（图片常粘在最后一个词或命令名后面）
+  const m = /^(\S+)([\s\S]*)$/.exec(textOnly(text).trim())
+  if (!m) return ''
   // 内容是转义过的：先还原再 NFKC，全角的 ＜＆ 变成 <& 以后要重新转义
   const head = h.escape(h.unescape(m[1]).normalize('NFKC'))
   const rest = m[2].replace(/^[ 　 ]+/, ' ')
@@ -114,6 +126,9 @@ export async function runPrefix(session: Session, next: Next, deps: PrefixDeps) 
   const raw = session.stripped.content ?? ''
   let content = normalizeIncoming(raw, { names, isCommand })
   if (!deps.dedupe.first(messageKey(session))) return
+  // 文字里夹着图片等元素（开头就是元素的不算）：只有本插件的命令才改写成纯文字，别的插件的消息原样放行
+  const typed = raw.trim().replace(LEADING_SLASH, '')
+  const hasElements = !typed.startsWith('<') && textOnly(typed) !== typed
   let rewritten = false
   if (isAddressed(session)) {
     const outcome = await takePending(session, content, deps, isCommand)
@@ -123,12 +138,21 @@ export async function runPrefix(session: Session, next: Next, deps: PrefixDeps) 
   }
   const help = deps.registry.has('help') ? helpRewrite(content, names) : null
   if (help) content = help
+  if (hasElements) {
+    const word = firstWord(content)
+    const own = names.find((n) => n.name === keyOf(h.unescape(word)))
+    if (!rewritten && !help && !own) return next()
+    // 命令后面的参数只因为去掉了图片而变空：命令的回复里补一句提示
+    if (own?.needsArgs && !help && !rewritten && !content.slice(word.length).trim()) markImagesDropped(session)
+  }
   // 用户写了「/」、或者内容换成了一条命令：Koishi 要前缀时补上
   const lead = requiredPrefix(session)
   const prefixed = lead && (rewritten || !!help || LEADING_SLASH.test(raw.trim()))
   session.stripped.content = prefixed ? h.escape(lead) + content : content
   return next()
 }
+
+const firstWord = (content: string) => content.trim().split(/\s/, 1)[0]
 
 /** 编号待办；只发了表头、一行都没认出来时的批量清单待办也带着候选的编号 */
 function choicesIn(pending: Pending | undefined): ChoicesPending | undefined {

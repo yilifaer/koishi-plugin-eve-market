@@ -15,7 +15,7 @@ import { TRANSLATE } from './text'
 const MAX_ALIASES = 10
 
 export function registerTranslate(commands: CommandContext): void {
-  commands.registry.register('translate', { args: '[query:text]', description: '翻译：物品、星系、黑话的中英文对照', aliases: [TRANSLATE_ALIAS] })
+  commands.registry.register('translate', { args: '[query:text]', needsArgs: true, description: '翻译：物品、星系、黑话的中英文对照', aliases: [TRANSLATE_ALIAS] })
     ?.action(async ({ session }, query) => {
       if (!session) return
       await invoke(commands, 'translate', session, (inv) => runTranslate(inv, typeof query === 'string' ? query : ''))

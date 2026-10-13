@@ -173,10 +173,10 @@ describe('safe registration', () => {
   it('names() lists every user-visible name and whether it takes arguments', async () => {
     await start()
     const names = w.registry.names()
-    expect(names).toContainEqual({ name: '查价', args: true })
-    expect(names).toContainEqual({ name: '中英对照', args: true })
-    expect(names).toContainEqual({ name: '入侵', args: false })
-    expect(names).toContainEqual({ name: '本群id', args: false })
+    expect(names).toContainEqual({ name: '查价', args: true, needsArgs: false })
+    expect(names).toContainEqual({ name: '中英对照', args: true, needsArgs: false })
+    expect(names).toContainEqual({ name: '入侵', args: false, needsArgs: false })
+    expect(names).toContainEqual({ name: '本群id', args: false, needsArgs: false })
     expect(names.some((n) => n.name.includes('.'))).toBe(false)
   })
 

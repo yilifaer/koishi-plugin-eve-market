@@ -16,7 +16,7 @@ import { startSlowHint } from './slow'
 import { BR } from './text'
 
 export function registerBr(commands: CommandContext): void {
-  commands.registry.register('br', { args: '[link:text]', description: '战报：BR 工具的战报截图（直接 @我 发链接也行）' })
+  commands.registry.register('br', { args: '[link:text]', needsArgs: true, description: '战报：BR 工具的战报截图（直接 @我 发链接也行）' })
     ?.action(async ({ session }, link) => {
       if (!session) return
       await invoke(commands, 'br', session, (inv) => runBr(inv, typeof link === 'string' ? link : ''))

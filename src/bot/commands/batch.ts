@@ -18,7 +18,7 @@ import { unknownMarketCard } from './resolution'
 import { SAY } from './text'
 
 export function registerBatch(commands: CommandContext): void {
-  commands.registry.register('batch', { args: '[args:text]', description: '批量查价：粘贴清单或装配，算总价' })
+  commands.registry.register('batch', { args: '[args:text]', needsArgs: true, description: '批量查价：粘贴清单或装配，算总价' })
     ?.action(async ({ session }, args) => {
       if (!session) return
       await invoke(commands, 'batch', session, (inv) => runBatch(inv, typeof args === 'string' ? args : ''))

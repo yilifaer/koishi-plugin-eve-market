@@ -18,6 +18,8 @@ export interface RegisterOptions {
   description?: string
   /** 别名，例如「翻译」的「中英对照」 */
   aliases?: readonly string[]
+  /** 不带参数就回复用法（参数因图片变空时要补提示） */
+  needsArgs?: boolean
   /** 管理命令：帮助列表里不显示 */
   hidden?: boolean
   /** 只对这些会话存在（管理命令：管理员在单聊或授权群里）；其他人那里和命令不存在一样 */
@@ -38,6 +40,8 @@ export interface CommandName {
   name: string
   /** 带参数（可以和后面的文字粘在一起写） */
   args: boolean
+  /** 不带参数就回复用法 */
+  needsArgs: boolean
 }
 
 export interface RegistryOptions {
@@ -60,6 +64,8 @@ export class CommandRegistry {
   private readonly commands = new Map<CommandId, Command>()
   /** 本插件建出来的 Command（含 eve-market.help 的上一级 eve-market） */
   private readonly own = new Set<Command>()
+  /** 不带参数就回复用法的命令 */
+  private readonly usageOnEmpty = new Set<Command>()
   /** 带 only 的命令：名字上挂的过滤器 */
   private readonly filters = new Map<Command, Filter>()
   private readonly found: CommandConflict[] = []
@@ -98,6 +104,7 @@ export class CommandRegistry {
       if (created !== command) Object.assign(created.config, { hidden: true })
     }
     for (const alias of options.aliases ?? []) this.addAlias(id, name, command, alias, filter)
+    if (options.needsArgs) this.usageOnEmpty.add(command)
     this.commands.set(id, command)
     return command
   }
@@ -131,7 +138,7 @@ export class CommandRegistry {
     for (const command of this.commands.values()) {
       const args = command._arguments.length > 0
       for (const name of Object.keys(command._aliases)) {
-        if (!name.includes('.')) out.push({ name, args })
+        if (!name.includes('.')) out.push({ name, args, needsArgs: this.usageOnEmpty.has(command) })
       }
     }
     return out

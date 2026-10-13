@@ -1,6 +1,6 @@
 import type { Context, Session } from 'koishi'
 import { afterEach, describe, expect, it } from 'vitest'
-import { helpRewrite, normalizeIncoming, requiredPrefix } from '../../../src/bot/prefix'
+import { helpRewrite, normalizeIncoming, requiredPrefix, textOnly } from '../../../src/bot/prefix'
 import type { ListProbe } from '../../../src/bot/prefix'
 import type { CommandName } from '../../../src/bot/register'
 import { HELP_COMMAND } from '../../../src/constants'
@@ -10,16 +10,16 @@ import { wirePlugin } from './wiring'
 import type { Wiring, WiringOptions } from './wiring'
 
 const NAMES: CommandName[] = [
-  { name: '查价', args: true },
-  { name: '批量查价', args: true },
-  { name: '制造', args: true },
-  { name: '制造比价', args: true },
-  { name: '入侵', args: false },
-  { name: '势力图', args: false },
-  { name: '联盟势力图', args: false },
-  { name: '本群id', args: false },
-  { name: '翻译', args: true },
-  { name: '中英对照', args: true },
+  { name: '查价', args: true, needsArgs: true },
+  { name: '批量查价', args: true, needsArgs: true },
+  { name: '制造', args: true, needsArgs: true },
+  { name: '制造比价', args: true, needsArgs: true },
+  { name: '入侵', args: false, needsArgs: false },
+  { name: '势力图', args: false, needsArgs: false },
+  { name: '联盟势力图', args: false, needsArgs: false },
+  { name: '本群id', args: false, needsArgs: false },
+  { name: '翻译', args: true, needsArgs: true },
+  { name: '中英对照', args: true, needsArgs: true },
 ]
 
 const norm = (content: string, isCommand?: (word: string) => boolean) => normalizeIncoming(content, { names: NAMES, isCommand })
@@ -49,6 +49,23 @@ describe('normalizeIncoming', () => {
     const image = '<img src="https://example.invalid/a.png?x=1&amp;y=2"/>'
     expect(norm(image)).toBe(image)
     expect(norm(`${image} 查价乌鸦级`)).toBe(`${image} 查价乌鸦级`)
+  })
+
+  it('drops elements glued to a word, replacing each with a space', () => {
+    const img = '<img width="849" src="https://example.com/x.png"/>'
+    expect(norm(`制造 乌鸦级 XX-1 建筑:旗舰组件 高级${img}`)).toBe('制造 乌鸦级 XX-1 建筑:旗舰组件 高级')
+    expect(norm(`查价${img}`)).toBe('查价')
+    expect(norm(`入侵${img}`)).toBe('入侵')
+    expect(norm(`查价乌鸦级${img}`)).toBe('查价 乌鸦级')
+    expect(norm(`查价 乌鸦级${img}${img}`)).toBe('查价 乌鸦级')
+    expect(norm(`制造 乌鸦级<face id="1"/>高级`)).toBe('制造 乌鸦级 高级')
+    expect(norm(`制造 乌鸦级 <face id="1"/> 高级`)).toBe('制造 乌鸦级 高级')
+  })
+
+  it('keeps game markup that arrives escaped', () => {
+    const text = '制造 &lt;localized hint="乌鸦级"&gt;Raven&lt;/localized&gt; 高级'
+    expect(norm(text)).toBe(text)
+    expect(norm(`${text}<img src="a"/>`)).toBe(text)
   })
 
   it('splits a command name glued to its argument, longest name first', () => {
@@ -350,5 +367,15 @@ describe('prefix middleware', () => {
     expect(texts(await h.direct('/查价乌鸦级'))).toEqual(['price:乌鸦级'])
     const session: Session = w.calls[0].session
     expect(session.isDirect).toBe(true)
+  })
+})
+
+describe('textOnly', () => {
+  it('keeps text and its escapes, turns every other element into one space', () => {
+    expect(textOnly('abc')).toBe('abc')
+    expect(textOnly('a&amp;b&lt;c')).toBe('a&amp;b&lt;c')
+    expect(textOnly('a<img src="x"/>b')).toBe('a b')
+    expect(textOnly('a <at id="1"/> b')).toBe('a b')
+    expect(textOnly('a\n<img src="x"/>\nb')).toBe('a\n\nb')
   })
 })

@@ -4,6 +4,7 @@ import type { PriceSide } from '../../core/types'
 
 export const SAY = {
   loading: '数据加载中，请稍后再试',
+  imageOnly: '图片里的字我看不到，请在游戏里复制后粘贴',
   failed: '出了点问题，请稍后再试',
   badQuantity: '数量要是正整数',
   twoMarkets: '一次只能选一个市场',

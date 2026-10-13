@@ -33,17 +33,17 @@ type Parts = Omit<IndustryArgsParts, 'item'>
 const ACTIVITY_OF: Record<PlanId, IndustryActivity> = { manufacture: 'manufacturing', reaction: 'reaction' }
 
 export function registerIndustry(commands: CommandContext): void {
-  commands.registry.register('manufacture', { args: '[args:text]', description: '制造：材料成本、制造时间和安装费用' })
+  commands.registry.register('manufacture', { args: '[args:text]', needsArgs: true, description: '制造：材料成本、制造时间和安装费用' })
     ?.action(async ({ session }, args) => {
       if (!session) return
       await invoke(commands, 'manufacture', session, (inv) => runPlan(inv, 'manufacture', textOf(args)))
     })
-  commands.registry.register('manufactureCompare', { args: '[args:text]', description: '制造比价：比较各个制造地点的成本和时间' })
+  commands.registry.register('manufactureCompare', { args: '[args:text]', needsArgs: true, description: '制造比价：比较各个制造地点的成本和时间' })
     ?.action(async ({ session }, args) => {
       if (!session) return
       await invoke(commands, 'manufactureCompare', session, (inv) => runCompare(inv, textOf(args)))
     })
-  commands.registry.register('reaction', { args: '[args:text]', description: '反应：反应材料成本、时间和安装费用' })
+  commands.registry.register('reaction', { args: '[args:text]', needsArgs: true, description: '反应：反应材料成本、时间和安装费用' })
     ?.action(async ({ session }, args) => {
       if (!session) return
       await invoke(commands, 'reaction', session, (inv) => runPlan(inv, 'reaction', textOf(args)))

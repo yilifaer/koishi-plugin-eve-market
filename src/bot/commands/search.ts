@@ -14,7 +14,7 @@ import { unknownMarketCard } from './resolution'
 import { within } from './wait'
 
 export function registerSearch(commands: CommandContext): void {
-  commands.registry.register('search', { args: '[query:text]', description: '搜索：按名字找物品，或者列出相关物品，带价格' })
+  commands.registry.register('search', { args: '[query:text]', needsArgs: true, description: '搜索：按名字找物品，或者列出相关物品，带价格' })
     ?.action(async ({ session }, query) => {
       if (!session) return
       await invoke(commands, 'search', session, (inv) => runSearch(inv, typeof query === 'string' ? query : ''))
