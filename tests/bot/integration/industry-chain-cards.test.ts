@@ -241,6 +241,13 @@ describe('编出来的结果', () => {
       nodes: [...result().nodes, node({ layer: 'component', item: TRIT })],
     })
     expect(md(overviewCard(env0, comp, [], false))).toContain('可以点「组件:买」')
+    // 「其他」层没有切换按钮，只能在命令里改
+    const other = result({
+      options: { ...result().options, layers: { ...result().options.layers, other: 'build' } },
+      layers: result().layers.map((l) => (l.layer === 'other' ? { ...l, mode: 'build' as const, used: true, build: 9000, buy: 1000, where: '小厂' } : l)),
+      nodes: [...result().nodes, node({ layer: 'other', item: TRIT })],
+    })
+    expect(md(overviewCard(env0, other, [], false))).toContain('可以改成「其他:买」')
   })
 
   it('the alchemy line says where the reprocessing is done and the tax; nothing extra without a refinery', () => {

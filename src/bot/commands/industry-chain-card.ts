@@ -116,7 +116,7 @@ function layerLines(env: IndustryEnv, r: ChainResult): Line[] {
       const buy = row.buy === null ? undefined : money(env, row.buy)
       lines.push({ text: CH.layerLine(name, nodesOf(r, row.layer).length, money(env, row.build), buy, row.where ? esc(row.where) : '') })
       // 两个数都知道才比；整批生产的量远超需要时，自己造反而贵得多
-      if (row.build !== null && row.buy !== null && row.buy > 0 && row.build > row.buy * TOO_SMALL_RATIO) lines.push({ text: CH.layerTooSmall(LAYER_WORD[row.layer]) })
+      if (row.build !== null && row.buy !== null && row.buy > 0 && row.build > row.buy * TOO_SMALL_RATIO) lines.push({ text: CH.layerTooSmall(LAYER_WORD[row.layer], row.layer !== 'other') })
       continue
     }
     const reasons = unusedReason(r, row.layer)
