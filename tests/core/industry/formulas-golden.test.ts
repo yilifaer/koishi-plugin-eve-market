@@ -42,6 +42,7 @@ const RAVEN = 638
 const DOMINIX = 645
 const CARBON_FIBER = 57453
 const FULLERIDES = 16679
+const SILICON_DIBORITE = 16658
 const SOTIYO = 35827
 const ATHANOR = 35835
 const TATARA = 35836
@@ -189,6 +190,50 @@ describe('golden vector 3: Carbon Fiber reaction, 10 runs, Athanor, lowsec, reac
 
   it('time with Reactions IV: 68,947 s', () => {
     expect(jobTime(bp.time, 10, plan.timeMultiplier, 1 - 4 * 0.04)).toBe(68_947)
+  })
+})
+
+describe('golden vector 4: Silicon Diborite reaction, 1 run, Tatara, nullsec, L-set reactor efficiency I', () => {
+  // 车主游戏截图（Tatara、00 -0.50）；调整价按截图里 EIV 136,191 对上，星系成本指数是游戏里的 3878/136191
+  const ADJUSTED: Record<number, number> = { 4312: 17719.2, 16635: 168.6, 16636: 307.35 }
+  const SCI = 3878 / 136_191
+  const m = mods('reaction', SILICON_DIBORITE, TATARA, [46496], 'null')
+  const bp = blueprintOf('reaction', SILICON_DIBORITE)
+  const plan = planProduction({ activity: 'reaction', blueprint: bp, runs: 1, techLevel: null, me: 0, te: 0, mods: m })
+
+  it('rig and materials', () => {
+    expect(bp.blueprintId).toBe(46179)
+    expect(m.applied).toEqual([{ rigId: 46496, me: -2.2, te: -22, cost: 0 }])
+    expect(quantities(plan)).toEqual({ 4312: 5, 16635: 98, 16636: 98 })
+  })
+
+  it('job cost breakdown', () => {
+    const cost = jobsCost(bp.materials, plan.jobs, (id) => ADJUSTED[id], {
+      sci: SCI, mods: m, sysCostBonusPct: 0, facilityTaxPct: 0.2, sccSurchargePct: FORMULA_DEFAULTS.sccSurchargePct,
+    })
+    expect(cost).toEqual({
+      eiv: 136_191,
+      grossSci: 3_878,
+      bonuses: 0,
+      facility: 272,
+      scc: 5_448,
+      extra: 0,
+      total: 9_598,
+      missingAdjusted: [],
+    })
+  })
+
+  it('the 4-digit index shown in game is 3 ISK off', () => {
+    const shown = jobsCost(bp.materials, plan.jobs, (id) => ADJUSTED[id], {
+      sci: 0.0285, mods: m, sysCostBonusPct: 0, facilityTaxPct: 0.2, sccSurchargePct: FORMULA_DEFAULTS.sccSurchargePct,
+    })
+    expect(shown.total).toBe(9_601)
+  })
+
+  it('time: 6,318 s un-skilled, 5,054 s with max skills (01:24:14)', () => {
+    expect(plan.timeMultiplier).toBeCloseTo(0.585, 6)
+    expect(plan.timeSeconds).toBe(6_318)
+    expect(plan.timeSecondsMaxSkill).toBe(5_054)
   })
 })
 

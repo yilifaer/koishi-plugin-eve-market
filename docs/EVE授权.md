@@ -248,7 +248,7 @@ data/eve-market/
 - EVE SSO（v2）的地址：授权 `https://login.eveonline.com/v2/oauth/authorize`，换令牌和刷新 `https://login.eveonline.com/v2/oauth/token`（用 HTTP Basic 方式带上 Client ID 和 Secret Key），撤销 `https://login.eveonline.com/v2/oauth/revoke`。
 - 令牌（JWT）里的签发者写法（`login.eveonline.com` 或 `https://login.eveonline.com`）、受众、权限字段 `scp` 是字符串还是数组、角色名和所属账号的字段名（`name`、`owner`）、角色 ID 的写法（`CHARACTER:EVE:<角色ID>`）。插件只解码、不验签（令牌是插件自己经 HTTPS 从 EVE 拿到的），所以不取 JWKS（`https://login.eveonline.com/oauth/jwks`）。
 - 刷新时 EVE 会不会换一个新的刷新令牌：插件按「会换」处理，每次都保存最新的。
-- 按名字找建筑的权限名 `esi-search.search_structures.v1` 和接口 `/characters/{角色ID}/search`。
-- 开发者网站上「连接类型」的确切写法，Callback URL 接不接受 `http://127.0.0.1`，Secret Key 以后还能不能再看。
+- 按名字找建筑的接口 `/characters/{角色ID}/search`（权限名 `esi-search.search_structures.v1` 已确认存在，搜索可用）。
+- 开发者网站上「连接类型」的确切写法，Secret Key 以后还能不能再看。
 - 改了 EVE 账号密码以后授权会不会失效；EVE 账号管理页里撤销第三方应用的入口位置。
 - 游戏聊天里建筑链接复制出来的格式。

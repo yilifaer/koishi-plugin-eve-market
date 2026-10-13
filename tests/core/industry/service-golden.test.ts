@@ -1,6 +1,6 @@
 // §6.7.12 的黄金向量走一遍完整的服务（解析命令 → 地点和建筑 → 修正 → 材料、时间、安装费用）。
 // 数据用插件自带的快照；调整价和星系成本指数来自 eve-ref 的测试源码（MIT-0，经游戏截图验证），星系成本指数用完整精度。
-// 地点名、建筑名是编造的；星系用公共星系（NIH-02 是 00、Tama 低安）。
+// 地点名、建筑名是编造的；星系用公共星系（NIH-02、NFM-0V 是 00，Tama 低安）。
 
 import { describe, expect, it } from 'vitest'
 import { isFailure } from '../../../src/core/types'
@@ -10,6 +10,7 @@ import { ALLOWED, FakeIndices, FakePrices, makeService } from './service-fakes'
 
 const NIH_02 = 30000900
 const TAMA = 30002813
+const NFM_0V = 30000230
 
 const data = loadSnapshotData()
 
@@ -114,5 +115,26 @@ describe('golden vector 3 through the service: Carbon Fiber reaction, 10 runs, A
     })
     // 游戏窗口是 Reactions IV（每级 -4%）：68,947 秒
     expect(Math.round(r.timeSeconds * (1 - 4 * 0.04))).toBe(68_947)
+  })
+})
+
+describe('golden vector 4 through the service: Silicon Diborite reaction, 1 run, Tatara, nullsec, tax 0.2%', () => {
+  const run = env({
+    locations: [{ name: '联盟反应点B', system: 'NFM-0V' }],
+    structures: [{ location: '联盟反应点B', name: '反应城', structureType: 'Tatara', activities: 'reaction', rigs: '46496', facilityTaxPct: 0.2 }],
+  }, new FakeIndices({
+    systems: { [NFM_0V]: { reaction: 3878 / 136_191 } },
+    adjusted: { 4312: 17719.2, 16635: 168.6, 16636: 307.35 },
+  }))
+
+  it('materials, job cost, time (un-skilled and max skill)', async () => {
+    const r = await run('#16658 联盟反应点B', 'reaction')
+    expect(r.blueprint.typeId).toBe(46179)
+    expect(quantities(r)).toEqual({ 4312: 5, 16635: 98, 16636: 98 })
+    expect(r.jobCost).toEqual({
+      eiv: 136_191, grossSci: 3_878, bonuses: 0, facility: 272, scc: 5_448, extra: 0, total: 9_598, missingAdjusted: 0,
+    })
+    expect(r.timeSeconds).toBe(6_318)
+    expect(r.timeSecondsMaxSkill).toBe(5_054)
   })
 })
