@@ -31,9 +31,10 @@ const OVERVIEW = [
   '反应 造 · 组件 造 · 其他 买 · 炼金 自动',
   '',
   '成品 自动选择：大厂 · 安装费和税 3,066 ISK',
-  '组件 7 种 · 自己造 2.51M（直接买约 68.50K） · 小厂',
-  '高级反应 9 种 · 自己造 327.69K（直接买约 2.42M） · 反应塔',
-  '低级反应 16 种 · 自己造 438.06K（直接买约 309.40K） · 反应塔',
+  '组件 7 种 · 自己造（材料按市价）2.51M（直接买约 68.50K） · 小厂',
+  '高级反应 9 种 · 自己造（材料按市价）327.69K（直接买约 2.42M） · 反应塔',
+  '低级反应 16 种 · 自己造（材料按市价）438.06K（直接买约 309.40K） · 反应塔',
+  '各层金额不能相加，总成本见下',
   '· 炼金 0 种：都是正常路线更划算',
   '直接买：原料 19 种 · 半成品 6 种（氢燃料块、氧燃料块、氦燃料块等）',
   '**预计总成本** `561,045 ISK`（561.05K）',
@@ -192,14 +193,14 @@ describe('拆到原料：反应的地点', () => {
     const out = card(await e.h.group(`制造 ${HOUND} XX-1 拆到原料`))
     expect(out).toContain('反应在 XX-2（XX-1 没有精炼厂）')
     expect(out).not.toContain('命令里的地点没有能做这些反应的建筑')
-    expect(out).toMatch(/高级反应 9 种 · 自己造 .*· 反应厂/)
+    expect(out).toMatch(/高级反应 9 种 · 自己造（材料按市价）.*· 反应厂/)
   })
 
   it('nobody can react: the reactions are bought, the engine warning stays', async () => {
     const e = await start({ industry: { locations: places, structures: STRUCTURES.filter((s) => !/反应/.test(s.name)) } })
     const out = card(await e.h.group(`制造 ${HOUND} XX-1 拆到原料`))
     expect(out).not.toContain('高级反应 9 种')
-    expect(out).toContain('没有能做')
+    expect(out).toContain('种反应没有地方做')
     expect(out).toContain('改成直接买')
     expect(out).toContain('没地方造')
   })

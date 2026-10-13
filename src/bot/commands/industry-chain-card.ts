@@ -116,6 +116,7 @@ function layerLines(env: IndustryEnv, r: ChainResult): Line[] {
     const reasons = unusedReason(r, row.layer)
     if (reasons) lines.push({ text: CH.layerUnused(name, reasons) })
   }
+  if (lines.length && lines.some((l) => 'text' in l && l.text.includes('自己造'))) lines.push({ text: CH.layerNoSum })
   return lines
 }
 
