@@ -33,5 +33,7 @@ export type {
 } from './indices'
 export { STEP_INDICES_WAIT_MS, createIndustryService } from './service'
 export type { IndustryServiceOptions } from './service'
+export { classifyMaterial, mergeOptions, resolveTop, runChain } from './chain'
+export type { ChainHost, ChainTop } from './chain'
 export { chunkLines, multibuyBlocks, multibuyLines } from './multibuy'
 export type { MultibuyOptions } from './multibuy'

@@ -9,14 +9,14 @@
 // 定价：材料、成品按配置的市场和价格类型。整个市场不可用、或者单个材料没有价格时改用回退市场（标 †）；
 // 没有回退市场就算「缺价格」，总成本标不完整，绝不当 0。安装费用要星系成本指数和调整价（indices.ts），取不到时写明。
 
-import { COMPARE_ME_TE, DEADLINE_GUARD_MS, MAX_RUNS, QUERY_DEADLINE_MS, SHOW_MAX_SKILL_TIME, T2_ME_TE_CHOICES } from '../../constants'
+import { CHAIN_ENABLED, COMPARE_ME_TE, DEADLINE_GUARD_MS, MAX_RUNS, QUERY_DEADLINE_MS, SHOW_MAX_SKILL_TIME, T2_ME_TE_CHOICES } from '../../constants'
 import { DataNotReadyError } from '../data'
 import { compactPrice, roundHalfAway } from '../format'
 import { industryArgsText } from '../parse'
 import type { IndustryArgsParts } from '../parse'
 import type { Clock, Logger, Scheduler } from '../ports'
 import type {
-  Access, BlueprintActivity, CoreFailure, DataService, DataSet, FailureReason, IndustryActivity, IndustryLocationInfo,
+  Access, BlueprintActivity, ChainRequest, ChainResult, CoreFailure, DataService, DataSet, FailureReason, IndustryActivity, IndustryLocationInfo,
   IndustryRequest, IndustryResult, IndustryRigState, IndustryService, IndustrySettings, IndustryStep, ItemInfo, ItemResolver,
   LocationComparison,
   MarketDef, MarketRegistry, MarketService, PriceQuote, PriceSide, Resolution, ServiceInfo, TypeId,
@@ -24,6 +24,9 @@ import type {
 import { isFailure } from '../types'
 import { describeError, withDeadline } from '../util'
 import { canBuild, locationCanBuild, needLabel } from './capabilities'
+import { runChain } from './chain/engine'
+import type { ChainHost } from './chain/expand'
+import { resolveTop } from './chain/top'
 import { FORMULA_REVISION, facilityTaxPctFor, formulaConfig, jobsCost, planProduction, runsForQuantity } from './formulas'
 import { costIndexOf } from './indices'
 import type { AdjustedPrices, IndustryIndices, SystemIndices } from './indices'
@@ -235,6 +238,38 @@ class Service implements IndustryService {
       if (req.facilityTaxPct !== undefined) out.facilityTaxPct = req.facilityTaxPct
       if (buildable.unable) out.unable = { count: buildable.unable, need: buildable.need ?? '' }
       return out
+    } catch (e) {
+      return this.caught(e)
+    }
+  }
+
+  /** 拆到原料：「高级」逐步问完地点、ME/TE、建筑再拆；缺参数、写错的建筑交给 located() 出下一步 */
+  async chain(req: ChainRequest): Promise<ChainResult | IndustryStep | CoreFailure> {
+    try {
+      if (!CHAIN_ENABLED) return failure('NOT_CONFIGURED', { message: '拆到原料暂时不可用' })
+      const job = this.job(req)
+      if ('ok' in job) return job
+      const asked = req.mode === 'steps' ? await this.located(job, req) : null
+      if (asked && !('applied' in asked)) return asked
+      const top = resolveTop(job, req, {
+        locations: this.o.locations,
+        findLocation: (token) => this.findLocation(job, token),
+        cannotBuildHere: (location, need) => this.cannotBuildHere(job, location, need),
+        meTe: (location) => this.meTe(job, req, location, []),
+      })
+      if (top === 'ask') {
+        const step = await this.located(job, req)
+        return 'applied' in step ? failure('BAD_ARGUMENT', { message: '参数不全，拆不了' }) : step
+      }
+      if ('ok' in top) return top
+      const { items, locations, markets, settings } = this.o
+      const host: ChainHost = {
+        data: job.data, items, locations, markets, settings, now: () => this.now(),
+        priceSide: (...args) => this.priceSide(...args),
+        costInputs: () => this.costInputs(),
+        marketWarnings: (label, prices, missing) => this.marketWarnings(label, prices, missing),
+      }
+      return await runChain(host, req.access, top, req.chain)
     } catch (e) {
       return this.caught(e)
     }

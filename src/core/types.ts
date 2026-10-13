@@ -1087,6 +1087,8 @@ export interface IndustryService {
   /** steps 模式缺参数时返回下一步 */
   plan(req: IndustryRequest): Promise<IndustryResult | IndustryStep | CoreFailure>
   compare(req: Omit<IndustryRequest, 'location' | 'structure' | 'mode'>): Promise<LocationComparison | CoreFailure>
+  /** 拆到原料：缺参数时返回下一步（IndustryStep），和 plan 一样 */
+  chain(req: ChainRequest): Promise<ChainResult | IndustryStep | CoreFailure>
   /** 按长度切好的纯文本块 */
   multibuy(result: IndustryResult): string[]
 }

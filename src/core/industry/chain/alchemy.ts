@@ -1,0 +1,105 @@
+// 炼金术：低级反应产物走「粗糙配方 → 废料提炼」的另一条路线，和正常路线比成本、时间（§7.5）。
+// 每单位粗糙产物提炼出主产物 perUnit 个和一些副产品；副产品先抵同种材料，抵不完的算「多出」。
+
+import { REPROCESS_ROUNDING } from '../../../constants'
+import { roundHalfAway } from '../../format'
+import type { AlchemyMode, TypeId } from '../../types'
+import { runsForQuantity } from '../formulas'
+import { reprocessOut, scrapYield } from '../reprocess'
+import { evaluateAt } from './job'
+import type { JobCtx, JobEval } from './job'
+import type { AlchemyPlan, PlanNode } from './expand'
+import { unitOf } from './prices'
+
+export interface AlchemyRoute {
+  /** 粗糙配方的建筑和安装费 */
+  ev: JobEval
+  runs: number
+  /** 提炼的粗糙产物个数 */
+  units: number
+  /** 得到的主产物个数（可能多于需求） */
+  output: number
+  perUnit: number
+  yieldPct: number
+  byproducts: Array<{ typeId: TypeId; quantity: number }>
+  /** 提炼税（ISK）；产出缺价格时 null */
+  reprocessTax: number | null
+  reprocessAt?: string
+  /** 比较用的成本：材料（扣掉自己产的副产品）+ 安装费 + 提炼税；缺价格时 null */
+  cost: number | null
+  timeSeconds: number
+}
+
+/** 提炼税最低的提炼建筑：提炼地点设置 → 命令里的地点；一座都没有按 0% */
+function reprocessing(ctx: JobCtx): { pct: number; at?: string } {
+  if (ctx.reprocess) return ctx.reprocess
+  for (const location of [ctx.host.locations.reprocessLocation(ctx.access), ctx.location]) {
+    const list = location?.structures.filter((s) => s.purposes.includes('reprocessing')) ?? []
+    if (!list.length) continue
+    const best = list.reduce((a, b) => (b.taxPct.reprocessing < a.taxPct.reprocessing ? b : a))
+    return (ctx.reprocess = { pct: best.taxPct.reprocessing, at: best.name })
+  }
+  ctx.warnings.add('未配置提炼建筑，提炼税按 0 算')
+  return (ctx.reprocess = { pct: 0 })
+}
+
+/** 产出（数量 × 材料市场单价）的总价值；有缺价格的 null */
+function worth(ctx: JobCtx, list: ReadonlyArray<{ typeId: TypeId; quantity: number }>): number | null {
+  let sum = 0
+  for (const { typeId, quantity } of list) {
+    const unit = unitOf(ctx.prices, typeId)
+    if (unit === null) return null
+    sum += unit * quantity
+  }
+  return sum
+}
+
+/** 需求 demand 个主产物走炼金：要几个粗糙产物、几流程、副产品多少、花多少钱；这个产物提炼不出主产物时 null */
+export function alchemyRoute(ctx: JobCtx, node: PlanNode, plan: AlchemyPlan, demand: number): AlchemyRoute | null {
+  const { info } = plan
+  const main = info.materials.find((m) => m.typeId === node.item.typeId)
+  const y = scrapYield(ctx.host.settings.chain.scrapmetalLevel)
+  const perUnit = main ? reprocessOut(main.quantity, 1, y, REPROCESS_ROUNDING) : 0
+  if (!main || perUnit < 1) return null
+  // 每个配方流程出 perRun 个粗糙产物，全部拿去提炼；提炼一次要 portion 个
+  const perRun = plan.bp.products.find((p) => p.typeId === info.id)?.quantity ?? 1
+  const portion = Math.max(1, info.portion)
+  const runs = runsForQuantity(Math.ceil(demand / perUnit) * portion, perRun)
+  const units = runs * perRun
+  const batches = Math.floor(units / portion)
+  const output = reprocessOut(main.quantity, batches, y, REPROCESS_ROUNDING)
+  const byproducts = info.materials
+    .filter((m) => m.typeId !== main.typeId)
+    .map((m) => ({ typeId: m.typeId, quantity: reprocessOut(m.quantity, batches, y, REPROCESS_ROUNDING) }))
+    .filter((b) => b.quantity > 0)
+
+  const ev = evaluateAt(ctx, {
+    item: plan.unrefined, bp: plan.bp, activity: 'reaction', runs, me: 0, te: 0, techLevel: null, location: node.place.location, rigs: 'default',
+  }, plan.structures)
+  const station = reprocessing(ctx)
+  const value = worth(ctx, [{ typeId: main.typeId, quantity: output }, ...byproducts])
+  const reprocessTax = value === null ? null : roundHalfAway(value * station.pct / 100, 2)
+  // 副产品先抵自己这条路线里同种材料
+  let offset = 0
+  for (const input of ev.inputs) {
+    const got = byproducts.find((b) => b.typeId === input.typeId)
+    if (got) offset += (unitOf(ctx.prices, input.typeId) ?? 0) * Math.min(got.quantity, input.quantity)
+  }
+  const cost = ev.cost === null || reprocessTax === null ? null : ev.cost - roundHalfAway(offset, 2) + reprocessTax
+  const route: AlchemyRoute = {
+    ev, runs, units, output, perUnit, yieldPct: Math.round(y * 1e8) / 1e6, byproducts, reprocessTax, cost, timeSeconds: ev.plan.timeSeconds,
+  }
+  if (station.at) route.reprocessAt = station.at
+  return route
+}
+
+/** 选便宜的，一样便宜选快的；只有一条路线知道成本时用它；强制炼金就炼金 */
+export function chooseRoute(
+  mode: AlchemyMode, normal: { cost: number | null; time: number }, alchemy: { cost: number | null; time: number },
+): 'normal' | 'alchemy' {
+  if (mode === 'alchemy') return 'alchemy'
+  if (alchemy.cost === null) return 'normal'
+  if (normal.cost === null) return 'alchemy'
+  if (Math.abs(alchemy.cost - normal.cost) >= 1) return alchemy.cost < normal.cost ? 'alchemy' : 'normal'
+  return alchemy.time < normal.time ? 'alchemy' : 'normal'
+}
