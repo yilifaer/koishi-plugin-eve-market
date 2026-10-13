@@ -232,7 +232,7 @@ interface Built {
 const EMPTY: Built = { key: '', list: [], byKey: new Map(), layers: [], maxWords: 0, issues: [] }
 
 /** 星系名当别名：碰上名称、手写别名，或者是纯数字、命令的参数时不加 */
-const RESERVED_AUTO = new Set(['高级', '材料', '全部', 'all'].map(marketKey))
+const RESERVED_AUTO = new Set(['高级', '材料', '全部', 'all', '拆到原料', '明细', '反应', '组件', '其他', '低级反应', '高级反应'].map(marketKey))
 
 function usableAuto(key: string): boolean {
   return !!key && !RESERVED_AUTO.has(key) && !/^[\d\s.,]+$/.test(key)

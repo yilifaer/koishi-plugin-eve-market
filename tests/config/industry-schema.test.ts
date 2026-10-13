@@ -27,12 +27,16 @@ describe('Config schema: industry group', () => {
     expect(description).toBe('工业')
     expect(Object.keys(schema.dict)).toEqual([
       'materialMarket', 'materialPriceType', 'productMarket', 'productPriceType', 'fallbackMarket', 'meTeChoices',
-      'sccSurchargePct', 'npcFacilityTaxPct', 'sellFeesPct', 'multibuyLanguage', 'locations', 'structures',
+      'sccSurchargePct', 'npcFacilityTaxPct', 'sellFeesPct', 'multibuyLanguage',
+      'chainReaction1', 'chainReaction2', 'chainComponents', 'chainOther', 'chainAlchemy', 'chainReactionLocation', 'reprocessLocation',
+      'scrapmetalLevel', 'locations', 'structures',
     ])
     const c = Config({} as any)
     expect(c.industry).toEqual({
       materialMarket: 'Jita 4-4', materialPriceType: 'sell', productMarket: 'Jita 4-4', productPriceType: 'sell', fallbackMarket: '',
       meTeChoices: '10/20, 5/10, 0/0', sccSurchargePct: 4, npcFacilityTaxPct: 0.25, sellFeesPct: 0, multibuyLanguage: 'en',
+      chainReaction1: 'build', chainReaction2: 'build', chainComponents: 'build', chainOther: 'buy', chainAlchemy: 'auto',
+      chainReactionLocation: '', reprocessLocation: '', scrapmetalLevel: 5,
       locations: [], structures: [],
     })
     // 公式常量的默认值只有一处
@@ -49,7 +53,8 @@ describe('Config schema: industry group', () => {
       'name', 'aliases', 'system', 'visibility', 'isDefault', 'defaultME', 'defaultTE', 'sysCostBonusPct', 'enabled', 'note',
     ])
     expect(columns(schema.dict.structures)).toEqual([
-      'location', 'name', 'structureType', 'structureId', 'activities', 'rigs', 'facilityTaxPct', 'extraFeePct', 'extraFeeIsk',
+      'location', 'name', 'structureType', 'structureId', 'activities', 'rigs', 'facilityTaxPct', 'reactionTaxPct',
+      'reprocessingTaxPct', 'supercapitalShipyard', 'extraFeePct', 'extraFeeIsk',
       'extraFeeLabel', 'isDefault', 'enabled', 'note',
     ])
     const c = Config({ industry: { locations: [{ name: 'XX-1', system: 'XX-1' }], structures: [{ location: 'XX-1', name: '大厂' }] } } as any)
@@ -59,7 +64,7 @@ describe('Config schema: industry group', () => {
     })
     expect(c.industry.structures[0]).toEqual({
       location: 'XX-1', name: '大厂', structureType: '', structureId: '', activities: 'manufacturing', rigs: '', facilityTaxPct: 0,
-      extraFeePct: 0, extraFeeIsk: 0, extraFeeLabel: '其他费用', isDefault: false, enabled: true, note: '',
+      supercapitalShipyard: false, extraFeePct: 0, extraFeeIsk: 0, extraFeeLabel: '其他费用', isDefault: false, enabled: true, note: '',
     })
   })
 
@@ -141,6 +146,84 @@ describe('normalizeConfig: industry tables through the schema', () => {
     const { settings, issues } = normalizeConfig(c)
     expect(settings.industry.structures.map((s) => s.name)).toEqual(['大厂'])
     expect(issues.map(formatIssue)).toEqual(['工业建筑第 4 行地点「XX-9」不在工业地点表里，已跳过'])
+  })
+
+  describe('0.0.5 taxes, purposes and chain defaults', () => {
+    const run = (structure: object, industry: object = {}) => {
+      const c = Config({ industry: { locations: [LOCATION], structures: [{ ...STRUCTURE, ...structure }], ...industry } } as any)
+      return normalizeConfig(c)
+    }
+
+    it('only facilityTaxPct 0.2 gives manufacturing 0.2, reaction 0.2, reprocessing 0', () => {
+      const { settings, issues } = run({ facilityTaxPct: 0.2 })
+      expect(settings.industry.structures[0].taxPct).toEqual({ manufacturing: 0.2, reaction: 0.2, reprocessing: 0 })
+      expect(settings.industry.structures[0].facilityTaxPct).toBe(0.2)
+      expect(settings.industry.structures[0].supercapitalShipyard).toBe(false)
+      expect(issues).toEqual([])
+    })
+
+    it('reactionTaxPct 0 stays 0, an empty cell falls back', () => {
+      expect(run({ facilityTaxPct: 1, reactionTaxPct: 0 }).settings.industry.structures[0].taxPct.reaction).toBe(0)
+      expect(run({ facilityTaxPct: 1, reactionTaxPct: '' }).settings.industry.structures[0].taxPct.reaction).toBe(1)
+      expect(run({ facilityTaxPct: 1, reactionTaxPct: 0.5, reprocessingTaxPct: 2 }).settings.industry.structures[0].taxPct)
+        .toEqual({ manufacturing: 1, reaction: 0.5, reprocessing: 2 })
+    })
+
+    it('parses the new purposes', () => {
+      const purposes = (activities: string) => run({ activities, reprocessingTaxPct: 1 }).settings.industry.structures[0].purposes
+      expect(purposes('reprocessing')).toEqual(['reprocessing'])
+      expect(purposes('reaction-reprocessing')).toEqual(['reaction', 'reprocessing'])
+      expect(purposes('manufacturing-reprocessing')).toEqual(['manufacturing', 'reprocessing'])
+      expect(purposes('all')).toEqual(['manufacturing', 'reaction', 'reprocessing'])
+      expect(run({ activities: 'both' }).settings.industry.structures[0]).toMatchObject({
+        activities: ['manufacturing', 'reaction'], purposes: ['manufacturing', 'reaction'],
+      })
+      expect(run({ activities: 'reprocessing', reprocessingTaxPct: 1 }).settings.industry.structures[0].activities).toEqual([])
+    })
+
+    it('reports a blank reprocessing tax only when the purpose includes reprocessing', () => {
+      expect(run({ activities: 'all' }).issues.map(formatIssue)).toEqual(['工业建筑第 1 行提炼税没填，按 0% 算'])
+      expect(run({ activities: 'both' }).issues).toEqual([])
+      expect(run({ activities: 'all', reprocessingTaxPct: 0 }).issues).toEqual([])
+    })
+
+    it('reads supercapitalShipyard', () => {
+      expect(run({ supercapitalShipyard: true }).settings.industry.structures[0].supercapitalShipyard).toBe(true)
+    })
+
+    it('reads the chain defaults and clamps scrapmetalLevel', () => {
+      const d = run({}).settings.industry.chain
+      expect(d).toEqual({
+        layers: { reaction1: 'build', reaction2: 'build', component: 'build', other: 'buy' },
+        alchemy: 'auto', reactionLocation: '', reprocessLocation: '', scrapmetalLevel: 5,
+      })
+      const { settings, issues } = run({}, {
+        chainReaction1: 'buy', chainOther: 'build', chainAlchemy: 'alchemy', chainReactionLocation: '  XX-1 ', reprocessLocation: ' 二号点', scrapmetalLevel: 9,
+      })
+      expect(settings.industry.chain).toEqual({
+        layers: { reaction1: 'buy', reaction2: 'build', component: 'build', other: 'build' },
+        alchemy: 'alchemy', reactionLocation: 'XX-1', reprocessLocation: '二号点', scrapmetalLevel: 5,
+      })
+      expect(issues).toHaveLength(1)
+      expect(run({}, { scrapmetalLevel: 0 }).settings.industry.chain.scrapmetalLevel).toBe(0)
+      expect(run({}, { scrapmetalLevel: 3.4 }).settings.industry.chain.scrapmetalLevel).toBe(3)
+    })
+
+    it('rejects names and aliases that collide with the new command words', () => {
+      for (const word of ['拆到原料', '明细', '反应', '组件', '其他', '低级反应', '高级反应']) {
+        const c = Config({ industry: { locations: [{ ...LOCATION, name: word }, { ...LOCATION, name: 'XX-2', system: 'Tama', aliases: word }] } } as any)
+        const { settings, issues } = normalizeConfig(c)
+        expect(settings.industry.locations.map((l) => l.name)).toEqual(['XX-2'])
+        expect(settings.industry.locations[0].aliases).toEqual([])
+        expect(issues.length).toBeGreaterThanOrEqual(2)
+      }
+    })
+  })
+
+  it('keeps markets and market aliases named like the new industry words', () => {
+    const c = Config({ markets: [{ name: '其他', location: '60003760', aliases: '反应, 明细' }] } as any)
+    const { settings } = normalizeConfig(c)
+    expect(settings.markets.find((m) => m.name === '其他')?.aliases).toEqual(['反应', '明细'])
   })
 
   it('reports market references of the group once it is in the console', () => {

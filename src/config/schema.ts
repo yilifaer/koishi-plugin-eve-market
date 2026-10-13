@@ -64,9 +64,15 @@ export interface IndustryStructureRow {
   name: string
   structureType: string
   structureId: string
-  activities: 'manufacturing' | 'reaction' | 'both'
+  activities: 'manufacturing' | 'reaction' | 'both' | 'reprocessing' | 'reaction-reprocessing' | 'manufacturing-reprocessing' | 'all'
   rigs: string
+  /** 制造税 % */
   facilityTaxPct: number
+  /** 反应税 %；没填时运行时是 undefined */
+  reactionTaxPct: number
+  /** 提炼税 %；同上 */
+  reprocessingTaxPct: number
+  supercapitalShipyard: boolean
   extraFeePct: number
   extraFeeIsk: number
   extraFeeLabel: string
@@ -86,6 +92,14 @@ export interface IndustryConfig {
   npcFacilityTaxPct: number
   sellFeesPct: number
   multibuyLanguage: Lang
+  chainReaction1: 'build' | 'buy'
+  chainReaction2: 'build' | 'buy'
+  chainComponents: 'build' | 'buy'
+  chainOther: 'build' | 'buy'
+  chainAlchemy: 'auto' | 'normal' | 'alchemy'
+  chainReactionLocation: string
+  reprocessLocation: string
+  scrapmetalLevel: number
   locations: IndustryLocationRow[]
   structures: IndustryStructureRow[]
 }
@@ -299,6 +313,22 @@ export const Config: Schema<Config> = Schema.intersect([
         .description('算利润时从成品价值里扣掉的销售税和经纪费（%）。填 0 = 不扣，卡片上注明「未计销售税和经纪费」。'),
       multibuyLanguage: choice<Lang>([['en', '英文名'], ['zh', '中文名']]).default('en').loose()
         .description('「查看材料」另外发的清单（可以粘进游戏的「多重购买」窗口）用英文名还是中文名。'),
+      chainReaction1: choice<'build' | 'buy'>([['build', '造'], ['buy', '买']]).default('build').loose()
+        .description('拆到原料时，低级反应（月矿原料）自己造还是直接买。'),
+      chainReaction2: choice<'build' | 'buy'>([['build', '造'], ['buy', '买']]).default('build').loose()
+        .description('拆到原料时，高级反应自己造还是直接买。'),
+      chainComponents: choice<'build' | 'buy'>([['build', '造'], ['buy', '买']]).default('build').loose()
+        .description('拆到原料时，组件自己造还是直接买。'),
+      chainOther: choice<'build' | 'buy'>([['build', '造'], ['buy', '买']]).default('buy').loose()
+        .description('拆到原料时，其他（T1 船体、R.A.M.、燃料块）自己造还是直接买。'),
+      chainAlchemy: choice<'auto' | 'normal' | 'alchemy'>([['auto', '自动'], ['normal', '正常'], ['alchemy', '炼金']]).default('auto').loose()
+        .description('月矿原料怎么来：自动 = 哪个便宜用哪个；正常 = 只走反应；炼金 = 只走提炼。'),
+      chainReactionLocation: str()
+        .description('拆到原料时默认的反应地点（填工业地点表里的名称或别名）。留空 = 自动用表里第一个能反应的地点。'),
+      reprocessLocation: str()
+        .description('提炼（炼金）的地点。留空 = 先找命令里写的地点，再找第一个有「提炼」建筑的地点。'),
+      scrapmetalLevel: num(5)
+        .description('废料处理技能等级，0–5 的整数。5 = 提炼出 55%。'),
       locations: table(Schema.object({
         name: str().description('名称'),
         aliases: str().description('别名'),
@@ -325,9 +355,16 @@ export const Config: Schema<Config> = Schema.intersect([
           ['manufacturing', '制造'],
           ['reaction', '反应'],
           ['both', '制造和反应'],
+          ['reprocessing', '提炼'],
+          ['reaction-reprocessing', '反应和提炼'],
+          ['manufacturing-reprocessing', '制造和提炼'],
+          ['all', '全部'],
         ]).default('manufacturing').description('用途'),
         rigs: str().description('改装件'),
-        facilityTaxPct: num(0).description('设施税 %'),
+        facilityTaxPct: num(0).description('制造税 %'),
+        reactionTaxPct: Schema.number().loose().description('反应税 %（留空 = 和制造税一样）'),
+        reprocessingTaxPct: Schema.number().loose().description('提炼税 %（留空 = 0）'),
+        supercapitalShipyard: strictBool(false).description('有超旗舰船坞（只能勾在索迪约上）'),
         extraFeePct: num(0).description('其他费用 %'),
         extraFeeIsk: num(0).description('其他费用 ISK'),
         extraFeeLabel: str(DEFAULT_EXTRA_FEE_LABEL).description('其他费用的名称'),
@@ -337,9 +374,9 @@ export const Config: Schema<Config> = Schema.intersect([
       }))
         .description([
           '**工业建筑**：一行一座，一个地点可以有几座。**地点**填上面「工业地点」里的名称；**名称**是建筑的简称，命令里用（例如「建筑:大工厂」），同一个地点里不能重复。',
-          '**建筑类型**填 Raitaru（莱塔卢）、Azbel（阿兹贝尔）、Sotiyo（索迪约）、Athanor（阿塔诺）、Tatara（塔塔拉）、势力铁壁等的名字或 typeID；在 NPC 空间站填「NPC」；不要建筑加成填「无」。建筑和改装件的加成数值来自物品数据，不用填。**用途**：反应只能在精炼厂（阿塔诺、塔塔拉）做，高安不能做反应。',
+          '**建筑类型**填 Raitaru（莱塔卢）、Azbel（阿兹贝尔）、Sotiyo（索迪约）、Athanor（阿塔诺）、Tatara（塔塔拉）、势力铁壁等的名字或 typeID；在 NPC 空间站填「NPC」；不要建筑加成填「无」。建筑和改装件的加成数值来自物品数据，不用填。**用途**：反应只能在精炼厂（阿塔诺、塔塔拉）做，高安不能做反应；「提炼」用来炼金，需要精炼厂。',
           '**改装件**填建筑上实际装的改装件，名字或 typeID，用逗号分隔，例如「屹立超大型舰船制造效率 II」。插件按产品自动判断哪个生效；尺寸和建筑不符、或者在这个安全等级不生效的，会在「市场状态」里报告。',
-          '**设施税**：游戏里建筑主人设的税率（%）。**其他费用**：联盟另外收的钱，按预估物品价值的 % 和/或每个工作固定多少 ISK，**其他费用的名称**显示在卡片上；没有就填 0。**默认建筑**：这个地点默认用哪座，没勾时用第一座。',
+          '**制造税 / 反应税 / 提炼税**：游戏里建筑主人设的税率（%）。反应税留空 = 和制造税一样，提炼税留空 = 0。**有超旗舰船坞**：只能勾在索迪约上（在 00 才生效）。**其他费用**：联盟另外收的钱，按预估物品价值的 % 和/或每个工作固定多少 ISK，**其他费用的名称**显示在卡片上；没有就填 0。**默认建筑**：这个地点默认用哪座，没勾时用第一座。',
         ].join('\n')),
     }).default({} as Config['industry']).loose(),
   }).description('工业'),

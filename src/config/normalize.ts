@@ -8,7 +8,7 @@ import type {
   AccessSettings, AdvancedSettings, AppraisalSettings, ConfigIssue, ConfigSection, DefaultQuantitySetting, DisplaySettings,
   FreightRoute, IndustryActivity, IndustryLocationSetting, IndustrySettings, IndustryStructureSetting, ItemAliasSetting,
   MarketRefField, MarketRefSetting, MarketSetting, MarketType, NoticeSetting, PriceSide, RenderSettings, Settings, SsoSettings,
-  Visibility,
+  StructurePurpose, Visibility,
 } from '../core/types'
 import {
   DEFAULT_BASE_MARKET, DEFAULT_CALLBACK_URL, DEFAULT_COALITION_MAP_URL, DEFAULT_EXTRA_FEE_LABEL, DEFAULT_GLOSSARY_URL,
@@ -156,9 +156,14 @@ const RESERVED_WORDS = new Set([
   '全部', 'all', '高级', '材料', '刷新',
 ].map(nameKey))
 
-function reservedReason(name: string): string | null {
+/** 工业命令新增的参数，只限制地点名和地点别名，市场名不受影响 */
+const INDUSTRY_WORDS = new Set([
+  '拆到原料', '明细', '反应', '组件', '其他', '低级反应', '高级反应',
+].map(nameKey))
+
+function reservedReason(name: string, industry = false): string | null {
   const key = nameKey(name)
-  if (RESERVED_WORDS.has(key)) return '和命令的参数冲突'
+  if (RESERVED_WORDS.has(key) || (industry && INDUSTRY_WORDS.has(key))) return '和命令的参数冲突'
   if (/^[\d\s.,]+$/.test(key)) return '是纯数字，会被当成数量'
   if (/^[+-]?\d+(\.\d+)?\s*(%|折)$/.test(key)) return '会被当成价格调整'
   if (key.startsWith('#')) return '不能以 # 开头'
@@ -494,9 +499,29 @@ function normalizeNotices(raw: Raw, issues: IssueList): NoticeSetting[] {
   return out
 }
 
+const PURPOSES: Record<string, StructurePurpose[]> = {
+  manufacturing: ['manufacturing'],
+  reaction: ['reaction'],
+  both: ['manufacturing', 'reaction'],
+  reprocessing: ['reprocessing'],
+  'reaction-reprocessing': ['reaction', 'reprocessing'],
+  'manufacturing-reprocessing': ['manufacturing', 'reprocessing'],
+  all: ['manufacturing', 'reaction', 'reprocessing'],
+}
+
+function pickPurposes(issues: IssueList, value: unknown, at: At): StructurePurpose[] {
+  return [...PURPOSES[pick(issues, 'industry', '用途', value, Object.keys(PURPOSES), 'manufacturing', at)]]
+}
+
+/** 没填：undefined、null、空字符串 */
+function isBlank(value: unknown) {
+  return isMissing(value) || (typeof value === 'string' && value.trim() === '')
+}
+
 function normalizeIndustry(raw: Raw, allIssues: IssueList): IndustrySettings {
   const s: ConfigSection = 'industry'
   const ind = obj(raw.industry)
+  const modes = ['build', 'buy'] as const
   // 0.1.x 存下的配置里没有这个分组：没写时全部用默认值，不报告
   const issues = isMissing(raw.industry) ? new IssueList() : allIssues
   const sides = ['sell', 'mid', 'buy'] as const
@@ -521,7 +546,7 @@ function normalizeIndustry(raw: Raw, allIssues: IssueList): IndustrySettings {
     }
     const name = line(r.name)
     if (!name) return issues.add(s, '「名称」为空，已跳过', { ...at, field: 'name' })
-    const reserved = reservedReason(name)
+    const reserved = reservedReason(name, true)
     if (reserved) return issues.add(s, `「名称」${name} ${reserved}，已跳过`, { ...at, field: 'name' })
     const key = nameKey(name)
     const same = locationKeys.get(key)
@@ -550,7 +575,7 @@ function normalizeIndustry(raw: Raw, allIssues: IssueList): IndustrySettings {
       const key = nameKey(alias)
       const other = locOwner.get(key)
       if (other === loc) return false
-      if (other || reservedReason(alias)) {
+      if (other || reservedReason(alias, true)) {
         const why = other ? `和第 ${other.row} 行冲突` : '和命令的参数冲突'
         issues.add(s, `别名「${alias}」${why}，这一行的不生效`, { table: locTable, row: loc.row, field: 'aliases' })
         return false
@@ -590,9 +615,17 @@ function normalizeIndustry(raw: Raw, allIssues: IssueList): IndustrySettings {
       issues.add(s, '「建筑 ID」不是数字，已忽略', { ...at, field: 'structureId' })
       structureId = ''
     }
-    const activity = pick(issues, s, '用途', r.activities, ['manufacturing', 'reaction', 'both'] as const, 'manufacturing', { ...at, field: 'activities' })
-    const activities: IndustryActivity[] = activity === 'both' ? ['manufacturing', 'reaction'] : [activity]
-    const facilityTaxPct = clampNumber(issues, s, '设施税', r.facilityTaxPct, 0, 0, 100, { ...at, field: 'facilityTaxPct' })
+    const purposes = pickPurposes(issues, r.activities, { ...at, field: 'activities' })
+    const activities = purposes.filter((p): p is IndustryActivity => p !== 'reprocessing')
+    const facilityTaxPct = clampNumber(issues, s, '制造税', r.facilityTaxPct, 0, 0, 100, { ...at, field: 'facilityTaxPct' })
+    // 反应税没填 = 制造税；填了 0 就是 0
+    const reactionTaxPct = isBlank(r.reactionTaxPct)
+      ? facilityTaxPct
+      : clampNumber(issues, s, '反应税', r.reactionTaxPct, facilityTaxPct, 0, 100, { ...at, field: 'reactionTaxPct' })
+    const reprocessingTaxPct = clampNumber(issues, s, '提炼税', r.reprocessingTaxPct, 0, 0, 100, { ...at, field: 'reprocessingTaxPct' })
+    if (purposes.includes('reprocessing') && isBlank(r.reprocessingTaxPct)) {
+      issues.add(s, '提炼税没填，按 0% 算', { ...at, field: 'reprocessingTaxPct' })
+    }
     structures.push({
       row,
       location: loc.name,
@@ -600,11 +633,11 @@ function normalizeIndustry(raw: Raw, allIssues: IssueList): IndustrySettings {
       structureType,
       structureId,
       activities,
-      purposes: [...activities],
+      purposes,
       rigs: splitList(text(r.rigs)),
       facilityTaxPct,
-      taxPct: { manufacturing: facilityTaxPct, reaction: facilityTaxPct, reprocessing: 0 },
-      supercapitalShipyard: false,
+      taxPct: { manufacturing: facilityTaxPct, reaction: reactionTaxPct, reprocessing: reprocessingTaxPct },
+      supercapitalShipyard: bool(r.supercapitalShipyard, false),
       extraFeePct: clampNumber(issues, s, '其他费用（%）', r.extraFeePct, 0, 0, 100, { ...at, field: 'extraFeePct' }),
       extraFeeIsk: clampNumber(issues, s, '其他费用（ISK）', r.extraFeeIsk, 0, 0, 1e13, { ...at, field: 'extraFeeIsk' }),
       extraFeeLabel: line(r.extraFeeLabel) || DEFAULT_EXTRA_FEE_LABEL,
@@ -630,11 +663,17 @@ function normalizeIndustry(raw: Raw, allIssues: IssueList): IndustrySettings {
     locations,
     structures,
     chain: {
-      layers: { reaction1: 'build', reaction2: 'build', component: 'build', other: 'buy' },
-      alchemy: 'auto',
-      reactionLocation: '',
-      reprocessLocation: '',
-      scrapmetalLevel: DEFAULT_SCRAPMETAL_LEVEL,
+      layers: {
+        reaction1: pick(issues, s, '低级反应', ind.chainReaction1, modes, 'build', { field: 'chainReaction1' }),
+        reaction2: pick(issues, s, '高级反应', ind.chainReaction2, modes, 'build', { field: 'chainReaction2' }),
+        component: pick(issues, s, '组件', ind.chainComponents, modes, 'build', { field: 'chainComponents' }),
+        other: pick(issues, s, '其他', ind.chainOther, modes, 'buy', { field: 'chainOther' }),
+      },
+      alchemy: pick(issues, s, '炼金术', ind.chainAlchemy, ['auto', 'normal', 'alchemy'] as const, 'auto', { field: 'chainAlchemy' }),
+      // 地点名只去空白，按名字找地点放在 core 里
+      reactionLocation: line(ind.chainReactionLocation),
+      reprocessLocation: line(ind.reprocessLocation),
+      scrapmetalLevel: clampNumber(issues, s, '废料处理技能等级', ind.scrapmetalLevel, DEFAULT_SCRAPMETAL_LEVEL, 0, 5, { field: 'scrapmetalLevel', integer: true }),
     },
   }
 }
