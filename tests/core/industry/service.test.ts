@@ -1,4 +1,4 @@
-// IndustryService（§2.6–§2.8、§6.7.9、§6.7.10）：小数据集 + 假的报价、系统指数和调整价。
+// IndustryService（§2.6–§2.8、§6.7.9、§6.7.10）：小数据集 + 假的报价、星系成本指数和调整价。
 // 地点名、建筑名、价格、指数都是编造的；星系用公共星系（NIH-02 是 00、Tama 低安、Jita 高安）。
 
 import { describe, expect, it } from 'vitest'
@@ -170,7 +170,7 @@ describe('IndustryService: advanced result', () => {
     })
     expect(r.timeSeconds).toBe(5_846)
     expect(r.applied).toEqual({
-      location: 'XX-1', systemId: NIH_02, secClass: 'null', structure: '大厂',
+      location: 'XX-1', systemId: NIH_02, secClass: 'null', structure: '大厂', structureBonus: { me: -1, te: -30, cost: -5 },
       rigs: [{ item: expect.objectContaining({ typeId: XL_SHIP_I, zh: '屹立超大型舰船制造效率 I' }), me: -4.2, te: -42, cost: 0 }],
       me: 10, te: 20, sci: 0.02, facilityTaxPct: 1, sccPct: 4,
       defaulted: ['me', 'te', 'structure', 'rigs', 'tax'], rigState: 'applied',
@@ -301,7 +301,7 @@ describe('IndustryService: advanced result', () => {
     const r = result(await notListed.run('乌鸦级 XX-1'))
     expect(r.applied.sci).toBe(0)
     expect(r.jobCost).toMatchObject({ grossSci: 0, bonuses: 0 })
-    expect(r.warnings).toEqual(['NIH-02 不在系统指数列表里，安装费用按指数 0 计算'])
+    expect(r.warnings).toEqual(['NIH-02 不在星系成本指数列表里，安装费用按指数 0 计算'])
 
     const { 57479: _, ...partial } = ADJUSTED
     const missing = setup({}, new FakeIndices({ systems: { [NIH_02]: { manufacturing: 0.02 } }, adjusted: partial }))
@@ -314,7 +314,7 @@ describe('IndustryService: advanced result', () => {
     expect(r3.applied.sci).toBeUndefined()
     expect(r3.indicesAt).toBeUndefined()
     expect(r3.jobCost).toMatchObject({ grossSci: 0, facility: 1_382_750 })
-    expect(r3.warnings).toEqual(['系统指数暂时取不到，安装费用没有计入系统指数（偏低）'])
+    expect(r3.warnings).toEqual(['星系成本指数暂时取不到，安装费用没有计入星系成本指数（偏低）'])
 
     const noAdjusted = setup({}, new FakeIndices({ systems: { [NIH_02]: { manufacturing: 0.02 } }, adjusted: UNAVAILABLE }))
     const r4 = result(await noAdjusted.run('乌鸦级 XX-1'))
@@ -369,8 +369,8 @@ describe('IndustryService: steps (location → ME/TE → structure)', () => {
     expect(s).toEqual({
       step: 'location',
       options: [
-        { label: 'XX-1', detail: '00 · 大厂 · 系统指数 2.00%', command: '乌鸦级 XX-1 高级' },
-        { label: '联盟工业点A', detail: '低安 · 反应塔 · 系统指数 1.00%', command: '乌鸦级 联盟工业点A 高级' },
+        { label: 'XX-1', detail: '00 · 大厂 · 星系成本指数 2.00%', command: '乌鸦级 XX-1 高级' },
+        { label: '联盟工业点A', detail: '低安 · 反应塔 · 星系成本指数 1.00%', command: '乌鸦级 联盟工业点A 高级' },
         { label: 'XX-2', detail: '高安 · 无建筑加成', command: '乌鸦级 XX-2 高级' },
       ],
       summary: [],
@@ -496,15 +496,15 @@ describe('IndustryService: compare locations', () => {
     const total = (r: IndustryResult) => r.materialCost + (r.jobCost?.total ?? 0)
     expect(c.rows.map((r) => [r.location, r.structure, r.noRigs, r.cheapest, r.fastest])).toEqual([
       ['XX-1', '大厂', false, true, true],
-      // XX-2 没有建筑：按 NPC 空间站的设施税 0.25%，表里也没有它的系统指数
+      // XX-2 没有建筑：按 NPC 空间站的设施税 0.25%，表里也没有它的星系成本指数
       ['XX-2', undefined, true, false, false],
       ['联盟工业点A', '反应塔', true, false, false],
     ])
     const totals = c.rows.map((r) => total(r.result))
     expect([...totals].sort((a, b) => a - b)).toEqual(totals)
     expect(c.rows[0].result.applied).toMatchObject({ me: 10, te: 20, defaulted: ['me', 'te', 'structure', 'rigs', 'tax'] })
-    expect(c.rows[1].result.warnings).toEqual(['吉他 不在系统指数列表里，安装费用按指数 0 计算'])
-    // 系统指数、调整价、材料报价都只取一次
+    expect(c.rows[1].result.warnings).toEqual(['吉他 不在星系成本指数列表里，安装费用按指数 0 计算'])
+    // 星系成本指数、调整价、材料报价都只取一次
     expect([env.indices.systemCalls, env.indices.adjustedCalls]).toEqual([1, 1])
     expect(env.prices.calls.filter((call) => call.typeIds.includes(34))).toHaveLength(1)
   })
@@ -534,6 +534,16 @@ describe('IndustryService: rigs, structures and data age reported to the cards',
     expect(await state('乌鸦级 XX-1 建筑:无')).toBe('impossible')
     // 基础参考没有地点，不给
     expect((result(await run('乌鸦级'))).applied.rigState).toBeUndefined()
+  })
+
+  it('structureBonus: the structure\'s own bonuses, none without a bonus', async () => {
+    const { run } = setup()
+    // 超级工厂造东西：材料 -1%、时间 -30%、费用 -5%
+    expect(result(await run('乌鸦级 XX-1')).applied.structureBonus).toEqual({ me: -1, te: -30, cost: -5 })
+    // 反应塔做反应、没有建筑、基础参考都没有
+    expect(result(await run('碳化钨 联盟工业点A', ALLOWED, 'reaction')).applied.structureBonus).toBeUndefined()
+    expect(result(await run('乌鸦级 XX-1 建筑:无')).applied.structureBonus).toBeUndefined()
+    expect(result(await run('乌鸦级')).applied.structureBonus).toBeUndefined()
   })
 
   it('a structure picked because it is the only one is marked as such', async () => {

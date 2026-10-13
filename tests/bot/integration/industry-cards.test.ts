@@ -15,7 +15,7 @@ function env(display: Partial<DisplaySettings> = {}, sellFeesPct = 0, extra: Par
   return { core, display: core.settings.display, industry: { sellFeesPct, ...extra } }
 }
 
-/** §2.6.4 的示例：00 的索迪约，ME 10 / TE 20，T2 改装件，系统指数 2.31%，设施税 1% */
+/** §2.6.4 的示例：00 的索迪约，ME 10 / TE 20，T2 改装件，星系成本指数 2.31%，设施税 1% */
 function example(over: Partial<IndustryResult> = {}): IndustryResult {
   const materials: IndustryResult['materials'] = [
     { item: item('Pyerite'), baseQuantity: 2_600_000, quantity: 2_199_844, unit: 28, total: 61_595_632, manufacturable: false },
@@ -30,6 +30,7 @@ function example(over: Partial<IndustryResult> = {}): IndustryResult {
     applied: {
       location: 'XX-1', systemId: 30000900, secClass: 'null', structure: '索迪约',
       rigs: [{ item: RIG, me: -5.04, te: -50.4, cost: 0 }],
+      structureBonus: { me: -1, te: -30, cost: -5 },
       me: 10, te: 20, sci: 0.0231, facilityTaxPct: 1, sccPct: 4, defaulted: [],
     },
     materials,
@@ -57,35 +58,41 @@ describe('result card (§2.6.4)', () => {
       'XX-1 · 索迪约 · 00',
       '蓝图 ME 10 / TE 20 · 1 流程（1 艘）',
       '改装件 屹立超大型舰船制造效率 II（材料 -5.04%，时间 -50.4%）',
-      '系统指数 2.31% · 设施税 1.00% · SCC 附加费 4%',
       '',
       '- 材料成本 `155,129,544 ISK`（155.13M）',
-      '- 安装费用 `3,840,000 ISK`（3.84M）',
-      '- 设施税 `1,750,000 ISK`（1.75M）',
-      '- SCC 附加费 `7,000,000 ISK`（7.00M）',
+      '- 基础物品成本 `175,000,000 ISK`（175.00M）',
+      '- 星系成本指数 2.31% `3,840,000 ISK`（3.84M）',
+      '- 设施税 1.00% `1,750,000 ISK`（1.75M）',
+      '- SCC 附加费 4% `7,000,000 ISK`（7.00M）',
       '- **预计总成本** `167,719,544 ISK`（167.72M）',
-      '- 制造时间 1 小时 23 分（满技能约 57 分）',
+      '- 制造时间 1 小时 23 分（未计技能）',
+      '    - 蓝图 TE 20 -20%',
+      '    - 技能和植入体（按技能全 5 级，不算植入体）-32%',
+      '    - 已安装的改装件 -50.4%',
+      '    - 建筑持有加成 -30%',
+      '    - 满技能约 57 分',
       '',
       '成品 Jita 4-4 出售 `258,400,000 ISK`（258.40M）',
       '**预计利润 90.68M · 利润率 35.1%**（未计销售税和经纪费）',
       '',
       '***',
-      '欧服 · 价格更新于 14:20 · 系统指数更新于 13:00',
+      '欧服 · 价格更新于 14:20 · 星系成本指数更新于 13:00',
     ].join('\n'))
   })
 
   it('full_only and compact_only change every main amount', () => {
     const full = md(resultCard(env({ priceDisplayMode: 'full_only' }), example(), 'manufacturing', []))
-    expect(full).toContain('- 安装费用 `3,840,000 ISK`\n')
+    expect(full).toContain('- 星系成本指数 2.31% `3,840,000 ISK`\n')
+    expect(full).toContain('- 基础物品成本 `175,000,000 ISK`\n')
     expect(full).toContain('**预计利润 90,680,456 ISK · 利润率 35.1%')
     const compact = md(resultCard(env({ priceDisplayMode: 'compact_only' }), example(), 'manufacturing', []))
-    expect(compact).toContain('- 材料成本 `155.13M`\n- 安装费用 `3.84M`\n')
+    expect(compact).toContain('- 材料成本 `155.13M`\n- 基础物品成本 `175.00M`\n- 星系成本指数 2.31% `3.84M`\n')
     expect(compact).toContain('**预计利润 90.68M · 利润率 35.1%')
   })
 
   it('plain text: no Markdown, the same lines', () => {
     const out = text(resultCard(env(), example(), 'manufacturing', [[{ label: '查看材料', command: { id: 'manufacture', args: '乌鸦级 XX-1 材料' }, primary: true }]]))
-    expect(out).toContain('材料成本 155,129,544 ISK (155.13M)\n安装费用 3,840,000 ISK (3.84M)')
+    expect(out).toContain('材料成本 155,129,544 ISK (155.13M)\n基础物品成本 175,000,000 ISK (175.00M)\n星系成本指数 2.31% 3,840,000 ISK (3.84M)')
     expect(out).toContain('预计利润 90.68M · 利润率 35.1%（未计销售税和经纪费）')
     expect(out).toContain('查看材料：@我 发送「制造 乌鸦级 XX-1 材料」')
     expect(out).not.toMatch(/\*\*|`/)
@@ -100,10 +107,51 @@ describe('result card (§2.6.4)', () => {
     })
     const out = md(resultCard(env({}, 2), r, 'manufacturing', []))
     expect(out).toContain('XX-1 · 索迪约（默认建筑） · 00\n蓝图 ME 10 / TE 20（地点默认）')
-    expect(out).toContain('- SCC 附加费 `7,000,000 ISK`（7.00M）\n- 联盟管理费 `1,750,000 ISK`（1.75M）\n- **预计总成本** `169,469,544 ISK`（169.47M）')
+    expect(out).toContain('- SCC 附加费 4% `7,000,000 ISK`（7.00M）\n- 联盟管理费 `1,750,000 ISK`（1.75M）\n- **预计总成本** `169,469,544 ISK`（169.47M）')
     expect(out).toContain('成品 Jita 4-4 暂无卖单')
     expect(out).not.toContain('预计利润')
     expect(md(resultCard(env({}, 2), example(), 'manufacturing', []))).toContain('（已扣销售税和经纪费 2%）')
+  })
+})
+
+describe('result card: time modifiers and cost lines', () => {
+  it('whole ISK in the cost lines, no .00 under 100,000', () => {
+    const job = { ...example().jobCost!, eiv: 99_999, grossSci: 2_310, bonuses: 0, facility: 1_000, scc: 4_000, total: 7_310 }
+    const out = md(resultCard(env({ priceDisplayMode: 'full_only' }), example({ jobCost: job }), 'manufacturing', []))
+    expect(out).toContain('- 基础物品成本 `99,999 ISK`\n- 星系成本指数 2.31% `2,310 ISK`\n- 设施税 1.00% `1,000 ISK`\n- SCC 附加费 4% `4,000 ISK`\n')
+  })
+
+  it('no system cost index: the line is left out, not written as 0', () => {
+    const base = example()
+    const out = md(resultCard(env(), example({ applied: { ...base.applied, sci: undefined } }), 'manufacturing', []))
+    expect(out).not.toContain('星系成本指数 0')
+    expect(out).toContain('- 设施税 1.00%')
+  })
+
+  it('a reaction card lists the skill and rig modifiers and the max-skill time, and splits the costs', () => {
+    const r = example({
+      applied: { ...example().applied, structureBonus: { me: 0, te: -25, cost: 0 }, rigs: [{ item: RIG, me: 0, te: -22, cost: 0 }], te: 0 },
+      timeSeconds: 8400, timeSecondsMaxSkill: 6720,
+    })
+    const out = md(resultCard(env(), r, 'reaction', []))
+    expect(out).toContain('- 反应时间 每流程 2 小时 20 分 · 共 2 小时 20 分（未计技能）\n    - 技能和植入体（按技能全 5 级，不算植入体）-20%\n    - 已安装的改装件 -22%\n    - 建筑持有加成 -25%\n    - 满技能约 1 小时 52 分')
+    expect(out).not.toContain('蓝图 TE')
+    expect(out).toContain('- 基础物品成本 ')
+    expect(out).not.toContain('安装费用和税')
+  })
+
+  it('no structure bonus and no rigs: only the skill line and the max-skill time', () => {
+    const r = example({ applied: { ...example().applied, rigs: [], structureBonus: undefined, te: 0 } })
+    const out = md(resultCard(env(), r, 'manufacturing', []))
+    expect(out).toContain('- 制造时间 1 小时 23 分（未计技能）\n    - 技能和植入体（按技能全 5 级，不算植入体）-32%\n    - 满技能约 57 分\n')
+    expect(out).not.toContain('建筑持有加成')
+  })
+
+  it('no max-skill time: the skill modifier line stays, the max-skill line is left out', () => {
+    const r = example({ timeSecondsMaxSkill: undefined })
+    const out = md(resultCard(env(), r, 'manufacturing', []))
+    expect(out).toContain('技能和植入体（按技能全 5 级，不算植入体）-32%')
+    expect(out).not.toContain('满技能约')
   })
 })
 
@@ -128,10 +176,10 @@ describe('result card: rigs and data age', () => {
 
   it('old system indices or adjusted prices (ESI unavailable) are marked in the footer', () => {
     const stale = example({ indicesStale: true, adjustedStale: true, adjustedPricesAt: Date.UTC(2026, 9, 7, 2, 5) })
-    expect(md(resultCard(env(), stale, 'manufacturing', []))).toMatch(/欧服 · 价格更新于 14:20 · 系统指数更新于 13:00（缓存） · 调整价更新于 10:05（缓存）$/)
+    expect(md(resultCard(env(), stale, 'manufacturing', []))).toMatch(/欧服 · 价格更新于 14:20 · 星系成本指数更新于 13:00（缓存） · 调整价更新于 10:05（缓存）$/)
     // 调整价是新的：不写它的时间
     const fresh = example({ adjustedPricesAt: Date.UTC(2026, 9, 7, 5, 5) })
-    expect(md(resultCard(env(), fresh, 'manufacturing', []))).toMatch(/欧服 · 价格更新于 14:20 · 系统指数更新于 13:00$/)
+    expect(md(resultCard(env(), fresh, 'manufacturing', []))).toMatch(/欧服 · 价格更新于 14:20 · 星系成本指数更新于 13:00$/)
   })
 })
 

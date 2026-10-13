@@ -3,7 +3,7 @@
 // 材料清单和比价的每一行跟 listPriceDisplayMode。没有价格的写「缺价格」，总成本标不完整，绝不写 0 ISK。
 // 按钮由调用方算好传进来（卡片只管排版）。
 
-import { SERVER_LABEL, TOP_MATERIALS } from '../../constants'
+import { MAX_SKILL_MANUFACTURING_MULT, MAX_SKILL_REACTION_MULT, SERVER_LABEL, TOP_MATERIALS } from '../../constants'
 import { listPriceMode } from '../../core/format'
 import type {
   DisplaySettings, EveCore, FormattedPrice, IndustryActivity, IndustryResult, IndustryRigState, IndustrySettings, IndustryStep,
@@ -34,11 +34,13 @@ const nameOf = (item: ItemInfo) => esc(itemName(item))
 const unitOf = (item: ItemInfo) => (item.categoryId === CATEGORY_SHIP ? '艘' : '个')
 const qty = (env: IndustryEnv, n: number) => env.core.format.quantity(n)
 const isk = (env: IndustryEnv, v: number) => env.core.format.isk(v)
+/** 费用明细：完整价格不写 .00 */
+const iskInt = (env: IndustryEnv, v: number) => env.core.format.isk(v, { integer: true })
 const listIsk = (env: IndustryEnv, v: number) => env.core.format.isk(v, { mode: listPriceMode(env.display) })
 const amount = (env: IndustryEnv, v: number) => amountText(env.core.format, v, env.display.priceDisplayMode)
 const duration = (env: IndustryEnv, sec: number) => env.core.format.duration(sec)
 
-/** 2.31%、1.00%（系统指数、设施税固定 2 位小数） */
+/** 2.31%、1.00%（星系成本指数、设施税固定 2 位小数） */
 const pctFixed = (p: number) => `${(Math.round(p * 100) / 100 || 0).toFixed(2)}%`
 /** 4%、-5.04%、-50.4%（末尾的 0 去掉） */
 const pctTrim = (p: number) => `${Math.round(p * 100) / 100 || 0}%`
@@ -67,7 +69,7 @@ function priceSource(env: IndustryEnv, key: string, side: PriceSide): string {
   return `${marketName(env, key)} ${SIDE_LABEL[side]}`
 }
 
-/** 系统指数、调整价用的是更新失败前的旧数据时写明（调整价只在这时写） */
+/** 星系成本指数、调整价用的是更新失败前的旧数据时写明（调整价只在这时写） */
 function footer(env: IndustryEnv, r: IndustryResult, withIndices: boolean): string {
   const parts: string[] = [SERVER_LABEL]
   const clock = (ms: number) => env.core.format.clock(ms)
@@ -150,7 +152,7 @@ function runsText(env: IndustryEnv, r: IndustryResult): string {
   return IND.runs(qty(env, r.runs), qty(env, r.outputQuantity), unitOf(r.product))
 }
 
-/** 系统指数 2.31% · 设施税 1.00% · SCC 附加费 4% */
+/** 星系成本指数 2.31% · 设施税 1.00% · SCC 附加费 4% */
 function ratesLine(r: IndustryResult): string | undefined {
   const { sci, facilityTaxPct, sccPct } = r.applied
   const parts: string[] = []
@@ -165,6 +167,44 @@ function timeLine(env: IndustryEnv, r: IndustryResult, activity: IndustryActivit
   const note = base ? IND.timeBase(max) : max ? IND.timeMax(max) : ''
   const line = `${IND.time(activity)} ${duration(env, r.timeSeconds)}${note}`
   return { text: r.runs > 1 ? `${line} · ${IND.timeLine}` : line }
+}
+
+/** 时间修正（像游戏里的「项目周期修正值」）：蓝图 TE、技能、改装件、建筑；乘数相乘，各行只列自己的 */
+function timeModifierLines(r: IndustryResult, activity: IndustryActivity): Line[] {
+  const out: string[] = []
+  if (activity === 'manufacturing' && r.applied.te > 0) out.push(IND.timeBlueprint(r.applied.te, pctTrim(-r.applied.te)))
+  const skillMult = activity === 'manufacturing' ? MAX_SKILL_MANUFACTURING_MULT : MAX_SKILL_REACTION_MULT
+  out.push(IND.timeSkills(pctTrim((skillMult - 1) * 100)))
+  const rigs = r.applied.rigs.reduce((sum, rig) => sum + rig.te, 0)
+  if (rigs !== 0) out.push(IND.timeRigs(pctTrim(rigs)))
+  const structure = r.applied.structureBonus?.te
+  if (structure) out.push(IND.timeStructure(pctTrim(structure)))
+  return out.map((text) => ({ text, indent: 1 as const }))
+}
+
+/** 结果卡片的时间：主数字是未计技能的，下面列修正和满技能时间 */
+function resultTimeLines(env: IndustryEnv, r: IndustryResult, activity: IndustryActivity): Line[] {
+  const total = duration(env, r.timeSeconds)
+  const head = activity === 'manufacturing'
+    ? `${IND.time(activity)} ${total}${IND.timeNoSkill}${r.runs > 1 ? ` · ${IND.timeLine}` : ''}`
+    : `${IND.time(activity)} ${IND.reactionTime(duration(env, r.timeSeconds / Math.max(1, r.runs)), total)}${IND.timeNoSkill}`
+  const lines: Line[] = [{ text: head }, ...timeModifierLines(r, activity)]
+  if (r.timeSecondsMaxSkill !== undefined) lines.push({ text: IND.timeMaxSkill(duration(env, r.timeSecondsMaxSkill)), indent: 1 })
+  return lines
+}
+
+/** 费用明细：基础物品成本、星系成本指数、设施税、SCC 附加费、其他费用（金额一律取整） */
+function jobCostLines(env: IndustryEnv, r: IndustryResult, job: NonNullable<IndustryResult['jobCost']>): Line[] {
+  const { sci, facilityTaxPct, sccPct } = r.applied
+  const lines: Line[] = [{ label: IND.eivCost, price: iskInt(env, job.eiv) }]
+  // 星系成本指数取不到时不写这一行（不能写成 0），原因见 warnings
+  if (sci !== undefined) lines.push({ label: IND.sciCost(pctFixed(sci * 100)), price: iskInt(env, job.grossSci + job.bonuses) })
+  lines.push(
+    { label: IND.facilityCost(facilityTaxPct === undefined ? undefined : pctFixed(facilityTaxPct)), price: iskInt(env, job.facility) },
+    { label: IND.sccCost(sccPct === undefined ? undefined : pctTrim(sccPct)), price: iskInt(env, job.scc) },
+  )
+  if (job.extra > 0) lines.push({ label: esc(job.extraLabel ?? IND.extraCost), price: iskInt(env, job.extra) })
+  return lines
 }
 
 /** 成品价值这一行：成品 Jita 4-4 出售 `…`；没有价格时「暂无卖单」 */
@@ -285,28 +325,18 @@ export function resultCard(env: IndustryEnv, r: IndustryResult, activity: Indust
   }
   const rigs = rigsLine(r)
   if (rigs) head.push({ text: rigs })
-  const rates = ratesLine(r)
+  // 有费用明细时税率写在明细行里；没有时（取不到调整价）才单列
+  const rates = jobOf(r) ? undefined : ratesLine(r)
   if (rates) head.push({ text: rates })
   card.sections.push({ style: 'plain', lines: head })
 
   const lines: Line[] = [materialCostLine(env, r)]
   const job = jobOf(r)
-  if (job && manufacturing) {
-    lines.push({ label: IND.installCost, price: isk(env, job.grossSci + job.bonuses) })
-    lines.push({ label: IND.facilityCost, price: isk(env, job.facility) })
-    lines.push({ label: IND.sccCost, price: isk(env, job.scc) })
-  } else if (job) {
-    lines.push({ label: IND.installAndTax, price: isk(env, job.total - job.extra) })
-  }
-  if (job && job.extra > 0) lines.push({ label: esc(job.extraLabel ?? IND.extraCost), price: isk(env, job.extra) })
+  if (job) lines.push(...jobCostLines(env, r, job))
   const total = costPrice(env, r, r.materialCost + (job?.total ?? 0))
   const note = `${incompleteNote(r)}${job ? '' : IND.noJobCost}`
   lines.push(note ? { label: IND.totalCost, price: total, extra: note } : { label: IND.totalCost, price: total })
-  if (manufacturing) {
-    lines.push(timeLine(env, r, activity, false))
-  } else {
-    lines.push({ text: `${IND.time(activity)} ${IND.reactionTime(duration(env, r.timeSeconds / Math.max(1, r.runs)), duration(env, r.timeSeconds))}` })
-  }
+  lines.push(...resultTimeLines(env, r, activity))
   card.sections.push({ lines })
 
   const tail: Line[] = [...fallbackLine(env, r)]

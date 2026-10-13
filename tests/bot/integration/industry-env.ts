@@ -1,4 +1,4 @@
-// 制造、制造比价、反应的集成测试共用：工业地点和建筑的配置、假 ESI 上的报价、系统指数和调整价。
+// 制造、制造比价、反应的集成测试共用：工业地点和建筑的配置、假 ESI 上的报价、星系成本指数和调整价。
 // 地点名、建筑名、税率、价格、指数都是编造的（XX-1、联盟工业点A、大厂……）；星系、空间站、物品是公共数据。
 
 import { GROUP } from '../../harness'
@@ -50,7 +50,7 @@ export const STRUCTURES = [
 export const INDUSTRY = { locations: LOCATIONS, structures: STRUCTURES }
 export const ALLOWED = { allowedGroups: [{ groupId: GROUP, enabled: true }] }
 
-/** 星域订单（Jita 4-4）、系统指数、调整价 */
+/** 星域订单（Jita 4-4）、星系成本指数、调整价 */
 export function industryEsi(fake: FakeEsi, extra?: (fake: FakeEsi) => void) {
   const sells = { ...RAVEN_SELL, ...CARBIDE_SELL, ...DC2_SELL }
   for (const [id, price] of Object.entries(sells)) addOrders(fake, THE_FORGE, jitaOrders(Number(id), price, null, { volume_remain: 1e9 }))

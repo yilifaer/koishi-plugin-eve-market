@@ -1,4 +1,4 @@
-// 系统指数和调整价：假的 ESI 路由（按调用编排回复）+ 假时钟。星系、物品是公共数据，数值是编造的。
+// 星系成本指数和调整价：假的 ESI 路由（按调用编排回复）+ 假时钟。星系、物品是公共数据，数值是编造的。
 
 import { afterEach, describe, expect, it } from 'vitest'
 import { FAILURE_MEMO_SEC, INDUSTRY_STALE_HOURS, QUERY_DEADLINE_MS } from '../../../src/constants'
@@ -203,10 +203,10 @@ describe('IndustryIndices', () => {
     await time.advance(FAILURE_MEMO_SEC * 1000)
     expect(await service.systemIndices()).toMatchObject({ stale: true })
     expect(api.count('systems')).toBe(3)
-    expect(logger.at('warn')).toEqual(['系统指数更新失败，先用旧数据：HTTP 503'])
+    expect(logger.at('warn')).toEqual(['星系成本指数更新失败，先用旧数据：HTTP 503'])
     await time.advance(FAILURE_MEMO_SEC * 1000)
     expect(await service.systemIndices()).toMatchObject({ stale: false })
-    expect(logger.at('info')).toEqual(['系统指数恢复更新'])
+    expect(logger.at('info')).toEqual(['星系成本指数恢复更新'])
   })
 
   it('answers UPSTREAM_UNAVAILABLE when it never had the list', async () => {
@@ -226,7 +226,7 @@ describe('IndustryIndices', () => {
     const held = api.hold(api.systemReplies)
     const first = service.systemIndices({ deadlineMs: 2000 })
     await time.advance(2000)
-    expect(await first).toEqual({ ok: false, code: 'UPSTREAM_UNAVAILABLE', message: '系统指数暂时取不到：等不到 ESI 的回复' })
+    expect(await first).toEqual({ ok: false, code: 'UPSTREAM_UNAVAILABLE', message: '星系成本指数暂时取不到：等不到 ESI 的回复' })
     // 默认的时限
     const second = service.systemIndices()
     await time.advance(QUERY_DEADLINE_MS)
@@ -251,7 +251,7 @@ describe('IndustryIndices', () => {
     api.systemReplies = [{ value: SYSTEMS, etag: '"s1"' }, { fail: http503() }]
     await service.systemIndices()
     await time.advance(INDUSTRY_STALE_HOURS * HOUR + 1)
-    expect(await service.systemIndices()).toMatchObject({ ok: false, code: 'UPSTREAM_UNAVAILABLE', message: '系统指数暂时取不到：HTTP 503' })
+    expect(await service.systemIndices()).toMatchObject({ ok: false, code: 'UPSTREAM_UNAVAILABLE', message: '星系成本指数暂时取不到：HTTP 503' })
   })
 
   it('warms both lists in the background a while after start, once', async () => {

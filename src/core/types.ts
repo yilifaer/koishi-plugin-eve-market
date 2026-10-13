@@ -937,6 +937,8 @@ export interface IndustryResult {
     rigs: Array<{ item: ItemInfo; me: number; te: number; cost: number }>
     me: number
     te: number
+    /** 建筑自带的加成（百分比，负数 = 减少）；没有建筑或没有这项加成时不给 */
+    structureBonus?: { me: number; te: number; cost: number }
     sci?: number
     facilityTaxPct?: number
     sccPct?: number
@@ -960,9 +962,9 @@ export interface IndustryResult {
   materialPrices?: { marketKey: string; side: PriceSide; unavailable?: boolean; fallbackKey?: string }
   /** 计入的报价里最旧的数据时间 */
   pricesAt?: number | null
-  /** 系统指数的数据时间（ESI 的 Last-Modified）；没有算安装费时不给 */
+  /** 星系成本指数的数据时间（ESI 的 Last-Modified）；没有算安装费时不给 */
   indicesAt?: number | null
-  /** 系统指数是更新失败前的旧数据（卡片上标「缓存」） */
+  /** 星系成本指数是更新失败前的旧数据（卡片上标「缓存」） */
   indicesStale?: boolean
   /** 调整价的数据时间；没有算安装费时不给 */
   adjustedPricesAt?: number | null
@@ -1027,6 +1029,8 @@ export interface PriceFormatOptions {
   compactDecimals: number
   thousandSeparator: boolean
   showCurrency: boolean
+  /** 完整价格一律取整（工业费用明细，不写 .00） */
+  integer?: boolean
 }
 
 /** 版式（代码/粗体/括号）由 view 决定 */
@@ -1284,7 +1288,7 @@ export interface CoreStatus {
   markets: MarketSourceStatus[]
   auth: AuthProfileStatus[]
   esi: EsiStatus
-  /** 系统指数和调整价的更新时间（配了工业地点时才有） */
+  /** 星系成本指数和调整价的更新时间（配了工业地点时才有） */
   industry?: { indicesAt: number | null; adjustedPricesAt: number | null }
   /** 本地检查和需要数据的检查合在一起 */
   issues: ConfigIssue[]

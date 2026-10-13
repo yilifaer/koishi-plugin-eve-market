@@ -1,4 +1,4 @@
-// 制造（§2.6）走完整个插件：真实的 Koishi、前置中间件、命令、core（小数据集 + 本机假 ESI 上的报价、系统指数和调整价）。
+// 制造（§2.6）走完整个插件：真实的 Koishi、前置中间件、命令、core（小数据集 + 本机假 ESI 上的报价、星系成本指数和调整价）。
 // 地点、建筑、税率、价格、指数都是编造的（XX-1、联盟工业点A、大厂……），星系和物品是公共数据。
 
 import { afterEach, describe, expect, it } from 'vitest'
@@ -25,7 +25,7 @@ const CLOCK = String.raw`\d\d:\d\d`
 const BASE_CARD = [
   '**乌鸦级 Raven · 制造 · 基础参考**',
   '',
-  '蓝图 ME 0 / TE 0 · 无建筑、无改装件 · 未计系统指数和税',
+  '蓝图 ME 0 / TE 0 · 无建筑、无改装件 · 未计星系成本指数和税',
   '',
   '- 材料成本 `161,417,000 ISK`（161.42M）',
   '- 制造时间 5 小时（未计技能；满技能约 3 小时 24 分）',
@@ -36,7 +36,7 @@ const BASE_CARD = [
   '',
   '成品 Jita 4-4 出售 `258,400,000 ISK`（258.40M）',
   '',
-  '> 仅供参考：没有计算星系的系统指数、建筑、改装件和税费。',
+  '> 仅供参考：没有计算星系的星系成本指数、建筑、改装件和税费。',
   '',
   '***',
 ].join('\n')
@@ -47,14 +47,19 @@ const RESULT_HEAD = [
   'XX-1 · 大厂 · 00',
   '蓝图 ME 10 / TE 20 · 1 流程（1 艘）',
   '改装件 屹立超大型舰船制造效率 I（材料 -4.2%，时间 -42%）',
-  '系统指数 2.31% · 设施税 1.00% · SCC 附加费 4%',
   '',
   '- 材料成本 `138,298,834 ISK`（138.30M）',
-  '- 安装费用 `3,034,445 ISK`（3.03M）',
-  '- 设施税 `1,382,750 ISK`（1.38M）',
-  '- SCC 附加费 `5,531,000 ISK`（5.53M）',
+  '- 基础物品成本 `138,275,000 ISK`（138.28M）',
+  '- 星系成本指数 2.31% `3,034,445 ISK`（3.03M）',
+  '- 设施税 1.00% `1,382,750 ISK`（1.38M）',
+  '- SCC 附加费 4% `5,531,000 ISK`（5.53M）',
   '- **预计总成本** `148,247,029 ISK`（148.25M）',
-  '- 制造时间 1 小时 37 分（满技能约 1 小时 6 分）',
+  '- 制造时间 1 小时 37 分（未计技能）',
+  '    - 蓝图 TE 20 -20%',
+  '    - 技能和植入体（按技能全 5 级，不算植入体）-32%',
+  '    - 已安装的改装件 -42%',
+  '    - 建筑持有加成 -30%',
+  '    - 满技能约 1 小时 6 分',
   '',
   '成品 Jita 4-4 出售 `258,400,000 ISK`（258.40M）',
   '**预计利润 110.15M · 利润率 42.6%**（未计销售税和经纪费）',
@@ -77,7 +82,7 @@ describe('制造: base reference', () => {
   it('written ME/TE and quantity are used and carried by every button; no index, tax or profit', async () => {
     const e = await start()
     const out = await e.h.group('制造 乌鸦级*10 ME10 TE20')
-    expect(card(out)).toContain('蓝图 ME 10 / TE 20 · 无建筑、无改装件 · 未计系统指数和税')
+    expect(card(out)).toContain('蓝图 ME 10 / TE 20 · 无建筑、无改装件 · 未计星系成本指数和税')
     expect(card(out)).toContain('- 10 流程（10 艘） · 材料按 Jita 4-4 出售价')
     expect(card(out)).toContain('- 制造时间 1 天 16 小时（未计技能；满技能约 1 天 3 小时） · 一条生产线连续生产')
     expect(card(out)).toContain('成品 Jita 4-4 出售 `2,584,000,000 ISK`（2.58B）（10 艘，单价 258.40M）')
@@ -116,7 +121,7 @@ describe('制造: result with a location', () => {
     const e = await start()
     const sent = await e.h.group('制造 乌鸦级 XX-1 ME10 TE20 建筑:大厂 改装:默认 税:1%')
     expect(sent).toHaveLength(1)
-    expect(sent[0].markdown).toMatch(new RegExp(`^${escapeRe(RESULT_HEAD)}\\n欧服 · 价格更新于 ${CLOCK} · 系统指数更新于 ${CLOCK}$`))
+    expect(sent[0].markdown).toMatch(new RegExp(`^${escapeRe(RESULT_HEAD)}\\n欧服 · 价格更新于 ${CLOCK} · 星系成本指数更新于 ${CLOCK}$`))
     expect(buttonRows(sent)).toEqual([
       [
         '查看材料=>制造 乌鸦级 XX-1 ME10 TE20 建筑:大厂 改装:默认 税:1% 材料',
@@ -150,16 +155,18 @@ describe('制造: result with a location', () => {
     expect(card(off)).toContain('- 材料成本 `144,182,700 ISK`（144.18M）')
     expect(buttons(off)).toContain('用改装件=>制造 乌鸦级 XX-1 改装:默认')
     const taxed = card(await e.h.group('制造 乌鸦级 XX-1 税:2.5%'))
-    expect(taxed).toContain('系统指数 2.31% · 设施税 2.50% · SCC 附加费 4%')
-    expect(taxed).toContain('- 设施税 `3,456,875 ISK`（3.46M）')
+    expect(taxed).toContain('- 星系成本指数 2.31% ')
+    expect(taxed).toContain('- 设施税 2.50% `3,456,875 ISK`（3.46M）')
   })
 
   it('no structure: NPC facility tax, no structure or rig bonus', async () => {
     const e = await start()
     const out = card(await e.h.group('制造 乌鸦级 XX-1 建筑:无'))
     expect(out).toContain('XX-1 · 无建筑加成 · 00\n蓝图 ME 10 / TE 20（地点默认）')
-    expect(out).toContain('系统指数 2.31% · 设施税 0.25% · SCC 附加费 4%')
+    expect(out).toContain('- 设施税 0.25% ')
+    expect(out).toContain('- SCC 附加费 4% ')
     expect(out).not.toContain('改装件')
+    expect(out).not.toContain('建筑持有加成')
   })
 
   it('an NPC station row: the NPC facility tax, no rig line', async () => {
@@ -167,8 +174,8 @@ describe('制造: result with a location', () => {
       industry: { locations: [{ name: 'XX-4', system: 'Jita', visibility: 'public' }], structures: [{ location: 'XX-4', name: 'NPC站', structureType: 'NPC' }] },
     })
     const out = card(await e.h.group('制造 乌鸦级 XX-4'))
-    expect(out).toContain('XX-4 · NPC站（该地点唯一） · 高安\n蓝图 ME 10 / TE 20（地点默认） · 1 流程（1 艘）\n系统指数 0.00% · 设施税 0.25% · SCC 附加费 4%')
-    expect(out).toContain('⚠ 吉他 不在系统指数列表里，安装费用按指数 0 计算')
+    expect(out).toContain('XX-4 · NPC站（该地点唯一） · 高安\n蓝图 ME 10 / TE 20（地点默认） · 1 流程（1 艘）\n\n- 材料成本')
+    expect(out).toContain('⚠ 吉他 不在星系成本指数列表里，安装费用按指数 0 计算')
   })
 
   it('an installed rig that does not apply to this product, and a structure with no rigs, are told apart', async () => {
@@ -181,7 +188,7 @@ describe('制造: result with a location', () => {
     const e = await start()
     const out = card(await e.h.group('制造 乌鸦级 XX-2'))
     expect(out).toContain('蓝图 ME 8 / TE 16（地点默认）')
-    expect(out).toMatch(/- SCC 附加费 `[\d,]+ ISK`（[\d.]+M）\n- 联盟管理费 `1,382,750 ISK`（1\.38M）\n- \*\*预计总成本\*\*/)
+    expect(out).toMatch(/- SCC 附加费 4% `[\d,]+ ISK`（[\d.]+M）\n- 联盟管理费 `1,382,750 ISK`（1\.38M）\n- \*\*预计总成本\*\*/)
   })
 
   it('T2: ME 2 / TE 4 by default, split into jobs over the copy limit, a missing price makes the cost incomplete', async () => {
@@ -199,9 +206,10 @@ describe('制造: result with a location', () => {
   it('the system index list is unavailable: the result still comes, with the reason', async () => {
     const e = await start({ esi: (fake) => fake.fault('GET', /^\/industry\/systems$/, { status: 503 }, 10) })
     const out = card(await e.h.group('制造 乌鸦级 XX-1'))
-    expect(out).toContain('系统指数暂时取不到，安装费用没有计入系统指数（偏低）')
-    expect(out).toContain('设施税 1.00% · SCC 附加费 4%')
-    expect(out).not.toContain('系统指数更新于')
+    expect(out).toContain('星系成本指数暂时取不到，安装费用没有计入星系成本指数（偏低）')
+    expect(out).toContain('- 设施税 1.00% ')
+    expect(out).not.toContain('- 星系成本指数')
+    expect(out).not.toContain('星系成本指数更新于')
   })
 
   it('the material market is unavailable: says so, uses the fallback market and marks it †', async () => {
@@ -232,9 +240,9 @@ describe('制造: advanced steps', () => {
       '',
       '请选择制造地点：',
       '',
-      '1. XX-1 · 00 · 大厂 · 系统指数 2.31%',
-      '2. XX-2 · 低安 · 中厂 · 系统指数 1.20%',
-      '3. XX-3 · 高安 · 高安厂 · 系统指数 3.02%',
+      '1. XX-1 · 00 · 大厂 · 星系成本指数 2.31%',
+      '2. XX-2 · 低安 · 中厂 · 星系成本指数 1.20%',
+      '3. XX-3 · 高安 · 高安厂 · 星系成本指数 3.02%',
       '',
       '点按钮后再按发送，或者 @我 回复编号（5 分钟内有效）',
     ].join('\n'))
@@ -258,7 +266,8 @@ describe('制造: advanced steps', () => {
     expect(buttonRows(third)[0]).toEqual(['大厂=>制造 乌鸦级 XX-1 ME7 TE14 建筑:大厂', '小厂=>制造 乌鸦级 XX-1 ME7 TE14 建筑:小厂'])
 
     const result = card(await e.h.group('2'))
-    expect(result).toContain('XX-1 · 小厂 · 00\n蓝图 ME 7 / TE 14 · 1 流程（1 艘）\n改装件 未装\n系统指数 2.31% · 设施税 0.50% · SCC 附加费 4%')
+    expect(result).toContain('XX-1 · 小厂 · 00\n蓝图 ME 7 / TE 14 · 1 流程（1 艘）\n改装件 未装\n\n- 材料成本')
+    expect(result).toContain('- 设施税 0.50% ')
   })
 
   it('a bare 「ME」 or 「TE」 asks the ME/TE step again with a notice, also outside 高级', async () => {
@@ -337,7 +346,7 @@ describe('制造: advanced steps', () => {
     const e = await start({ config: { display: { output: 'text' } } })
     const out = await e.h.group('制造 乌鸦级 高级')
     expect(out[0].markdown).toBeUndefined()
-    expect(out[0].text).toContain('回复 @我 1：XX-1 · 00 · 大厂 · 系统指数 2.31%')
+    expect(out[0].text).toContain('回复 @我 1：XX-1 · 00 · 大厂 · 星系成本指数 2.31%')
     expect(out[0].text).toContain('编号 5 分钟内有效，也可以直接发送「制造 乌鸦级 XX-1 高级」')
     expect(out[0].text).toContain('默认直接出结果：@我 发送「制造 乌鸦级 XX-1」')
     expect(card(await e.h.group('2'))).toContain('已选：XX-2')

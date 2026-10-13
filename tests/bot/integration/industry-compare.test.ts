@@ -45,11 +45,11 @@ describe('制造比价', () => {
     const sent = await e.h.group('制造比价 乌鸦级')
     expect(sent).toHaveLength(1)
     expect(sent[0].markdown?.startsWith(RAVEN_COMPARE)).toBe(true)
-    expect(sent[0].markdown).toMatch(/\n欧服 · 价格更新于 \d\d:\d\d · 系统指数更新于 \d\d:\d\d$/)
+    expect(sent[0].markdown).toMatch(/\n欧服 · 价格更新于 \d\d:\d\d · 星系成本指数更新于 \d\d:\d\d$/)
     expect(buttonRows(sent)).toEqual([['XX-1 详情=>制造 乌鸦级 XX-1 ME10 TE20', 'XX-3 详情=>制造 乌鸦级 XX-3 ME10 TE20', 'XX-2 详情=>制造 乌鸦级 XX-2 ME10 TE20']])
     // 编号回复也行：第 2 行是 XX-3
     expect(card(await e.h.group('2'))).toMatch(/^\*\*乌鸦级 Raven · 高级制造计算\*\*\n\nXX-3 · 高安厂（该地点唯一） · 高安\n蓝图 ME 10 \/ TE 20 · 1 流程/)
-    // 系统指数和调整价只取了一次
+    // 星系成本指数和调整价只取了一次
     expect(e.fake.count(/^\/industry\/systems$/)).toBe(1)
     expect(e.fake.count(/^\/markets\/prices$/)).toBe(1)
   })

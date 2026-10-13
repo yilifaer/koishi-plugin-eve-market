@@ -1,4 +1,4 @@
-// 系统指数（/industry/systems）和调整价（/markets/prices）（§6.7.7、§9.1、§9.4）。两份都是全量列表，经 core/esi 请求：
+// 星系成本指数（/industry/systems）和调整价（/markets/prices）（§6.7.7、§9.1、§9.4）。两份都是全量列表，经 core/esi 请求：
 // - 没过期（约 1 小时，以 ESI 的过期头为准）直接用手上的；过期后请求，有旧数据时最多等一会儿，等不到或失败就先用旧的并标出；
 // - 同一份同时只请求一次（后台预取进行中时群友来查，请求改走交互池）；失败后 FAILURE_MEMO_SEC 秒内不再请求；
 // - 旧数据最多用 INDUSTRY_STALE_HOURS 小时；
@@ -27,7 +27,7 @@ const ACTIVITIES: readonly IndustryActivity[] = ['manufacturing', 'reaction']
 
 export type IndicesEsi = Pick<EsiApi, 'industrySystems' | 'prices'>
 
-/** 星系 → 活动 → 系统指数（小数：0.0231 = 2.31%） */
+/** 星系 → 活动 → 星系成本指数（小数：0.0231 = 2.31%） */
 export type CostIndices = ReadonlyMap<number, Readonly<Partial<Record<IndustryActivity, number>>>>
 
 export interface SystemIndices {
@@ -73,7 +73,7 @@ export interface IndustryIndicesOptions {
   random?: Random
 }
 
-/** 某个星系某种活动的系统指数；星系不在列表里时 undefined */
+/** 某个星系某种活动的星系成本指数；星系不在列表里时 undefined */
 export function costIndexOf(indices: Pick<SystemIndices, 'bySystem'>, systemId: number, activity: IndustryActivity): number | undefined {
   return indices.bySystem.get(systemId)?.[activity]
 }
@@ -105,7 +105,7 @@ export function adjustedTable(rows: readonly EsiMarketPrice[]): ReadonlyMap<Type
 
 type Kind = 'indices' | 'prices'
 
-const LABELS: Record<Kind, string> = { indices: '系统指数', prices: '调整价' }
+const LABELS: Record<Kind, string> = { indices: '星系成本指数', prices: '调整价' }
 
 interface Snapshot<T> {
   table: T

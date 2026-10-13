@@ -1,4 +1,4 @@
-// 整个 core 接在本机的假 ESI 上：星域订单给材料和成品报价，/industry/systems 给系统指数，/markets/prices 给调整价。
+// 整个 core 接在本机的假 ESI 上：星域订单给材料和成品报价，/industry/systems 给星系成本指数，/markets/prices 给调整价。
 // 地点名、建筑名、价格、指数都是编造的；星系、空间站是公共数据（NIH-02、Jita 4-4）。
 
 import { afterEach, describe, expect, it } from 'vitest'
@@ -119,7 +119,7 @@ describe('IndustryService on the fake ESI', () => {
     expect(r.materialCost).toBe(138_298_834)
     expect(r.jobCost).toBeUndefined()
     expect(r.warnings).toEqual([
-      '系统指数暂时取不到，安装费用没有计入系统指数（偏低）',
+      '星系成本指数暂时取不到，安装费用没有计入星系成本指数（偏低）',
       '调整价暂时取不到，安装费用、设施税和 SCC 附加费没有计入',
     ])
   })

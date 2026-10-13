@@ -164,7 +164,7 @@ export function estimatedItemValue(materials: BlueprintActivity['materials'], ru
 }
 
 export interface JobCostParams {
-  /** 系统指数（小数，例如 0.0231）；星系不在 /industry/systems 里时由调用方传 0 并警告 */
+  /** 星系成本指数（小数，例如 0.0231）；星系不在 /industry/systems 里时由调用方传 0 并警告 */
   sci: number
   /** 建筑和改装件的费用乘数（S_cost、R_cost） */
   mods: ModifierSet

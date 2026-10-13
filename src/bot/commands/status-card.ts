@@ -201,12 +201,12 @@ function dataLines(status: CoreStatus, now: number): Line[] {
   return lines
 }
 
-/** 系统指数：13:00 更新 · 调整价：13:05 更新（配了工业地点时才有） */
+/** 星系成本指数：13:00 更新 · 调整价：13:05 更新（配了工业地点时才有） */
 function industryLines(status: CoreStatus, now: number): Line[] {
   const i = status.industry
   if (!i) return []
   const at = (ms: number | null) => (ms === null ? '还没有' : `${clock(ms, now)} 更新`)
-  return [{ text: `系统指数：${at(i.indicesAt)} · 调整价：${at(i.adjustedPricesAt)}` }]
+  return [{ text: `星系成本指数：${at(i.indicesAt)} · 调整价：${at(i.adjustedPricesAt)}` }]
 }
 
 function esiLine(status: CoreStatus, now: number): Line[] {

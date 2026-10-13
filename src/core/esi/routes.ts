@@ -350,7 +350,7 @@ export class EsiApi {
     }, withStale(opts, INDUSTRY_STALE_HOURS * HOUR * 1000))
   }
 
-  /** 系统指数。限流组 industry */
+  /** 星系成本指数。限流组 industry */
   industrySystems(opts: EsiCallOptions = {}): Promise<EsiResult<EsiIndustrySystem[]>> {
     return this.client.request({
       route: 'GET /industry/systems',

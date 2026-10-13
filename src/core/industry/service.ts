@@ -1,11 +1,11 @@
 // IndustryService（§2.6–§2.8、§6.7.9、§6.7.10）：制造、反应、制造比价、多买清单。
 // plan 的三种模式：
-//   base     基础参考：ME/TE 写了才算，无建筑、无改装件、不计系统指数和税；
+//   base     基础参考：ME/TE 写了才算，无建筑、无改装件、不计星系成本指数和税；
 //   advanced 有地点：缺的参数用默认值（地点的默认建筑和改装件、地点的 ME/TE、建筑的税），直接出结果；
 //   steps    「高级」逐步：地点 → ME/TE（反应没有）→ 建筑（只有一座时跳过），缺哪一步返回哪一步（IndustryStep）。
 // 每个选项里都是完整的命令参数（无状态，按钮和编号回复都能用）；物品写的是 commandName，整条命令太长时由 bot 换成 #typeID。
 // 定价：材料、成品按配置的市场和价格类型。整个市场不可用、或者单个材料没有价格时改用回退市场（标 †）；
-// 没有回退市场就算「缺价格」，总成本标不完整，绝不当 0。安装费用要系统指数和调整价（indices.ts），取不到时写明。
+// 没有回退市场就算「缺价格」，总成本标不完整，绝不当 0。安装费用要星系成本指数和调整价（indices.ts），取不到时写明。
 
 import { COMPARE_ME_TE, DEADLINE_GUARD_MS, MAX_RUNS, QUERY_DEADLINE_MS, SHOW_MAX_SKILL_TIME, T2_ME_TE_CHOICES } from '../../constants'
 import { DataNotReadyError } from '../data'
@@ -30,7 +30,7 @@ import { NO_BONUS, SEC_LABEL, jobModifiers, structureMultipliers } from './modif
 import type { JobModifiers } from './modifiers'
 import { multibuyBlocks } from './multibuy'
 
-/** 第 1 步列地点时，系统指数最多等多久（拿不到就不写指数） */
+/** 第 1 步列地点时，星系成本指数最多等多久（拿不到就不写指数） */
 export const STEP_INDICES_WAIT_MS = 1500
 /** 反应写了「建筑:无」：重新问建筑时的说明 */
 const REACTION_NEEDS_REFINERY = '反应只能在精炼厂里进行（不能用「建筑:无」），请选择建筑'
@@ -120,8 +120,16 @@ function pctText(p: number, signed = false): string {
   return `${signed && v > 0 ? '+' : ''}${v}%`
 }
 
-/** 系统指数：固定 2 位小数（1.2 → 1.20%，和结果卡片一样） */
+/** 星系成本指数：固定 2 位小数（1.2 → 1.20%，和结果卡片一样） */
 const pctFixed = (p: number) => `${(Math.round(p * 100) / 100 || 0).toFixed(2)}%`
+
+/** 建筑自带的加成（百分比）；没有建筑或这种活动没有加成时 undefined */
+function structureBonusOf(structure: IndustryStructure | null, activity: IndustryActivity): IndustryResult['applied']['structureBonus'] {
+  const s = structureMultipliers(structure?.type, activity)
+  if (s.me === 1 && s.te === 1 && s.cost === 1) return undefined
+  const tidy = (mult: number) => Math.round(bonusPct(mult) * 1e6) / 1e6 || 0
+  return { me: tidy(s.me), te: tidy(s.te), cost: tidy(s.cost) }
+}
 
 /** 改装件的情况（见 IndustryRigState） */
 function rigStateOf(setup: Pick<Setup, 'structure' | 'rigs'>, applied: number): IndustryRigState {
@@ -181,7 +189,7 @@ class Service implements IndustryService {
       const me = reaction ? 0 : req.me ?? fallback.me
       const te = reaction ? 0 : req.te ?? fallback.te
       const deadlineAt = this.now() + QUERY_DEADLINE_MS
-      // 材料单价各地点相同，系统指数和调整价也只取一次
+      // 材料单价各地点相同，星系成本指数和调整价也只取一次
       const [book, costs] = await Promise.all([this.priceBook(job, this.baseWanted(job), deadlineAt), this.costInputs()])
       const rows: LocationComparison['rows'] = list.map((location) => {
         const structure = defaultStructure(location, job.activity)
@@ -375,7 +383,7 @@ class Service implements IndustryService {
       const detail = [
         SEC_LABEL[location.system.secClass],
         structure?.name ?? '无建筑加成',
-        sci === undefined ? '' : `系统指数 ${pctFixed(sci * 100)}`,
+        sci === undefined ? '' : `星系成本指数 ${pctFixed(sci * 100)}`,
       ].filter(Boolean).join(' · ')
       return { label: location.name, detail, command: this.command(job, { ...carry, location: location.name, steps: true }) }
     })
@@ -526,6 +534,8 @@ class Service implements IndustryService {
     if (location) {
       Object.assign(result.applied, { location: location.name, systemId: location.system.id, secClass: location.system.secClass })
       if (structure) result.applied.structure = structure.name
+      const bonus = structureBonusOf(structure, job.activity)
+      if (bonus) result.applied.structureBonus = bonus
       if (structure && setup.only) result.applied.structureOnly = true
       result.applied.rigState = rigStateOf(setup, mods.applied.length)
     }
@@ -544,10 +554,10 @@ class Service implements IndustryService {
     Object.assign(result.applied, { facilityTaxPct: tax, sccPct: config.sccSurchargePct })
     let sci = 0
     if (!costs.indices) {
-      result.warnings.push('系统指数暂时取不到，安装费用没有计入系统指数（偏低）')
+      result.warnings.push('星系成本指数暂时取不到，安装费用没有计入星系成本指数（偏低）')
     } else {
       const found = costIndexOf(costs.indices, location.system.id, job.activity)
-      if (found === undefined) result.warnings.push(`${nameOf(location.system)} 不在系统指数列表里，安装费用按指数 0 计算`)
+      if (found === undefined) result.warnings.push(`${nameOf(location.system)} 不在星系成本指数列表里，安装费用按指数 0 计算`)
       sci = found ?? 0
       result.applied.sci = sci
       result.indicesAt = costs.indices.dataTime
@@ -709,10 +719,10 @@ class Service implements IndustryService {
     }
   }
 
-  /** 系统指数和调整价（各自有时限，取不到时是 null） */
+  /** 星系成本指数和调整价（各自有时限，取不到时是 null） */
   private async costInputs(): Promise<CostInputs> {
     const [indices, adjusted] = await Promise.all([
-      this.safe(() => this.o.indices.systemIndices(), '系统指数'),
+      this.safe(() => this.o.indices.systemIndices(), '星系成本指数'),
       this.safe(() => this.o.indices.adjustedPrices(), '调整价'),
     ])
     return { indices, adjusted }
@@ -720,7 +730,7 @@ class Service implements IndustryService {
 
   /** 第 1 步列地点用：只等一小会儿 */
   private quickIndices(): Promise<SystemIndices | null> {
-    return this.safe(() => this.o.indices.systemIndices({ deadlineMs: STEP_INDICES_WAIT_MS }), '系统指数')
+    return this.safe(() => this.o.indices.systemIndices({ deadlineMs: STEP_INDICES_WAIT_MS }), '星系成本指数')
   }
 
   private async safe<T>(task: () => Promise<T | CoreFailure>, what: string): Promise<T | null> {

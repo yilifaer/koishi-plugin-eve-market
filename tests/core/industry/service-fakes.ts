@@ -1,4 +1,4 @@
-// IndustryService 测试共用：假的报价服务、假的系统指数和调整价、把真的识别器、市场注册表、工业地点接在一起。
+// IndustryService 测试共用：假的报价服务、假的星系成本指数和调整价、把真的识别器、市场注册表、工业地点接在一起。
 // 价格、指数都是编造的；地点名、建筑名也是编造的（XX-1、联盟工业点A），星系用公共星系。
 
 import { normalizeConfig } from '../../../src/config/normalize'

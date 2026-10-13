@@ -56,8 +56,8 @@ function compactNumber(value: number, decimals: number, grouping: boolean, trim:
 }
 
 /** 完整价格（不带 ISK）：≥ 100,000 取整，否则 2 位小数。按 2 位小数四舍五入后的值判断，99,999.996 算 100,000 */
-export function fullPrice(value: number, grouping: boolean): string {
-  const integer = Math.abs(roundHalfAway(value, 2)) >= INTEGER_FROM
+export function fullPrice(value: number, grouping: boolean, forceInteger = false): string {
+  const integer = forceInteger || Math.abs(roundHalfAway(value, 2)) >= INTEGER_FROM
   return formatFixed(value, integer ? 0 : 2, grouping)
 }
 
@@ -84,7 +84,7 @@ export function createPriceFormatter(display: FormatterDisplay, clock: Clock, ti
     const o = { ...defaults, ...overrides }
     const compact = compactPrice(value, o.compactDecimals, o.thousandSeparator)
     if (o.mode === 'compact_only') return { na: false, compact }
-    const full = `${fullPrice(value, o.thousandSeparator)}${o.showCurrency ? ' ISK' : ''}`
+    const full = `${fullPrice(value, o.thousandSeparator, o.integer)}${o.showCurrency ? ' ISK' : ''}`
     if (o.mode === 'full_only') return { na: false, full }
     const hasCompact = Math.abs(roundHalfAway(value, 2)) >= COMPACT_FROM
     return hasCompact ? { na: false, full, compact } : { na: false, full }

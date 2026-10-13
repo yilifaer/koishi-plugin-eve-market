@@ -210,7 +210,7 @@ describe('createEveCore: EVE authorization, and industry', () => {
     expect(core.industry.locations(PUBLIC)).toEqual([])
     expect(core.parse.industryArgs('乌鸦级*2', 'manufacturing', PUBLIC)).toMatchObject({ typeId: RAVEN, quantity: 2, mode: 'base' })
     expect(core.parse.industryArgs('乌鸦级 XX-1', 'manufacturing', PUBLIC)).toMatchObject({ ok: false, code: 'UNKNOWN_LOCATION', token: 'XX-1' })
-    // 没配地点：不预取系统指数和调整价，「市场状态」里也不列
+    // 没配地点：不预取星系成本指数和调整价，「市场状态」里也不列
     expect(core.status().industry).toBeUndefined()
     expect(fake.count(/^\/industry\/systems$/)).toBe(0)
   })
