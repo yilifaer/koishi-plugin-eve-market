@@ -3,13 +3,15 @@
 //   base     基础参考：ME/TE 写了才算，无建筑、无改装件、不计星系成本指数和税；
 //   advanced 有地点：缺的参数用默认值（地点的默认建筑和改装件、地点的 ME/TE、建筑的税），直接出结果；
 //   steps    「高级」逐步：地点 → ME/TE（反应没有）→ 建筑（只有一座时跳过），缺哪一步返回哪一步（IndustryStep）。
+// 地点和建筑按产品筛：造不了的地点、建筑不列（capabilities.ts）；没写建筑、能造的有 2 座以上时，
+// 取一次价把每座都算一遍，预计总成本最低的胜出（pick.ts），结果标 autoPicked；制造比价每个地点同样处理，不多取价。
 // 每个选项里都是完整的命令参数（无状态，按钮和编号回复都能用）；物品写的是 commandName，整条命令太长时由 bot 换成 #typeID。
 // 定价：材料、成品按配置的市场和价格类型。整个市场不可用、或者单个材料没有价格时改用回退市场（标 †）；
 // 没有回退市场就算「缺价格」，总成本标不完整，绝不当 0。安装费用要星系成本指数和调整价（indices.ts），取不到时写明。
 
 import { COMPARE_ME_TE, DEADLINE_GUARD_MS, MAX_RUNS, QUERY_DEADLINE_MS, SHOW_MAX_SKILL_TIME, T2_ME_TE_CHOICES } from '../../constants'
 import { DataNotReadyError } from '../data'
-import { roundHalfAway } from '../format'
+import { compactPrice, roundHalfAway } from '../format'
 import { industryArgsText } from '../parse'
 import type { IndustryArgsParts } from '../parse'
 import type { Clock, Logger, Scheduler } from '../ports'
@@ -17,18 +19,21 @@ import type {
   Access, BlueprintActivity, CoreFailure, DataService, DataSet, FailureReason, IndustryActivity, IndustryLocationInfo,
   IndustryRequest, IndustryResult, IndustryRigState, IndustryService, IndustrySettings, IndustryStep, ItemInfo, ItemResolver,
   LocationComparison,
-  MarketDef, MarketRegistry, MarketService, PriceQuote, PriceSide, Resolution, TypeId,
+  MarketDef, MarketRegistry, MarketService, PriceQuote, PriceSide, Resolution, ServiceInfo, TypeId,
 } from '../types'
 import { isFailure } from '../types'
 import { describeError, withDeadline } from '../util'
+import { canBuild, locationCanBuild, needLabel } from './capabilities'
 import { FORMULA_REVISION, facilityTaxPctFor, formulaConfig, jobsCost, planProduction, runsForQuantity } from './formulas'
 import { costIndexOf } from './indices'
 import type { AdjustedPrices, IndustryIndices, SystemIndices } from './indices'
-import { defaultStructure, findStructure, locationSupports, structuresFor } from './locations'
-import type { IndustryLocation, IndustryLocations, IndustryStructure } from './locations'
+import { findStructure, locationSupports, structuresFor } from './locations'
+import type { BuildableLocations, IndustryLocation, IndustryLocations, IndustryStructure } from './locations'
 import { NO_BONUS, SEC_LABEL, jobModifiers, structureMultipliers } from './modifiers'
 import type { JobModifiers } from './modifiers'
 import { multibuyBlocks } from './multibuy'
+import { rankStructures, rankingCost } from './pick'
+import type { Ranked } from './pick'
 
 /** 第 1 步列地点时，星系成本指数最多等多久（拿不到就不写指数） */
 export const STEP_INDICES_WAIT_MS = 1500
@@ -49,6 +54,9 @@ export interface IndustryServiceOptions {
   scheduler: Scheduler
   logger?: Logger
 }
+
+/** 候选建筑各算一遍的结果 */
+type Candidate = Ranked<{ structure: IndustryStructure; result: IndustryResult }>
 
 /** 一次计算里不随地点变的部分 */
 interface Job {
@@ -165,6 +173,12 @@ class Service implements IndustryService {
     return this.o.locations.visible(access, activity).map((l) => ({ name: l.name, isDefault: l.isDefault }))
   }
 
+  locationsFor(access: Access, activity: IndustryActivity, typeId: TypeId): IndustryLocationInfo[] {
+    const product = this.o.items.byId(typeId)
+    const list = product ? this.o.locations.buildable(access, activity, product).usable : this.o.locations.visible(access, activity)
+    return list.map((l) => ({ name: l.name, isDefault: l.isDefault }))
+  }
+
   async plan(req: IndustryRequest): Promise<IndustryResult | IndustryStep | CoreFailure> {
     try {
       const job = this.job(req)
@@ -180,7 +194,8 @@ class Service implements IndustryService {
     try {
       const job = this.job(req)
       if ('ok' in job) return job
-      const list = this.o.locations.visible(req.access, req.activity)
+      const buildable = this.o.locations.buildable(req.access, req.activity, job.product)
+      const list = buildable.usable
       if (list.length < 2) {
         return failure('NOT_CONFIGURED', { locations: list.map((l) => l.name), message: '本群可比较的工业地点不足 2 个' })
       }
@@ -189,22 +204,21 @@ class Service implements IndustryService {
       const me = reaction ? 0 : req.me ?? fallback.me
       const te = reaction ? 0 : req.te ?? fallback.te
       const deadlineAt = this.now() + QUERY_DEADLINE_MS
-      // 材料单价各地点相同，星系成本指数和调整价也只取一次
+      // 材料单价各地点相同，星系成本指数和调整价也只取一次；各地点挑建筑也用这一份
       const [book, costs] = await Promise.all([this.priceBook(job, this.baseWanted(job), deadlineAt), this.costInputs()])
       const rows: LocationComparison['rows'] = list.map((location) => {
-        const structure = defaultStructure(location, job.activity)
-        const defaulted: Defaulted[] = []
-        if (req.me === undefined && !reaction) defaulted.push('me')
-        if (req.te === undefined && !reaction) defaulted.push('te')
-        if (structure) defaulted.push('structure')
-        if (structure && req.rigs === undefined) defaulted.push('rigs')
-        if (req.facilityTaxPct === undefined) defaulted.push('tax')
-        const setup: Setup = { location, structure, rigs: req.rigs ?? 'default', me, te, tax: req.facilityTaxPct, defaulted }
-        const result = this.assemble(job, setup, book, costs)
+        const base = { location, rigs: req.rigs ?? 'default', me, te, tax: req.facilityTaxPct } as const
+        const candidates = this.capable(job, location)
+        const auto = candidates.length > 1
+        const structure = auto ? null : candidates[0] ?? null
+        const picked = auto
+          ? this.rankCandidates(job, { ...base, defaulted: this.defaultedOf(req, job, true, false) }, candidates, book, costs)[0].item
+          : { structure, result: this.assemble(job, { ...base, structure, defaulted: this.defaultedOf(req, job, !!structure, true) }, book, costs) }
         const row: LocationComparison['rows'][number] = {
-          location: location.name, noRigs: !result.applied.rigs.length, result, cheapest: false, fastest: false,
+          location: location.name, noRigs: !picked.result.applied.rigs.length, result: picked.result, cheapest: false, fastest: false,
         }
-        if (structure) row.structure = structure.name
+        if (picked.structure) row.structure = picked.structure.name
+        if (auto) Object.assign(row, { autoPicked: true, among: candidates.length })
         return row
       })
       const cost = (r: IndustryResult) => r.materialCost + (r.jobCost?.total ?? 0)
@@ -218,6 +232,7 @@ class Service implements IndustryService {
       }
       if (req.rigs === 'none') out.rigsOff = true
       if (req.facilityTaxPct !== undefined) out.facilityTaxPct = req.facilityTaxPct
+      if (buildable.unable) out.unable = { count: buildable.unable, need: buildable.need ?? '' }
       return out
     } catch (e) {
       return this.caught(e)
@@ -267,55 +282,58 @@ class Service implements IndustryService {
     const defaulted: Defaulted[] = []
     let location: IndustryLocation | undefined
     let only = false
+    let unable: Pick<BuildableLocations, 'unable' | 'need'> = { unable: 0 }
     if (req.location !== undefined) {
       const found = this.findLocation(job, req.location)
       if ('ok' in found) return found
       location = found
+      const verdict = locationCanBuild(location, job.product, job.activity, job.data.industry)
+      if (!verdict.ok) return this.cannotBuildHere(job, location, verdict.need)
     } else {
-      const list = this.o.locations.visible(req.access, job.activity)
+      const buildable = this.o.locations.buildable(req.access, job.activity, job.product)
+      const list = buildable.usable
+      unable = buildable
       if (list.length === 1) {
         location = list[0]
         only = true
       } else if (req.mode === 'advanced') {
-        location = this.o.locations.defaultLocation(req.access, job.activity)
+        const fallback = this.o.locations.defaultLocation(req.access, job.activity)
+        location = fallback && list.includes(fallback) ? fallback : undefined
       }
       if (!location) {
-        if (!list.length) return failure('NOT_CONFIGURED', { locations: [], message: `本群没有可以${ACTIVITY_LABEL[job.activity]}的工业地点` })
-        return this.locationStep(job, req, list)
+        if (!list.length) return this.noLocation(job, buildable)
+        return this.locationStep(job, req, list, unable)
       }
       defaulted.push('location')
     }
 
     const manufacturing = job.activity === 'manufacturing'
     if (manufacturing && (req.meteMissing || (req.mode === 'steps' && req.me === undefined && req.te === undefined))) return this.meteStep(job, req, location, only)
-    const fallback = job.t2 ? T2_ME_TE_CHOICES[0] : { me: location.defaultME, te: location.defaultTE }
-    let me = 0
-    let te = 0
-    if (manufacturing) {
-      me = req.me ?? fallback.me
-      te = req.te ?? fallback.te
-      if (req.me === undefined) defaulted.push('me')
-      if (req.te === undefined) defaulted.push('te')
-    }
+    const { me, te } = this.meTe(job, req, location, defaulted)
 
-    const list = structuresFor(location, job.activity)
+    const candidates = this.capable(job, location)
     let structure: IndustryStructure | null = null
     let onlyStructure = false
     // 「建筑:?」和写错的建筑名：列出全部，包括「无建筑加成」（反应只能在精炼厂里做，不列）
     if (req.structure === '?') return this.structureStep(job, req, location, only, true)
     if (req.structure === 'none') {
       if (!manufacturing) return this.structureStep(job, req, location, only, true, REACTION_NEEDS_REFINERY)
+      const verdict = canBuild(null, location, job.product, job.activity, job.data.industry)
+      if (!verdict.ok) return this.structureStep(job, req, location, only, true, `「建筑:无」造不了${nameOf(job.product)}（需要${needLabel(verdict.need)}），请重新选择`)
       structure = null
     } else if (req.structure !== undefined) {
       const found = findStructure(location, req.structure, job.activity)
       if (!found) return this.structureStep(job, req, location, only, true, `${location.name} 没有叫「${req.structure}」的建筑，请重新选择`)
+      const verdict = canBuild(found, location, job.product, job.activity, job.data.industry)
+      if (!verdict.ok) return this.structureStep(job, req, location, only, true, `${found.name} 造不了${nameOf(job.product)}（需要${needLabel(verdict.need)}），请重新选择`)
       structure = found
-    } else if (list.length) {
-      // 「无建筑加成」不算一个选项：只有一座建筑时直接用它
-      if (req.mode === 'steps' && list.length > 1) return this.structureStep(job, req, location, only, false)
-      structure = defaultStructure(location, job.activity)
+    } else if (candidates.length) {
+      // 「无建筑加成」不算一个选项：只有一座能造的建筑时直接用它
+      if (req.mode === 'steps' && candidates.length > 1) return this.structureStep(job, req, location, only, false)
+      if (candidates.length > 1) return this.autoPicked(job, req, location, candidates, me, te, defaulted)
+      structure = candidates[0]
       defaulted.push('structure')
-      onlyStructure = list.length === 1
+      onlyStructure = true
     }
     if (structure && req.rigs === undefined) defaulted.push('rigs')
     if (req.facilityTaxPct === undefined) defaulted.push('tax')
@@ -326,6 +344,70 @@ class Service implements IndustryService {
     const wanted = plan.materials.map((m) => ({ typeId: m.typeId, qty: m.quantity }))
     const [book, costs] = await Promise.all([this.priceBook(job, wanted, this.now() + QUERY_DEADLINE_MS), this.costInputs()])
     return this.assemble(job, setup, book, costs)
+  }
+
+  /** 制造的 ME/TE：命令里写的，否则 T2 用常见值、其他用地点的默认；反应没有 */
+  private meTe(job: Job, req: IndustryRequest, location: IndustryLocation, defaulted: Defaulted[]): { me: number; te: number } {
+    if (job.activity !== 'manufacturing') return { me: 0, te: 0 }
+    const fallback = job.t2 ? T2_ME_TE_CHOICES[0] : { me: location.defaultME, te: location.defaultTE }
+    if (req.me === undefined) defaulted.push('me')
+    if (req.te === undefined) defaulted.push('te')
+    return { me: req.me ?? fallback.me, te: req.te ?? fallback.te }
+  }
+
+  /** 这个地点里造得了这个产品的建筑（能做这种活动的），按表格顺序 */
+  private capable(job: Job, location: IndustryLocation): IndustryStructure[] {
+    return structuresFor(location, job.activity).filter((s) => canBuild(s, location, job.product, job.activity, job.data.industry).ok)
+  }
+
+  /** 比价用：这一行的 defaulted（structure：有建筑；listed：建筑是默认的那座，不是自动挑的） */
+  private defaultedOf(req: IndustryRequest | Omit<IndustryRequest, 'location' | 'structure' | 'mode'>, job: Job, structure: boolean, listed: boolean): Defaulted[] {
+    const reaction = job.activity === 'reaction'
+    const out: Defaulted[] = []
+    if (req.me === undefined && !reaction) out.push('me')
+    if (req.te === undefined && !reaction) out.push('te')
+    if (structure && listed) out.push('structure')
+    if (structure && req.rigs === undefined) out.push('rigs')
+    if (req.facilityTaxPct === undefined) out.push('tax')
+    return out
+  }
+
+  /** 候选建筑各算一遍（价格、指数共用同一份，不再取价），按预计总成本 → 时间 → 默认勾 → 表格顺序排好 */
+  private rankCandidates(job: Job, base: Omit<Setup, 'structure'>, list: IndustryStructure[], book: PriceBook, costs: CostInputs): Candidate[] {
+    return rankStructures(list.map((structure) => {
+      const result = this.assemble(job, { ...base, structure, defaulted: [...base.defaulted] }, book, costs)
+      result.applied.autoPicked = { among: list.length }
+      return {
+        item: { structure, result }, cost: rankingCost(result, costs.adjusted), time: result.timeSeconds, isDefault: structure.isDefault, row: structure.row,
+      }
+    }))
+  }
+
+  /** 没写建筑、能造的有 2 座以上：取一次价，各算一遍，用最合适的那座 */
+  private async autoPicked(
+    job: Job, req: IndustryRequest, location: IndustryLocation, list: IndustryStructure[], me: number, te: number, defaulted: Defaulted[],
+  ): Promise<IndustryResult> {
+    if (req.rigs === undefined) defaulted.push('rigs')
+    if (req.facilityTaxPct === undefined) defaulted.push('tax')
+    const [book, costs] = await Promise.all([this.priceBook(job, this.baseWanted(job), this.now() + QUERY_DEADLINE_MS), this.costInputs()])
+    const base = { location, rigs: req.rigs ?? 'default', me, te, tax: req.facilityTaxPct, defaulted } as const
+    return this.rankCandidates(job, base, list, book, costs)[0].item.result
+  }
+
+  /** 写的地点造不了这个产品：给能造的地点 */
+  private cannotBuildHere(job: Job, location: IndustryLocation, need: readonly ServiceInfo[]): CoreFailure {
+    const { usable } = this.o.locations.buildable(job.access, job.activity, job.product)
+    const label = needLabel(need)
+    const message = `${location.name} 造不了${nameOf(job.product)}（需要${label}）`
+    return failure('UNKNOWN_LOCATION', { token: location.name, reason: 'capability', need: label, locations: usable.map((l) => l.name), message })
+  }
+
+  /** 本群没有能造这个产品的地点 */
+  private noLocation(job: Job, buildable: BuildableLocations): CoreFailure {
+    const what = ACTIVITY_LABEL[job.activity]
+    if (!buildable.unable) return failure('NOT_CONFIGURED', { locations: [], message: `本群没有可以${what}的工业地点` })
+    const message = `本群没有能${what}${nameOf(job.product)}的工业地点（需要${buildable.need}）`
+    return failure('NOT_CONFIGURED', { locations: [], reason: 'capability', need: buildable.need, message })
   }
 
   /** 命令里写的地点：本群看不到和不存在一样；高安不能反应；没有能做这种活动的建筑 */
@@ -373,23 +455,28 @@ class Service implements IndustryService {
     return out
   }
 
-  private async locationStep(job: Job, req: IndustryRequest, list: IndustryLocation[]): Promise<IndustryStep> {
+  private async locationStep(
+    job: Job, req: IndustryRequest, list: IndustryLocation[], skipped: Pick<BuildableLocations, 'unable' | 'need'>,
+  ): Promise<IndustryStep> {
     const indices = await this.quickIndices()
     // 写了的建筑带下去：选了地点以后用它，或者说明这个地点没有它
     const carry = { ...this.carried(req), me: req.me, te: req.te, meteMissing: req.meteMissing, structure: req.structure }
     const options = list.map((location) => {
-      const structure = defaultStructure(location, job.activity)
+      const usable = this.capable(job, location)
+      // 2 座以上能造时会自动挑最便宜的，这里不替它写某一座
+      const structureText = usable.length === 0 ? '无建筑加成' : usable.length === 1 ? usable[0].name : `${usable.length} 座可选，自动挑`
       const sci = indices ? costIndexOf(indices, location.system.id, job.activity) : undefined
       const detail = [
         SEC_LABEL[location.system.secClass],
-        structure?.name ?? '无建筑加成',
+        structureText,
         sci === undefined ? '' : `星系成本指数 ${pctFixed(sci * 100)}`,
       ].filter(Boolean).join(' · ')
       return { label: location.name, detail, command: this.command(job, { ...carry, location: location.name, steps: true }) }
     })
     const step: IndustryStep = { step: 'location', options, summary: this.summary(job, req) }
+    if (skipped.unable) step.note = `另有 ${skipped.unable} 个地点造不了（需要${skipped.need}）`
     const fallback = this.o.locations.defaultLocation(job.access, job.activity)
-    if (fallback) step.defaults = this.command(job, { ...carry, location: fallback.name })
+    if (fallback && list.includes(fallback)) step.defaults = this.command(job, { ...carry, location: fallback.name })
     return step
   }
 
@@ -412,22 +499,64 @@ class Service implements IndustryService {
     return step
   }
 
-  /** all：也列「无建筑加成」（反应只能在精炼厂里做，不列） */
-  private structureStep(job: Job, req: IndustryRequest, location: IndustryLocation, only: boolean, all: boolean, notice?: string): IndustryStep {
+  /**
+   * 建筑这一步：取一次价，造得了的建筑各算一遍，预计总成本最低的排第一并标推荐；造不了的不列，数量写在 note。
+   * all：也列「无建筑加成」（放最后；反应只能在精炼厂里做，不列）
+   */
+  private async structureStep(
+    job: Job, req: IndustryRequest, location: IndustryLocation, only: boolean, all: boolean, notice?: string,
+  ): Promise<IndustryStep> {
     const carry = { ...this.carried(req), location: location.name, me: req.me, te: req.te }
-    const options: IndustryStep['options'] = structuresFor(location, job.activity).map((structure) => ({
-      label: structure.name,
-      detail: this.structureDetail(job, location, structure, req.rigs ?? 'default'),
-      command: this.command(job, { ...carry, structure: structure.name }),
-    }))
-    if (all && job.activity === 'manufacturing') {
+    const rigs = req.rigs ?? 'default'
+    const { me, te } = this.meTe(job, req, location, [])
+    const [book, costs] = await Promise.all([this.priceBook(job, this.baseWanted(job), this.now() + QUERY_DEADLINE_MS), this.costInputs()])
+    const base = { location, rigs, me, te, tax: req.facilityTaxPct, defaulted: [] }
+    const ranked = this.rankCandidates(job, base, this.capable(job, location), book, costs)
+    const options: IndustryStep['options'] = ranked.map(({ item: { structure, result }, cost }, i) => {
+      const option: IndustryStep['options'][number] = {
+        label: structure.name,
+        detail: [this.costText(result, cost), this.structureDetail(job, location, structure, rigs)].join(' · '),
+        command: this.command(job, { ...carry, structure: structure.name }),
+      }
+      if (i === 0) option.recommended = true
+      if (!result.missingPrices) option.cost = cost
+      return option
+    })
+    if (all && job.activity === 'manufacturing' && canBuild(null, location, job.product, job.activity, job.data.industry).ok) {
       const tax = req.facilityTaxPct ?? formulaConfig(this.o.settings).npcFacilityTaxPct
+      const result = this.assemble(job, { ...base, structure: null }, book, costs)
       const command = this.command(job, { ...carry, structure: 'none' })
-      options.push({ label: '无建筑加成', detail: `按 NPC 空间站算 · 设施税 ${pctText(tax)}`, command })
+      const option: IndustryStep['options'][number] = {
+        label: '无建筑加成',
+        detail: [this.costText(result, rankingCost(result, costs.adjusted)), `按 NPC 空间站算 · 设施税 ${pctText(tax)}`].join(' · '),
+        command,
+      }
+      if (!result.missingPrices) option.cost = rankingCost(result, costs.adjusted)
+      options.push(option)
     }
     const step: IndustryStep = { step: 'structure', options, summary: this.summary(job, req, location, only, false), defaults: this.command(job, carry) }
     if (notice) step.notice = notice
+    const skipped = this.skippedStructures(job, location)
+    if (skipped) step.note = `另有 ${skipped.count} 座造不了（需要${skipped.need}）`
     return step
+  }
+
+  /** 预计总成本；有材料缺价格时不写数字（只用调整价顶上排序，不当成真实成本） */
+  private costText(result: IndustryResult, cost: number): string {
+    return `预计总成本 ${result.missingPrices ? '不完整' : compactPrice(cost, 2)}`
+  }
+
+  /** 这个地点能做这种活动、但造不了这个产品的建筑：数量和缺的服务 */
+  private skippedStructures(job: Job, location: IndustryLocation): { count: number; need: string } | undefined {
+    const need: ServiceInfo[] = []
+    let count = 0
+    for (const structure of structuresFor(location, job.activity)) {
+      const verdict = canBuild(structure, location, job.product, job.activity, job.data.industry)
+      if (verdict.ok) continue
+      count++
+      need.push(...verdict.need)
+    }
+    return count ? { count, need: needLabel(need) } : undefined
   }
 
   /** 材料 -1%，时间 -30%，费用 -5% · 改装件 屹立超大型舰船制造效率 II */
@@ -550,7 +679,7 @@ class Service implements IndustryService {
     const location = setup.location!
     const { structure } = setup
     const config = formulaConfig(this.o.settings)
-    const tax = facilityTaxPctFor({ override: setup.tax, structurePct: structure?.facilityTaxPct, hasStructure: !!structure }, config)
+    const tax = facilityTaxPctFor({ override: setup.tax, activity: job.activity, structure }, config)
     Object.assign(result.applied, { facilityTaxPct: tax, sccPct: config.sccSurchargePct })
     let sci = 0
     if (!costs.indices) {

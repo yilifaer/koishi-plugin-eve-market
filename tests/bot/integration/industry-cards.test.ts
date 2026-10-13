@@ -41,7 +41,7 @@ function example(over: Partial<IndustryResult> = {}): IndustryResult {
     timeSecondsMaxSkill: 3400,
     productValue: { marketKey: 'jita 4-4', side: 'sell', unit: 258_400_000, total: 258_400_000 },
     profit: { value: 90_680_456, marginPct: 35.09 },
-    formulaRevision: '1',
+    formulaRevision: '2',
     warnings: [],
     materialPrices: { marketKey: 'jita 4-4', side: 'sell' },
     pricesAt: Date.UTC(2026, 9, 7, 6, 20),

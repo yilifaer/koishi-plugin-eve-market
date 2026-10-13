@@ -80,13 +80,13 @@ describe('制造比价', () => {
 
     const off = await e.h.group('制造比价 乌鸦级 改装:无')
     expect(card(off)).toContain('ME 10 / TE 20 · 1 流程 · 不用改装件 · 材料按 Jita 4-4 出售价')
-    // 改装件是用户关掉的：不写「未装」「不生效」
-    expect(card(off)).toContain('1. **XX-1 · 大厂 💰最低 ⚡最快**\n    - 成本 `154.13M`')
+    // 改装件是用户关掉的：不写「未装」「不生效」；没有改装件时小厂更便宜，自动挑小厂
+    expect(card(off)).toContain('1. **XX-1 · 小厂 💰最低**\n    - 成本 `153.50M`')
     expect(card(off)).not.toMatch(/未装改装件|改装件对它不生效/)
     expect(buttons(off)[0]).toBe('XX-1 详情=>制造 乌鸦级 XX-1 ME10 TE20 改装:无')
     const detail = card(await e.h.group('1'))
     expect(detail).toContain('改装件 不用（改装:无）')
-    expect(detail).toContain('（154.13M）')
+    expect(detail).toContain('（153.50M）')
   })
 
   it('an NPC station has no rig note; a rig of the wrong size counts as not installed', async () => {

@@ -413,6 +413,203 @@ describe('structure helpers', () => {
   })
 })
 
+describe('IndustryLocations: taxes, purposes and services', () => {
+  const locations = [
+    { name: 'XX-1', system: 'NIH-02', isDefault: true },
+    { name: 'XX-2', system: 'Jita' },
+    { name: '联盟工业点A', system: 'Tama' },
+  ]
+  const SUPERCAPITAL = 35877
+  const MANUFACTURING = 35878
+  const CAPITAL = 35881
+  const REPROCESSING = 35899
+  const ids = (list: readonly { id: number }[] | null) => list?.map((x) => x.id)
+  /** 带着配置问题建（问题不要求为空） */
+  function make(industry: Record<string, unknown>) {
+    const { settings } = normalizeConfig({ industry: { locations, ...industry } })
+    return createIndustryLocations(settings.industry, staticDataService())
+  }
+
+  it('keeps one tax per activity: reaction falls back to the manufacturing tax, reprocessing to 0', () => {
+    const r = make({
+      structures: [
+        { location: 'XX-1', name: '甲', structureType: 'Athanor', activities: 'all', facilityTaxPct: 2 },
+        { location: 'XX-1', name: '乙', structureType: 'Athanor', activities: 'all', facilityTaxPct: 2, reactionTaxPct: 0, reprocessingTaxPct: 1.5 },
+        { location: 'XX-2', name: '空间站', structureType: 'NPC', activities: 'manufacturing-reprocessing', facilityTaxPct: 3, reprocessingTaxPct: 0.5 },
+      ],
+    })
+    const [a, b] = r.get('XX-1')!.structures
+    expect([a.taxPct, a.facilityTaxPct]).toEqual([{ manufacturing: 2, reaction: 2, reprocessing: 0 }, 2])
+    expect(b.taxPct).toEqual({ manufacturing: 2, reaction: 0, reprocessing: 1.5 })
+    // NPC 空间站的制造税是「NPC 空间站设施税」，提炼税照填的
+    expect(r.get('XX-2')!.structures[0].taxPct).toEqual({ manufacturing: 0.25, reaction: 3, reprocessing: 0.5 })
+    expect(Object.isFrozen(a.taxPct)).toBe(true)
+  })
+
+  it('services: what the structure really has at this security level', () => {
+    const r = make({
+      structures: [
+        { location: 'XX-1', name: '大厂', structureType: 'Sotiyo', supercapitalShipyard: true },
+        { location: 'XX-1', name: '中厂', structureType: 'Sotiyo' },
+        { location: 'XX-1', name: '塔', structureType: 'Athanor', activities: 'reaction-reprocessing' },
+        { location: 'XX-2', name: '中厂', structureType: 'Azbel' },
+        { location: '联盟工业点A', name: '中厂', structureType: 'Azbel' },
+      ],
+    })
+    const at = (location: string, i: number) => r.get(location)!.structures[i]
+    expect(ids(at('XX-1', 0).services)).toEqual([SUPERCAPITAL, MANUFACTURING, CAPITAL])
+    expect(at('XX-1', 0).supercapitalShipyard).toBe(true)
+    expect(ids(at('XX-1', 1).services)).toEqual([MANUFACTURING, CAPITAL])
+    expect(at('XX-1', 1).supercapitalShipyard).toBe(false)
+    expect(ids(at('XX-1', 2).services)).toEqual([REPROCESSING, 45537, 45538, 45539])
+    expect(at('XX-1', 2).purposes).toEqual(['reaction', 'reprocessing'])
+    // 高安的阿兹贝尔没有旗舰级船坞，低安的有
+    expect(ids(at('XX-2', 0).services)).toEqual([MANUFACTURING])
+    expect(ids(at('联盟工业点A', 0).services)).toEqual([MANUFACTURING, CAPITAL])
+    expect(r.issues()).toEqual([])
+  })
+
+  it('services is null when the data has no services table', () => {
+    const data = loadFixtureData()
+    const old: DataSet = { ...data, industry: { ...data.industry, services: null } }
+    const { settings } = normalizeConfig({
+      industry: { locations, structures: [{ location: 'XX-1', name: '大厂', structureType: 'Sotiyo', supercapitalShipyard: true }] },
+    })
+    const r = createIndustryLocations(settings.industry, staticDataService(old))
+    expect(r.get('XX-1')!.structures[0]).toMatchObject({ services: null, supercapitalShipyard: true })
+    expect(r.issues()).toEqual([])
+  })
+
+  it('the supercapital switch is ignored (and reported) on a type that cannot fit it or outside nullsec', () => {
+    const r = make({
+      structures: [
+        { location: 'XX-1', name: '中厂', structureType: 'Azbel', supercapitalShipyard: true },
+        { location: 'XX-1', name: '无加成', structureType: '无', supercapitalShipyard: true },
+        { location: '联盟工业点A', name: '大厂', structureType: 'Sotiyo', supercapitalShipyard: true },
+      ],
+    })
+    expect(r.get('XX-1')!.structures.map((s) => s.supercapitalShipyard)).toEqual([false, false])
+    expect(r.get('联盟工业点A')!.structures[0].supercapitalShipyard).toBe(false)
+    expect(ids(r.get('联盟工业点A')!.structures[0].services)).toEqual([MANUFACTURING, CAPITAL])
+    expect(messages(r.issues())).toEqual([
+      '工业建筑#1.supercapitalShipyard 阿兹贝尔（Azbel）装不上超级旗舰级船坞，「有超旗舰船坞」不生效',
+      '工业建筑#2.supercapitalShipyard 建筑类型为「无」装不上超级旗舰级船坞，「有超旗舰船坞」不生效',
+      '工业建筑#3.supercapitalShipyard 超级旗舰级船坞只能在 00 使用，而 联盟工业点A 是低安，「有超旗舰船坞」不生效',
+    ])
+  })
+
+  it('reprocessing: dropped on 「无」 (a row with nothing left is skipped), allowed at NPC stations', () => {
+    const r = make({
+      structures: [
+        { location: 'XX-1', name: '无加成', structureType: '无', activities: 'manufacturing-reprocessing' },
+        { location: 'XX-1', name: '只提炼', structureType: '无', activities: 'reprocessing' },
+        { location: 'XX-2', name: '空间站', structureType: 'NPC', activities: 'reprocessing' },
+        { location: 'XX-2', name: '塔', structureType: 'Athanor', activities: 'reprocessing' },
+      ],
+    })
+    expect(r.get('XX-1')!.structures.map((s) => [s.name, s.purposes])).toEqual([['无加成', ['manufacturing']]])
+    expect(r.get('XX-2')!.structures.map((s) => [s.name, s.activities, s.purposes])).toEqual([
+      ['空间站', [], ['reprocessing']],
+      ['塔', [], ['reprocessing']],
+    ])
+    expect(ids(r.get('XX-2')!.structures[1].services)).toEqual([REPROCESSING])
+    expect(messages(r.issues())).toEqual([
+      '工业建筑#1.activities 建筑类型为「无」（没有建筑加成）时不能提炼，「用途」里的提炼不生效',
+      '工业建筑#2.activities 建筑类型为「无」（没有建筑加成）时不能提炼，「用途」里的提炼不生效',
+      '工业建筑#2.activities 「用途」里没有能用的用途，已跳过',
+    ])
+  })
+
+  it('a reactor row that loses the reaction keeps its reprocessing', () => {
+    const r = make({ structures: [{ location: 'XX-2', name: '塔', structureType: 'Athanor', activities: 'reaction-reprocessing' }] })
+    expect(r.get('XX-2')!.structures[0]).toMatchObject({ activities: [], purposes: ['reprocessing'] })
+    expect(messages(r.issues())).toEqual(['工业建筑#1.activities XX-2 是高安（0.9），高安不能进行反应，「用途」里的反应不生效'])
+  })
+
+  it('the default reaction and reprocessing locations: unknown or unfit ones count as empty and are reported', () => {
+    const structures = [
+      { location: 'XX-1', name: '工厂', structureType: 'Azbel' },
+      { location: '联盟工业点A', name: '塔', structureType: 'Athanor', activities: 'reaction-reprocessing' },
+    ]
+    const ok = make({ structures, chainReactionLocation: '联盟工业点A', reprocessLocation: '联盟工业点A' })
+    expect(ok.chainReactionLocation(ALLOWED)?.name).toBe('联盟工业点A')
+    expect(ok.reprocessLocation(ALLOWED)?.name).toBe('联盟工业点A')
+    expect(ok.issues()).toEqual([])
+
+    const none = make({ structures })
+    expect([none.chainReactionLocation(ALLOWED), none.reprocessLocation(ALLOWED)]).toEqual([undefined, undefined])
+    expect(none.issues()).toEqual([])
+
+    const bad = make({ structures, chainReactionLocation: '不存在', reprocessLocation: 'XX-1' })
+    expect([bad.chainReactionLocation(ALLOWED), bad.reprocessLocation(ALLOWED)]).toEqual([undefined, undefined])
+    expect(bad.issues()).toEqual([
+      { section: 'industry', field: 'chainReactionLocation', message: '「默认反应地点」不存在 不是已配置的工业地点，已当作没填' },
+      { section: 'industry', field: 'reprocessLocation', message: '「提炼地点」XX-1 没有用途含「提炼」的建筑，已当作没填' },
+    ])
+    // 高安的地点不能反应
+    const high = make({ structures: [{ location: 'XX-2', name: '塔', structureType: 'Athanor', activities: 'reaction' }], chainReactionLocation: 'XX-2' })
+    expect(high.chainReactionLocation(ALLOWED)).toBeUndefined()
+    expect(high.issues().some((i) => i.field === 'chainReactionLocation' && i.message.includes('没有能反应的建筑'))).toBe(true)
+  })
+
+  it('the default reaction and reprocessing locations are empty for a group that cannot see them', () => {
+    const r = make({
+      structures: [{ location: 'XX-1', name: '塔', structureType: 'Athanor', activities: 'reaction-reprocessing' }],
+      chainReactionLocation: 'XX-1', reprocessLocation: 'XX-1',
+    })
+    expect(r.chainReactionLocation(ALLOWED)?.name).toBe('XX-1')
+    expect([r.chainReactionLocation(PUBLIC), r.reprocessLocation(PUBLIC)]).toEqual([undefined, undefined])
+  })
+})
+
+describe('IndustryLocations: buildable', () => {
+  const FRIGATE = { groupId: 25, categoryId: 6 }
+  const CARRIER = { groupId: 547, categoryId: 6 }
+  const SUPERCARRIER = { groupId: 659, categoryId: 6 }
+  const r = build({
+    locations: [
+      { name: 'XX-1', system: 'NIH-02', visibility: 'allowed' },
+      { name: 'XX-2', system: 'Jita', visibility: 'public' },
+      { name: '联盟工业点A', system: 'Tama', visibility: 'public' },
+      { name: '空点', system: 'Tama', visibility: 'public' },
+    ],
+    structures: [
+      { location: 'XX-1', name: '大厂', structureType: 'Sotiyo', supercapitalShipyard: true },
+      { location: 'XX-2', name: '工厂', structureType: 'Raitaru' },
+      { location: '联盟工业点A', name: '中厂', structureType: 'Azbel' },
+    ],
+  })
+
+  it('filters by what the services cover, and says what is missing', () => {
+    expect(names(r.buildable(ALLOWED, 'manufacturing', FRIGATE).usable)).toEqual(['XX-1', 'XX-2', '联盟工业点A', '空点'])
+    const carrier = r.buildable(ALLOWED, 'manufacturing', CARRIER)
+    expect(names(carrier.usable)).toEqual(['XX-1', '联盟工业点A'])
+    expect(carrier).toMatchObject({ unable: 2, need: '旗舰级船坞 / 超级旗舰级船坞' })
+    const super_ = r.buildable(ALLOWED, 'manufacturing', SUPERCARRIER)
+    expect(names(super_.usable)).toEqual(['XX-1'])
+    expect(super_).toMatchObject({ unable: 3, need: '超级旗舰级船坞' })
+    expect(r.buildable(ALLOWED, 'manufacturing', FRIGATE).need).toBeUndefined()
+  })
+
+  it('only looks at the locations the group can see', () => {
+    expect(names(r.buildable(PUBLIC, 'manufacturing', CARRIER).usable)).toEqual(['联盟工业点A'])
+    expect(r.buildable(PUBLIC, 'manufacturing', CARRIER).unable).toBe(2)
+  })
+
+  it('a location without structures builds with the manufacturing plant only', () => {
+    expect(names(r.buildable(ALLOWED, 'manufacturing', { groupId: 513, categoryId: 6 }).usable)).toContain('空点')
+    expect(names(r.buildable(ALLOWED, 'manufacturing', CARRIER).usable)).not.toContain('空点')
+  })
+
+  it('no services table: nothing is filtered', () => {
+    const data = loadFixtureData()
+    const old: DataSet = { ...data, industry: { ...data.industry, services: null } }
+    const { settings } = normalizeConfig({ industry: { locations: [{ name: 'XX-2', system: 'Jita' }], structures: [{ location: 'XX-2', name: '工厂', structureType: 'Raitaru' }] } })
+    const rl = createIndustryLocations(settings.industry, staticDataService(old))
+    expect(rl.buildable(ALLOWED, 'manufacturing', SUPERCARRIER)).toEqual({ usable: rl.all(), unable: 0 })
+  })
+})
+
 describe('IndustryLocations on the full bundled data', () => {
   it('every structure type and rig is found by its own English and Chinese name', () => {
     const data = loadSnapshotData()

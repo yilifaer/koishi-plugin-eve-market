@@ -77,6 +77,8 @@ export interface CoreFailure {
   markets?: string[]
   /** UNKNOWN_LOCATION 时：本群可用的工业地点的名称，按表格顺序 */
   locations?: string[]
+  /** UNKNOWN_LOCATION / NOT_CONFIGURED 且 reason 是 capability 时：造这个产品需要的建筑服务，例如「旗舰级船坞」 */
+  need?: string
   /** MARKET_UNAVAILABLE / UNKNOWN_MARKET 时带上保存好的估价编号 */
   appraisalId?: string
   /** 用户写的、没认出来的那个词（未知市场、未知地点；制造、反应认不出的物品名），原样，回显前要经过 safeEcho */
@@ -1053,16 +1055,18 @@ export interface LocationComparison {
   me: number
   te: number
   /** 按总成本排序 */
-  rows: Array<{ location: string; structure?: string; noRigs: boolean; result: IndustryResult; cheapest: boolean; fastest: boolean }>
+  rows: Array<{
+    location: string; structure?: string; noRigs: boolean; result: IndustryResult; cheapest: boolean; fastest: boolean
+    /** 建筑是自动挑的：在 among 座能做的里选了最合适的 */
+    autoPicked?: boolean; among?: number
+  }>
   materialMarketKey: string
   materialSide: PriceSide
   /** 命令里写了「改装:无」：各地点都不用改装件 */
   rigsOff?: boolean
   /** 命令里写的设施税：各地点都按它算 */
   facilityTaxPct?: number
-  /** 按产品筛过地点：自动挑的（count 个里选了这些）；不能做的地点数和原因 */
-  autoPicked?: { count: number; need: string }
-  among?: { count: number; need: string }
+  /** 按产品筛过地点：造不了这个产品的地点数和缺什么（例如「旗舰级船坞」） */
   unable?: { count: number; need: string }
 }
 
@@ -1074,6 +1078,8 @@ export interface IndustryLocationInfo {
 export interface IndustryService {
   /** 本群能用的工业地点，按表格顺序；给了 activity 时只列能做这种活动的（帮助、「快速计算」「制造比价」按钮用） */
   locations(access: Access, activity?: IndustryActivity): IndustryLocationInfo[]
+  /** 本群能用、并且造得了这个产品的工业地点（「快速计算」按钮用）；数据没有服务表时同 locations */
+  locationsFor(access: Access, activity: IndustryActivity, typeId: TypeId): IndustryLocationInfo[]
   /** steps 模式缺参数时返回下一步 */
   plan(req: IndustryRequest): Promise<IndustryResult | IndustryStep | CoreFailure>
   compare(req: Omit<IndustryRequest, 'location' | 'structure' | 'mode'>): Promise<LocationComparison | CoreFailure>

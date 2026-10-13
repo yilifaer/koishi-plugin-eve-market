@@ -15,7 +15,7 @@ import type { BlueprintActivity, IndustryActivity, TypeId } from '../types'
 import type { Multipliers } from './modifiers'
 
 /** 公式版本：写进每个结果（IndustryResult.formulaRevision） */
-export const FORMULA_REVISION = '1'
+export const FORMULA_REVISION = '2'
 
 // ------------------------------------------------------------------ 常量
 
@@ -213,12 +213,13 @@ export function jobsCost(
   return { ...sum, missingAdjusted: [...missing] }
 }
 
-/** 设施税：命令里写了「税:x%」用它；有建筑用建筑配置的；无建筑用 NPC 空间站的 */
+/** 设施税：命令里写了「税:x%」用它；有建筑用建筑配置的（按活动分开）；无建筑用 NPC 空间站的 */
 export function facilityTaxPctFor(
-  opts: { override?: number; structurePct?: number; hasStructure: boolean }, config: FormulaConfig,
+  opts: { override?: number; activity: IndustryActivity; structure: { taxPct: Readonly<Record<IndustryActivity, number>> } | null },
+  config: FormulaConfig,
 ): number {
   if (opts.override !== undefined) return opts.override
-  return opts.hasStructure ? opts.structurePct ?? 0 : config.npcFacilityTaxPct
+  return opts.structure ? opts.structure.taxPct[opts.activity] : config.npcFacilityTaxPct
 }
 
 // ------------------------------------------------------------------ 一个计算

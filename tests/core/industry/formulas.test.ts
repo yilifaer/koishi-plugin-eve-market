@@ -143,7 +143,7 @@ describe('installation cost', () => {
   })
 
   it('no structure: no cost bonus, NPC facility tax', () => {
-    const tax = facilityTaxPctFor({ hasStructure: false }, formulaConfig())
+    const tax = facilityTaxPctFor({ activity: 'manufacturing', structure: null }, formulaConfig())
     expect(tax).toBe(0.25)
     expect(jobCost(100_000_000, { sci: 0.02, mods: NONE, sysCostBonusPct: 0, facilityTaxPct: tax, sccSurchargePct: 4 })).toEqual({
       eiv: 100_000_000, grossSci: 2_000_000, bonuses: 0, facility: 250_000, scc: 4_000_000, extra: 0, total: 6_250_000,
@@ -180,12 +180,13 @@ describe('installation cost', () => {
     expect(cost.total).toBe(cost.grossSci + cost.bonuses + cost.facility + cost.scc + cost.extra)
   })
 
-  it('facility tax: the command overrides, then the structure, then the NPC default', () => {
+  it('facility tax: the command overrides, then the structure (per activity), then the NPC default', () => {
     const config = formulaConfig({ npcFacilityTaxPct: 0.5 })
-    expect(facilityTaxPctFor({ override: 0, structurePct: 2, hasStructure: true }, config)).toBe(0)
-    expect(facilityTaxPctFor({ override: 1.5, hasStructure: false }, config)).toBe(1.5)
-    expect(facilityTaxPctFor({ structurePct: 2, hasStructure: true }, config)).toBe(2)
-    expect(facilityTaxPctFor({ hasStructure: true }, config)).toBe(0)
-    expect(facilityTaxPctFor({ structurePct: 2, hasStructure: false }, config)).toBe(0.5)
+    const structure = { taxPct: { manufacturing: 2, reaction: 3 } }
+    expect(facilityTaxPctFor({ override: 0, activity: 'manufacturing', structure }, config)).toBe(0)
+    expect(facilityTaxPctFor({ override: 1.5, activity: 'manufacturing', structure: null }, config)).toBe(1.5)
+    expect(facilityTaxPctFor({ activity: 'manufacturing', structure }, config)).toBe(2)
+    expect(facilityTaxPctFor({ activity: 'reaction', structure }, config)).toBe(3)
+    expect(facilityTaxPctFor({ activity: 'reaction', structure: null }, config)).toBe(0.5)
   })
 })

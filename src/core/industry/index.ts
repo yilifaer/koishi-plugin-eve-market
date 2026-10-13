@@ -11,7 +11,7 @@ export {
   locationVisibleTo,
   structuresFor,
 } from './locations'
-export type { IndustryLocation, IndustryLocations, IndustryStructure, IndustrySystem } from './locations'
+export type { BuildableLocations, IndustryLocation, IndustryLocations, IndustryStructure, IndustrySystem } from './locations'
 export {
   INDICES_REVALIDATE_WAIT_MS,
   INDICES_STORE_KEY,

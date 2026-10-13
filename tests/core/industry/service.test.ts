@@ -98,7 +98,7 @@ describe('IndustryService: base reference', () => {
       productValue: { marketKey: JITA_KEY, side: 'sell', unit: 258_400_000, total: 258_400_000 },
       materialPrices: { marketKey: JITA_KEY, side: 'sell' },
       pricesAt: QUOTE_TIME,
-      formulaRevision: '1',
+      formulaRevision: '2',
       warnings: [],
     })
     expect(r.applied.location).toBeUndefined()
@@ -173,7 +173,7 @@ describe('IndustryService: advanced result', () => {
       location: 'XX-1', systemId: NIH_02, secClass: 'null', structure: '大厂', structureBonus: { me: -1, te: -30, cost: -5 },
       rigs: [{ item: expect.objectContaining({ typeId: XL_SHIP_I, zh: '屹立超大型舰船制造效率 I' }), me: -4.2, te: -42, cost: 0 }],
       me: 10, te: 20, sci: 0.02, facilityTaxPct: 1, sccPct: 4,
-      defaulted: ['me', 'te', 'structure', 'rigs', 'tax'], rigState: 'applied',
+      defaulted: ['me', 'te', 'rigs', 'tax'], autoPicked: { among: 2 }, rigState: 'applied',
     })
     expect(r.materialCost).toBe(138_298_834)
     // EIV 138,275,000 × 2% = 2,765,500；Sotiyo 费用 -5%；设施税 1%；SCC 4%
@@ -198,7 +198,8 @@ describe('IndustryService: advanced result', () => {
     const noRigs = result(await run('乌鸦级 XX-1 ME10 TE20 改装:无'))
     expect(noRigs.applied.rigs).toEqual([])
     expect(noRigs.timeSeconds).toBe(18_000 * 0.8 * 0.7)
-    expect(noRigs.applied.defaulted).toEqual(['structure', 'tax'])
+    expect(noRigs.applied.defaulted).toEqual(['tax'])
+    expect(noRigs.applied.autoPicked).toEqual({ among: 2 })
 
     const none = result(await run('乌鸦级 XX-1 ME10 TE20 建筑:无'))
     expect(none.applied.structure).toBeUndefined()
@@ -369,7 +370,7 @@ describe('IndustryService: steps (location → ME/TE → structure)', () => {
     expect(s).toEqual({
       step: 'location',
       options: [
-        { label: 'XX-1', detail: '00 · 大厂 · 星系成本指数 2.00%', command: '乌鸦级 XX-1 高级' },
+        { label: 'XX-1', detail: '00 · 2 座可选，自动挑 · 星系成本指数 2.00%', command: '乌鸦级 XX-1 高级' },
         { label: '联盟工业点A', detail: '低安 · 反应塔 · 星系成本指数 1.00%', command: '乌鸦级 联盟工业点A 高级' },
         { label: 'XX-2', detail: '高安 · 无建筑加成', command: '乌鸦级 XX-2 高级' },
       ],
@@ -422,8 +423,14 @@ describe('IndustryService: steps (location → ME/TE → structure)', () => {
     expect(s).toEqual({
       step: 'structure',
       options: [
-        { label: '大厂', detail: '材料 -1%，时间 -30%，费用 -5% · 改装件 屹立超大型舰船制造效率 I', command: '乌鸦级 XX-1 ME10 TE20 建筑:大厂' },
-        { label: '小厂', detail: '材料 -1%，时间 -20%，费用 -4% · 没有装改装件', command: '乌鸦级 XX-1 ME10 TE20 建筑:小厂' },
+        {
+          label: '大厂', detail: '预计总成本 147.84M · 材料 -1%，时间 -30%，费用 -5% · 改装件 屹立超大型舰船制造效率 I',
+          command: '乌鸦级 XX-1 ME10 TE20 建筑:大厂', recommended: true, cost: 147_839_809,
+        },
+        {
+          label: '小厂', detail: '预计总成本 154.44M · 材料 -1%，时间 -20%，费用 -4% · 没有装改装件',
+          command: '乌鸦级 XX-1 ME10 TE20 建筑:小厂', cost: 154_443_705,
+        },
       ],
       summary: ['XX-1', 'ME 10', 'TE 20'],
       defaults: '乌鸦级 XX-1 ME10 TE20',
@@ -431,7 +438,9 @@ describe('IndustryService: steps (location → ME/TE → structure)', () => {
     // 「建筑:?」（不是高级模式也行）列出全部，包括「无建筑加成」
     const list = step(await run('乌鸦级 XX-1 ME10 TE20 建筑:?'))
     expect(list.options.map((o) => o.label)).toEqual(['大厂', '小厂', '无建筑加成'])
-    expect(list.options[2]).toEqual({ label: '无建筑加成', detail: '按 NPC 空间站算 · 设施税 0.25%', command: '乌鸦级 XX-1 ME10 TE20 建筑:无' })
+    expect(list.options[2]).toMatchObject({ label: '无建筑加成', command: '乌鸦级 XX-1 ME10 TE20 建筑:无' })
+    expect(list.options[2].detail).toMatch(/^预计总成本 .+ · 按 NPC 空间站算 · 设施税 0\.25%$/)
+    expect(list.options[2].recommended).toBeUndefined()
     const unknown = step(await run('乌鸦级 XX-1 ME10 TE20 建筑:不存在'))
     expect(unknown).toMatchObject({ step: 'structure', notice: 'XX-1 没有叫「不存在」的建筑，请重新选择' })
     expect(unknown.options.map((o) => o.label)).toEqual(['大厂', '小厂', '无建筑加成'])
@@ -440,14 +449,14 @@ describe('IndustryService: steps (location → ME/TE → structure)', () => {
     expect(one.options.map((o) => o.label)).toEqual(['反应塔', '无建筑加成'])
     // 改装件不用时写明
     const noRigs = step(await run('乌鸦级 XX-1 ME10 TE20 改装:无 高级'))
-    expect(noRigs.options[0].detail).toBe('材料 -1%，时间 -30%，费用 -5% · 不用改装件')
+    expect(noRigs.options[0].detail).toMatch(/ · 材料 -1%，时间 -30%，费用 -5% · 不用改装件$/)
     expect(noRigs.options[0].command).toBe('乌鸦级 XX-1 ME10 TE20 建筑:大厂 改装:无')
   })
 
   it('a rig that does not apply to the product is named as such', async () => {
     const { run } = setup()
     const s = step(await run('损伤控制 II XX-1 ME2 TE4 高级'))
-    expect(s.options[0].detail).toBe('材料 -1%，时间 -30%，费用 -5% · 没有对损伤控制 II生效的改装件')
+    expect(s.options[0].detail).toMatch(/ · 材料 -1%，时间 -30%，费用 -5% · 没有对损伤控制 II生效的改装件$/)
   })
 
   it('a reaction goes location → structure, without ME/TE', async () => {
@@ -461,11 +470,12 @@ describe('IndustryService: steps (location → ME/TE → structure)', () => {
     const { run } = setup({ industry: two })
     const s = step(await run('碳化钨 高级', ALLOWED, 'reaction'))
     expect(s).toMatchObject({ step: 'structure', summary: ['联盟工业点A（本群唯一的地点）'] })
+    // 材料价格不全：成本不写数字；成本一样（都按 0 排）时快的在前
     expect(s.options).toEqual([
-      { label: '反应塔', detail: '没有建筑加成 · 改装件 屹立中型复合反应堆时间效率 I', command: '碳化钨 联盟工业点A 建筑:反应塔' },
-      { label: '大反应塔', detail: '时间 -25% · 没有装改装件', command: '碳化钨 联盟工业点A 建筑:大反应塔' },
+      { label: '大反应塔', detail: '预计总成本 不完整 · 时间 -25% · 没有装改装件', command: '碳化钨 联盟工业点A 建筑:大反应塔', recommended: true },
+      { label: '反应塔', detail: '预计总成本 不完整 · 没有建筑加成 · 改装件 屹立中型复合反应堆时间效率 I', command: '碳化钨 联盟工业点A 建筑:反应塔' },
     ])
-    const r = result(await run(s.options[1].command, ALLOWED, 'reaction'))
+    const r = result(await run(s.options[0].command, ALLOWED, 'reaction'))
     expect(r.applied).toMatchObject({ structure: '大反应塔', facilityTaxPct: 3 })
     expect(r.timeSeconds).toBe(10_800 * 0.75)
   })
@@ -502,7 +512,8 @@ describe('IndustryService: compare locations', () => {
     ])
     const totals = c.rows.map((r) => total(r.result))
     expect([...totals].sort((a, b) => a - b)).toEqual(totals)
-    expect(c.rows[0].result.applied).toMatchObject({ me: 10, te: 20, defaulted: ['me', 'te', 'structure', 'rigs', 'tax'] })
+    expect(c.rows[0].result.applied).toMatchObject({ me: 10, te: 20, defaulted: ['me', 'te', 'rigs', 'tax'], autoPicked: { among: 2 } })
+    expect(c.rows.map((r) => [r.autoPicked, r.among])).toEqual([[true, 2], [undefined, undefined], [undefined, undefined]])
     expect(c.rows[1].result.warnings).toEqual(['吉他 不在星系成本指数列表里，安装费用按指数 0 计算'])
     // 星系成本指数、调整价、材料报价都只取一次
     expect([env.indices.systemCalls, env.indices.adjustedCalls]).toEqual([1, 1])

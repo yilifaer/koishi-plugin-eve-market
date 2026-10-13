@@ -3,6 +3,8 @@
 // - 建筑类型按名字或 typeID 对上 industry.json；「无」= 没有建筑加成，「NPC」= NPC 空间站（设施税按 NPC 空间站算）；
 // - 改装件按名字或 typeID 对上数据：找不到、尺寸和建筑不符的去掉；在这个安全等级不生效的留着（算加成时按 0），都报告；
 // - 反应只能在精炼厂、不能在高安：不符合的建筑去掉「反应」用途；不能放在高安的建筑（索迪约等）放在高安时报告；
+//   「提炼」用途不能用在「无」类型上（NPC 空间站可以）；「有超旗舰船坞」装不上或不在 00 时报告，开关不生效；
+// - 每座建筑按数据里的服务表算出实际有的服务（services），能造什么产品由 capabilities.ts 判断；
 //   这些判断（尺寸、安全等级、精炼厂）和计算时用的是同一套（modifiers.ts）；
 // - 可见范围按 Access：本群看不到的地点和不存在的一样。
 // 每个数据版本建一次，数据更新后第一次用到时自动重建。
@@ -14,9 +16,11 @@ import { compactMarketKey, marketKey } from '../market'
 import { secClassOf } from '../universe'
 import type {
   Access, ConfigIssue, DataService, DataSet, IndustryActivity, IndustryLocationSetting, IndustrySettings,
-  IndustryStructureSetting, RigInfo, SecClass, StructureTypeInfo, SystemInfo, Visibility,
+  IndustryStructureSetting, RigInfo, SecClass, ServiceInfo, StructurePurpose, StructureTypeInfo, SystemInfo, Visibility,
 } from '../types'
-import { ACTIVITY_CODE, SEC_LABEL, rigFits, rigSecMultiplier, structureProblems } from './modifiers'
+import { canFit, locationCanBuild, needLabel, structureServices } from './capabilities'
+import type { ProductClass } from './capabilities'
+import { ACTIVITY_CODE, SEC_KEY, SEC_LABEL, rigFits, rigSecMultiplier, structureProblems } from './modifiers'
 
 /** 一座建筑最多装几个改装件（Upwell 建筑都是 3 个改装槽） */
 export const MAX_RIGS = 3
@@ -55,10 +59,18 @@ export interface IndustryStructure {
   structureId: string
   /** 已经去掉做不了的反应（高安、不是精炼厂、NPC 空间站） */
   activities: readonly IndustryActivity[]
+  /** activities 再加上「提炼」（「无」类型上的提炼已去掉） */
+  purposes: readonly StructurePurpose[]
   /** 装得上的改装件，按填写顺序；在这个安全等级不生效的也在里面（rigSecMultiplier 为 null） */
   rigs: readonly RigInfo[]
-  /** 已经换算好：NPC 空间站是「NPC 空间站设施税」，其他是这一行写的 */
+  /** 已经换算好：NPC 空间站的制造税是「NPC 空间站设施税」，其他是这一行写的 */
   facilityTaxPct: number
+  /** 各用途的税（%）：制造税等于 facilityTaxPct */
+  taxPct: Readonly<{ manufacturing: number; reaction: number; reprocessing: number }>
+  /** 有超旗舰船坞：只有真的能用才是 true（装得上、在 00） */
+  supercapitalShipyard: boolean
+  /** 这座建筑在这个安全等级实际有的服务；数据里没有服务表时 null */
+  services: readonly ServiceInfo[] | null
   extraFeePct: number
   extraFeeIsk: number
   extraFeeLabel: string
@@ -83,6 +95,15 @@ export interface IndustryLocation {
   structures: readonly IndustryStructure[]
 }
 
+/** 按产品筛过的地点（本群能看到、能做这种活动的里面） */
+export interface BuildableLocations {
+  usable: IndustryLocation[]
+  /** 造不了的地点数 */
+  unable: number
+  /** 造不了的地点缺什么，例如「旗舰级船坞」；没有造不了的时候不给 */
+  need?: string
+}
+
 export interface IndustryLocations {
   /** 全部有效的地点，不分可见范围，按表格顺序 */
   all(): IndustryLocation[]
@@ -96,6 +117,12 @@ export interface IndustryLocations {
   get(name: string): IndustryLocation | undefined
   /** 「快速计算」的默认地点；本群看不到、或者不能做这种活动时 undefined */
   defaultLocation(access: Access, activity?: IndustryActivity): IndustryLocation | undefined
+  /** 本群能看到的、能做这种活动的地点里，哪些造得了这个产品；数据没有服务表时不筛 */
+  buildable(access: Access, activity: IndustryActivity, product: ProductClass): BuildableLocations
+  /** 控制台的「默认反应地点」；没填、不存在、不能反应或本群看不到时 undefined（不存在、不能反应已报配置问题） */
+  chainReactionLocation(access: Access): IndustryLocation | undefined
+  /** 控制台的「提炼地点」；没填、不存在、没有能提炼的建筑或本群看不到时 undefined（不存在、不合用已报配置问题） */
+  reprocessLocation(access: Access): IndustryLocation | undefined
   /** 要有数据才能发现的配置问题：星系、建筑类型、改装件查不到或不合适 */
   issues(): ConfigIssue[]
 }
@@ -222,6 +249,8 @@ function rigName(r: RigInfo): string {
 interface Built {
   key: string
   list: IndustryLocation[]
+  reactionLocation?: IndustryLocation
+  reprocessLocation?: IndustryLocation
   byKey: Map<string, IndustryLocation>
   /** 名称、手写别名、星系名，然后同样三层的去空白写法 */
   layers: Array<Map<string, IndustryLocation>>
@@ -303,16 +332,22 @@ class StructureResolver {
       }
     }
 
-    const activities = this.activities(s, type, npc, system)
+    const reprocessing = this.reprocessing(s, type, npc)
+    const activities = this.activities(s, type, npc, system, reprocessing)
     if (!activities) return null
+    const purposes: StructurePurpose[] = reprocessing ? [...activities, 'reprocessing'] : [...activities]
+    const supercap = this.supercap(s, type, npc, system)
 
-    let facilityTaxPct = s.facilityTaxPct
+    const taxPct = { ...s.taxPct }
     if (npc) {
-      facilityTaxPct = this.settings.npcFacilityTaxPct
-      if (s.facilityTaxPct > 0 && s.facilityTaxPct !== facilityTaxPct) {
-        this.report(s, 'facilityTaxPct', `NPC 空间站的设施税按「NPC 空间站设施税」（${facilityTaxPct}%）算，这一行写的 ${s.facilityTaxPct}% 不生效`)
+      taxPct.manufacturing = this.settings.npcFacilityTaxPct
+      if (s.facilityTaxPct > 0 && s.facilityTaxPct !== taxPct.manufacturing) {
+        this.report(s, 'facilityTaxPct', `NPC 空间站的设施税按「NPC 空间站设施税」（${taxPct.manufacturing}%）算，这一行写的 ${s.facilityTaxPct}% 不生效`)
       }
     }
+    const services = this.data.industry.services
+      ? Object.freeze(structureServices(type, npc, system.secClass, supercap, purposes, this.data.industry.services))
+      : null
 
     return Object.freeze({
       row: s.row,
@@ -322,8 +357,12 @@ class StructureResolver {
       npc,
       structureId: s.structureId,
       activities: Object.freeze([...activities]),
+      purposes: Object.freeze(purposes),
       rigs: Object.freeze(this.rigs(s, type, npc, system, activities)),
-      facilityTaxPct,
+      facilityTaxPct: taxPct.manufacturing,
+      taxPct: Object.freeze(taxPct),
+      supercapitalShipyard: supercap,
+      services,
       extraFeePct: s.extraFeePct,
       extraFeeIsk: s.extraFeeIsk,
       extraFeeLabel: s.extraFeeLabel,
@@ -331,25 +370,59 @@ class StructureResolver {
     })
   }
 
-  /** 实际能做的用途：高安、不是精炼厂（NPC 空间站、「无」也算）的去掉反应；什么都不剩时 null（跳过这一行） */
-  private activities(s: IndustryStructureSetting, type: StructureTypeInfo | null, npc: boolean, system: IndustrySystem): IndustryActivity[] | null {
+  /** 「提炼」用途：「无」类型上不能提炼（NPC 空间站可以），去掉并报告 */
+  private reprocessing(s: IndustryStructureSetting, type: StructureTypeInfo | null, npc: boolean): boolean {
+    if (!s.purposes.includes('reprocessing')) return false
+    if (type || npc) return true
+    this.report(s, 'activities', '建筑类型为「无」（没有建筑加成）时不能提炼，「用途」里的提炼不生效')
+    return false
+  }
+
+  /** 「有超旗舰船坞」：只有装得上超级旗舰级船坞、并且在能用的安全等级（00）才生效；数据没有服务表时没法核对，照填的算 */
+  private supercap(s: IndustryStructureSetting, type: StructureTypeInfo | null, npc: boolean, system: IndustrySystem): boolean {
+    if (!s.supercapitalShipyard) return false
+    const services = this.data.industry.services
+    if (!services) return true
+    const supers = services.filter((x) => x.key === 'supercapital')
+    if (npc || !type || !supers.some((x) => canFit(type, x))) {
+      this.report(s, 'supercapitalShipyard', `${npc ? 'NPC 空间站' : type ? typeName(type) : '建筑类型为「无」'}装不上超级旗舰级船坞，「有超旗舰船坞」不生效`)
+      return false
+    }
+    if (!supers.some((x) => x.sec[SEC_KEY[system.secClass]])) {
+      this.report(s, 'supercapitalShipyard', `超级旗舰级船坞只能在 00 使用，而 ${s.location} 是${SEC_LABEL[system.secClass]}，「有超旗舰船坞」不生效`)
+      return false
+    }
+    return true
+  }
+
+  /** 实际能做的用途：高安、不是精炼厂（NPC 空间站、「无」也算）的去掉反应；制造、反应、提炼都不剩时 null（跳过这一行） */
+  private activities(
+    s: IndustryStructureSetting, type: StructureTypeInfo | null, npc: boolean, system: IndustrySystem, reprocessing: boolean,
+  ): IndustryActivity[] | null {
     const where = `${s.location} 是高安（${displaySec(system.security)}）`
     const problems = structureProblems(type, system.secClass, ['reaction'])
     const highsec = problems.find((p) => p.code === 'structure-highsec')
     if (highsec) this.report(s, 'structureType', `${highsec.message}，而 ${where}，请检查`)
-    if (!s.activities.includes('reaction')) return [...s.activities]
+    if (!s.activities.includes('reaction')) return this.keep(s, s.activities, reprocessing)
     const why = system.secClass === 'high' ? `${where}，高安不能进行反应`
       : npc ? 'NPC 空间站不能进行反应'
         : !type ? '建筑类型为「无」（没有建筑加成）时不能进行反应'
           : problems.find((p) => p.code === 'reaction-structure')?.message
     if (!why) return [...s.activities]
     const out = s.activities.filter((a) => a !== 'reaction')
-    if (!out.length) {
+    if (!out.length && !reprocessing) {
       this.report(s, 'activities', `${why}，已跳过`)
       return null
     }
     this.report(s, 'activities', `${why}，「用途」里的反应不生效`)
     return out
+  }
+
+  /** 用途里没有制造和反应、提炼也被去掉了：这一行什么都做不了，跳过 */
+  private keep(s: IndustryStructureSetting, list: readonly IndustryActivity[], reprocessing: boolean): IndustryActivity[] | null {
+    if (list.length || reprocessing) return [...list]
+    this.report(s, 'activities', '「用途」里没有能用的用途，已跳过')
+    return null
   }
 
   /** effective：去掉不能做的反应以后的用途 */
@@ -459,7 +532,26 @@ function buildLocations(settings: IndustrySettings, data: DataSet): Built {
   for (const layer of layers.slice(0, 3)) {
     for (const k of layer.keys()) maxWords = Math.max(maxWords, k.split(' ').length)
   }
-  return { key: data.key, list, byKey: new Map(list.map((l) => [l.key, l])), layers, maxWords, issues }
+  const out: Built = { key: data.key, list, byKey: new Map(list.map((l) => [l.key, l])), layers, maxWords, issues }
+  const reaction = settingLocation(out, settings.chain.reactionLocation, '默认反应地点', 'chainReactionLocation',
+    (l) => locationSupports(l, 'reaction'), '没有能反应的建筑（或在高安）')
+  const reprocess = settingLocation(out, settings.chain.reprocessLocation, '提炼地点', 'reprocessLocation',
+    (l) => l.structures.some((st) => st.purposes.includes('reprocessing')), '没有用途含「提炼」的建筑')
+  if (reaction) out.reactionLocation = reaction
+  if (reprocess) out.reprocessLocation = reprocess
+  return out
+}
+
+/** 控制台里填的地点名（拆到原料的默认设置）：没填、找不到或不合用时 undefined，后两种报配置问题 */
+function settingLocation(
+  built: Built, text: string, label: string, field: string, accept: (l: IndustryLocation) => boolean, lack: string,
+): IndustryLocation | undefined {
+  if (!text) return undefined
+  const found = findIn(built.layers, text, () => true)
+  const message = !found ? `「${label}」${text} 不是已配置的工业地点，已当作没填`
+    : !accept(found) ? `「${label}」${found.name} ${lack}，已当作没填` : ''
+  if (message) built.issues.push({ section: 'industry', field, message })
+  return message ? undefined : found
 }
 
 function findIn(layers: Array<Map<string, IndustryLocation>>, text: string, accept: (l: IndustryLocation) => boolean): IndustryLocation | undefined {
@@ -500,6 +592,32 @@ class Locations implements IndustryLocations {
     return this.state().byKey.get(marketKey(name))
   }
 
+  buildable(access: Access, activity: IndustryActivity, product: ProductClass): BuildableLocations {
+    const list = this.visible(access, activity)
+    const data = this.currentData()
+    if (!data) return { usable: list, unable: 0 }
+    const usable: IndustryLocation[] = []
+    const need: ServiceInfo[] = []
+    for (const location of list) {
+      const verdict = locationCanBuild(location, product, activity, data.industry)
+      if (verdict.ok) usable.push(location)
+      else need.push(...verdict.need)
+    }
+    const out: BuildableLocations = { usable, unable: list.length - usable.length }
+    if (out.unable) out.need = needLabel(need)
+    return out
+  }
+
+  chainReactionLocation(access: Access): IndustryLocation | undefined {
+    const loc = this.state().reactionLocation
+    return loc && locationVisibleTo(loc, access) ? loc : undefined
+  }
+
+  reprocessLocation(access: Access): IndustryLocation | undefined {
+    const loc = this.state().reprocessLocation
+    return loc && locationVisibleTo(loc, access) ? loc : undefined
+  }
+
   defaultLocation(access: Access, activity?: IndustryActivity): IndustryLocation | undefined {
     const loc = this.state().list.find((l) => l.isDefault)
     if (!loc || !locationVisibleTo(loc, access) || (activity && !locationSupports(loc, activity))) return undefined
@@ -510,14 +628,19 @@ class Locations implements IndustryLocations {
     return [...this.state().issues]
   }
 
-  private state(): Built {
-    let data: DataSet
+  /** 数据还没加载好时 null */
+  private currentData(): DataSet | null {
     try {
-      data = this.data.current()
+      return this.data.current()
     } catch (e) {
-      if (e instanceof DataNotReadyError) return EMPTY
+      if (e instanceof DataNotReadyError) return null
       throw e
     }
+  }
+
+  private state(): Built {
+    const data = this.currentData()
+    if (!data) return EMPTY
     if (this.built?.key !== data.key) this.built = buildLocations(this.settings, data)
     return this.built
   }

@@ -1,7 +1,8 @@
 // 建筑能力（纯函数）：哪些服务能造这个产品，建筑实际装了哪些服务，能不能造。
 // 规则全部来自 industry.json 的 services 表，这里只写判断，不写数据。
 
-import type { IndustryActivity, SecClass, ServiceInfo, StructurePurpose, StructureTypeInfo } from '../types'
+import type { IndustryActivity, IndustryData, SecClass, ServiceInfo, StructurePurpose, StructureTypeInfo } from '../types'
+import type { IndustryLocation, IndustryStructure } from './locations'
 import { SEC_KEY } from './modifiers'
 
 /** 产品只看分组和大类（ItemInfo 可以直接传） */
@@ -41,7 +42,8 @@ function installed(service: ServiceInfo, purposes: readonly StructurePurpose[], 
   }
 }
 
-function fits(type: StructureTypeInfo, service: ServiceInfo): boolean {
+/** 这种建筑能不能装这个服务（不看安全等级） */
+export function canFit(type: StructureTypeInfo, service: ServiceInfo): boolean {
   return service.fitTypes.includes(type.id) || service.fitGroups.includes(type.group)
 }
 
@@ -50,7 +52,7 @@ function installedServices(spec: StructureSpec, sec: SecClass | null, services: 
   const secOk = (s: ServiceInfo) => sec === null || s.sec[SEC_KEY[sec]]
   if (spec.npc || !spec.type) return services.filter((s) => s.key === 'manufacturing' && secOk(s))
   const type = spec.type
-  return services.filter((s) => fits(type, s) && secOk(s) && installed(s, spec.purposes, spec.supercap))
+  return services.filter((s) => canFit(type, s) && secOk(s) && installed(s, spec.purposes, spec.supercap))
 }
 
 /** 这座建筑在这个安全等级实际有的服务 */
@@ -73,9 +75,37 @@ export function capabilityVerdict(
   return { ok: false, need: relevant, why: relevant.some((s) => ignoringSec.includes(s)) ? 'sec' : 'service' }
 }
 
+/** 「建筑:无」和没有建筑的地点：按 NPC 空间站的制造厂算 */
+const NO_STRUCTURE: StructureSpec = { type: null, npc: false, purposes: ['manufacturing'], supercap: false }
+
+/** 这座建筑（null = 没有建筑）在这个地点能不能造这个产品 */
+export function canBuild(
+  structure: IndustryStructure | null, location: IndustryLocation, product: ProductClass, activity: IndustryActivity, data: IndustryData,
+): CapabilityVerdict {
+  const spec = structure
+    ? { type: structure.type, npc: structure.npc, purposes: structure.purposes, supercap: structure.supercapitalShipyard }
+    : NO_STRUCTURE
+  return capabilityVerdict(product, activity, spec, location.system.secClass, data.services)
+}
+
+/** 地点能不能造：任一座建筑能造就行；一座建筑都没配的地点按制造厂的能力算 */
+export function locationCanBuild(
+  location: IndustryLocation, product: ProductClass, activity: IndustryActivity, data: IndustryData,
+): CapabilityVerdict {
+  const list = location.structures.filter((s) => s.activities.includes(activity))
+  if (!list.length) return canBuild(null, location, product, activity, data)
+  const verdicts = list.map((s) => canBuild(s, location, product, activity, data))
+  const known = verdicts.find((v) => v.ok && v.known) ?? verdicts.find((v) => v.ok)
+  if (known) return known
+  // 都造不了：原因优先写「安全等级」（建筑本身能装，只是这里用不了）
+  return verdicts.find((v) => !v.ok && v.why === 'sec') ?? verdicts[0]
+}
+
 /** 「旗舰级船坞 / 超级旗舰级船坞」：中文去掉「屹立」前缀和「 I」后缀；没有中文名用英文（去掉 Standup 和 I） */
 export function needLabel(need: readonly ServiceInfo[]): string {
-  const names = need.map((s) => (s.zh
+  // 覆盖的分组少的在前（基础的服务先写，例如旗舰级船坞在超级旗舰级船坞前面）
+  const size = (x: ServiceInfo) => x.groups.length + x.categories.length
+  const names = [...need].sort((a, b) => size(a) - size(b)).map((s) => (s.zh
     ? s.zh.replace(/^屹立/, '').replace(/ I$/, '')
     : s.en.replace(/^Standup /, '').replace(/ I$/, '')))
   return [...new Set(names)].join(' / ')
