@@ -132,6 +132,7 @@ function mainCard(env: HelpEnv): Card {
     style: 'plain',
     lines: [
       { text: `群里先 @我 再输入${topic}。时间都是北京时间。` },
+      { text: '按钮只把命令填进输入框，要再按发送' },
       { text: '数据：CCP hf.（非商业使用）· 黑话表：EVE Online 中文黑话表 eve-cn-slang（CC BY 4.0）' },
     ],
   })

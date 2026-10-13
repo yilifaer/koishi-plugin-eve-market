@@ -1,6 +1,6 @@
 // 制造、制造比价、反应（§2.6–§2.8）用到的中文文字。物品名、地点名、用户的原话由调用方先转义（回显用户的文字经过 safeEcho）。
 
-import { MAX_ME, MAX_RUNS, MAX_TE } from '../../constants'
+import { MAX_ME, MAX_RUNS, MAX_TE, PENDING_MINUTES } from '../../constants'
 import type { FailureReason, IndustryActivity, PriceSide } from '../../core/types'
 
 /** 活动的叫法 */
@@ -120,7 +120,7 @@ export const IND = {
   compareProduct: (market: string, side: string, value: string) => `成品参考 ${market} ${side} ${value}`,
   compareNoFees: '利润未计销售税和经纪费',
   compareFees: (pct: string) => `利润已扣销售税和经纪费 ${pct}`,
-  compareHint: '点「详情」看完整明细，或者 @我 回复编号（5 分钟内有效）',
+  compareHint: `点按钮后再按发送看完整明细，或者 @我 回复编号（${PENDING_MINUTES} 分钟内有效）`,
   detail: (name: string) => `${name} 详情`,
 
   // ---------------------------------------------------------------- 按钮

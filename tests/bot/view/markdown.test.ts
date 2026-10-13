@@ -142,11 +142,11 @@ describe('keyboardRows', () => {
     const rows = keyboardRows(card, renderOptions())
     // 标签 8 个字宽，一行只放 2 个，不会被 QQ 截断
     expect(rows.map((r) => r.map((b) => b.label))).toEqual([['地点1号很长的…', '地点2号很长的…'], ['地点3号很长的…', '地点4号很长的…'], ['地点5号很长的…']])
-    expect(toQQMarkdown(card, renderOptions()).md).toContain('点按钮，或者 @我 回复编号（5 分钟内有效）')
+    expect(toQQMarkdown(card, renderOptions()).md).toContain('点按钮后再按发送，或者 @我 回复编号（5 分钟内有效）')
     // 只要有一项没写，全部用编号
     card.choices![2] = { ...card.choices![2], button: undefined }
     expect(keyboardRows(card, renderOptions())[0].map((b) => b.label)).toEqual(['1', '2', '3', '4', '5'])
-    expect(toQQMarkdown(card, renderOptions()).md).toContain('点下面的编号，或者 @我 回复编号（5 分钟内有效）')
+    expect(toQQMarkdown(card, renderOptions()).md).toContain('点下面的编号后再按发送，或者 @我 回复编号（5 分钟内有效）')
   })
 
   it('wraps rows wider than 4 actions evenly and keeps at most 5 rows', () => {

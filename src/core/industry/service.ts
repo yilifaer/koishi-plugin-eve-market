@@ -279,7 +279,7 @@ class Service implements IndustryService {
     }
 
     const manufacturing = job.activity === 'manufacturing'
-    if (req.mode === 'steps' && manufacturing && req.me === undefined && req.te === undefined) return this.meteStep(job, req, location, only)
+    if (manufacturing && (req.meteMissing || (req.mode === 'steps' && req.me === undefined && req.te === undefined))) return this.meteStep(job, req, location, only)
     const fallback = job.t2 ? T2_ME_TE_CHOICES[0] : { me: location.defaultME, te: location.defaultTE }
     let me = 0
     let te = 0
@@ -368,7 +368,7 @@ class Service implements IndustryService {
   private async locationStep(job: Job, req: IndustryRequest, list: IndustryLocation[]): Promise<IndustryStep> {
     const indices = await this.quickIndices()
     // 写了的建筑带下去：选了地点以后用它，或者说明这个地点没有它
-    const carry = { ...this.carried(req), me: req.me, te: req.te, structure: req.structure }
+    const carry = { ...this.carried(req), me: req.me, te: req.te, meteMissing: req.meteMissing, structure: req.structure }
     const options = list.map((location) => {
       const structure = defaultStructure(location, job.activity)
       const sci = indices ? costIndexOf(indices, location.system.id, job.activity) : undefined
@@ -388,7 +388,7 @@ class Service implements IndustryService {
   private meteStep(job: Job, req: IndustryRequest, location: IndustryLocation, only: boolean): IndustryStep {
     const choices = job.t2 ? T2_ME_TE_CHOICES : this.o.settings.meTeChoices
     const carry = { ...this.carried(req), location: location.name, structure: req.structure }
-    return {
+    const step: IndustryStep = {
       step: 'mete',
       // 按钮写成 10/20（「ME10/TE20」放不进 8 个字的按钮；命令也认这种写法）
       options: choices.map((c) => ({
@@ -400,6 +400,8 @@ class Service implements IndustryService {
       defaults: this.command(job, carry),
       custom: `${this.command(job, { ...carry, steps: true })} ME`,
     }
+    if (req.meteMissing) step.notice = `${req.meteMissing.toUpperCase()} 后面要写数字，例如 ME7 TE14`
+    return step
   }
 
   /** all：也列「无建筑加成」（反应只能在精炼厂里做，不列） */

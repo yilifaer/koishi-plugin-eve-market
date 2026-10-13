@@ -182,7 +182,7 @@ export const CANDIDATE_MARKDOWN = [
   '3. 小型护盾扩展装置 II · Small Shield Extender II',
   '4. 旗舰级护盾扩展装置 II · Capital Shield Extender II',
   '',
-  '点下面的编号，或者 @我 回复编号（5 分钟内有效）',
+  '点下面的编号后再按发送，或者 @我 回复编号（5 分钟内有效）',
 ].join('\n')
 
 /** 很长的清单：rows 行数据，每行约 width 字 */

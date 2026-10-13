@@ -20,6 +20,7 @@ export const SAY = {
   notTradable: (name: string, note: string) => `${name} 不能在市场上交易${note}。`,
   t2Blueprint: '（T2 蓝图一般通过发明获得）',
   confused: (text: string) => `没看懂「${text}」。你是想查价吗？`,
+  maybeIndustry: (text: string, command: string) => `没看懂「${text}」。是不是想用「${command}」？`,
   chat: (help: string) => `发「${help}」看我能做什么`,
 } as const
 

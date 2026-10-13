@@ -117,7 +117,7 @@ export function setName(set: ImplantSet): string {
 }
 
 /**
- * 未知市场 / 本群看不到的市场（同一句话）：按钮是前 4 个可用市场，保留原来的物品和数量。
+ * 未知市场 / 本群看不到的市场（同一句话）：按钮是前 MAX_MARKET_BUTTONS 个可用市场，保留原来的物品和数量。
  * usable：这个命令能用哪些市场（走势只列有成交历史的 NPC 市场）；不写 = 全部
  */
 export function unknownMarketCard(

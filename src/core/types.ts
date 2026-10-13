@@ -916,6 +916,8 @@ export interface IndustryRequest {
   me?: number
   te?: number
   facilityTaxPct?: number
+  /** 命令里的 ME 或 TE 后面没写数字：回到 ME/TE 这一步并提醒（只对制造） */
+  meteMissing?: 'me' | 'te'
   access: Access
 }
 

@@ -86,7 +86,7 @@ describe('批量查价: header and pending list', () => {
     } })
     const sent = await e.h.group('批量查价\n护盾扩展装置 II')
     expect(card(sent)).toContain('第 1 行「护盾扩展装置 II」可能是 3 种物品，请写完整名称')
-    expect(card(sent)).toContain('点下面的编号，或者 @我 回复编号（5 分钟内有效）')
+    expect(card(sent)).toContain('点下面的编号后再按发送，或者 @我 回复编号（5 分钟内有效）')
     const picked = card(await e.h.group('2'))
     expect(picked).toContain('**批量估价 · Jita 4-4 · 出售价')
     expect(picked).toContain('中型护盾扩展装置 II')
@@ -147,7 +147,7 @@ describe('批量查价: appraisal ID buttons', () => {
   it('unknown market in the header: the list is saved and the buttons reprice it', async () => {
     const e = await start({ esi: prices })
     const sent = await e.h.group('批量查价 TEST sell\nRaven*2')
-    expect(card(sent)).toBe('未知市场：TEST\n\n当前可用市场：Jita 4-4 · Amarr · Dodixie · Rens · Hek')
+    expect(card(sent)).toBe('未知市场：TEST\n\n当前可用市场：Jita（Jita 4-4） · Amarr · Dodixie · Rens · Hek')
     const jitaButton = buttons(sent)[0]
     expect(jitaButton).toMatch(/^Jita=>批量查价 #[A-Z0-9]{4} Jita$/)
     const result = await e.h.group(jitaButton.split('=>')[1])

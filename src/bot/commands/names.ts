@@ -65,9 +65,12 @@ export function itemArgs(
   return length > MAX_BUTTON_COMMAND_CHARS ? compose(`#${item.typeId}`) : args
 }
 
-/** 「Jita · Amarr · …」 */
+/** 「Jita（Jita 4-4） · Amarr · …」：和按钮上的短名不同时，写成「短名（全名）」 */
 export function marketNames(markets: readonly MarketDef[]): string {
-  return markets.map((m) => escapeMarkdown(m.name)).join(' · ')
+  return markets.map((m) => {
+    const short = shortName(m)
+    return escapeMarkdown(short === m.name ? m.name : `${short}（${m.name}）`)
+  }).join(' · ')
 }
 
 /** 按钮上和命令里写市场用的最短写法（Jita 4-4 → Jita） */

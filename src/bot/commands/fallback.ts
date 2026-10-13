@@ -29,7 +29,34 @@ async function isExactItem(commands: CommandContext, session: Session, content: 
   return res.kind === 'set' || (res.kind === 'unique' && EXACT_TIERS.has(res.tier))
 }
 
+/** 带着制造、反应才有的参数词（高级、材料、ME7、10流程、建筑:…）*/
+const INDUSTRY_WORDS = /高级|材料|\b[mt]e\s*[=:]?\s*\d|\d+\s*流程|(?:建筑|改装|税)[:：]/i
+
+/** 缺了命令名的制造、反应：认得出物品时给出该用的命令（反应产物用「反应」） */
+function missingIndustry(inv: Invocation, content: string): { id: 'manufacture' | 'reaction'; command: string } | null {
+  if (!INDUSTRY_WORDS.test(content) || hasUrl(content)) return null
+  const { core, access, commands } = inv
+  const req = core.parse.industryArgs(content, 'manufacturing', access)
+  let id: 'manufacture' | 'reaction' | null = null
+  if (isFailure(req)) {
+    if (req.code === 'IS_REACTION') id = 'reaction'
+  } else {
+    id = 'manufacture'
+  }
+  if (!id || !commands.registry.has(id)) return null
+  return { id, command: `${commands.registry.name(id)} ${content}` }
+}
+
 async function confused(inv: Invocation, content: string): Promise<void> {
+  const industry = missingIndustry(inv, content)
+  if (industry) {
+    const card = emptyCard(SAY.maybeIndustry(safeEcho(content), safeEcho(industry.command)))
+    const actions: Action[] = [{ label: industry.command, command: { id: industry.id, args: content }, primary: true }]
+    actions.push({ label: inv.commands.registry.name('help'), command: { id: 'help' } })
+    card.actions.push(actions)
+    await sendCard(inv, card)
+    return
+  }
   if (Array.from(content).length > FALLBACK_SHORT_CHARS) {
     await inv.reply.text(SAY.chat(inv.commands.registry.name('help')))
     return

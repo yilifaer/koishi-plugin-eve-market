@@ -64,7 +64,7 @@ describe('查价: markets and visibility', () => {
     const missing = await e.h.group('查价 TEST 乌鸦级', { channelId: GROUP2 })
     expect(card(hidden).replace('联盟市场A', 'TEST')).toBe(card(missing))
     expect(card(alias).replace('前线', 'TEST')).toBe(card(missing))
-    expect(card(missing)).toBe('未知市场：TEST\n\n当前可用市场：Jita 4-4 · Amarr · Dodixie · Rens · Hek')
+    expect(card(missing)).toBe('未知市场：TEST\n\n当前可用市场：Jita（Jita 4-4） · Amarr · Dodixie · Rens · Hek')
     expect(buttonRows(missing)).toEqual([['Jita=>查价 Jita 乌鸦级', 'Amarr=>查价 Amarr 乌鸦级', 'Dodixie=>查价 Dodixie 乌鸦级'], ['Rens=>查价 Rens 乌鸦级', 'Hek=>查价 Hek 乌鸦级']])
     expect(buttonRows(hidden)).toEqual(buttonRows(missing))
     // 授权群里同一个名字照常查价
@@ -211,7 +211,7 @@ describe('查价: items', () => {
       expect(sent[0].markdown).toBe([
         '**查价用法**',
         '- 查价 乌鸦级：查本群的默认市场\n- 查价 Jita 乌鸦级*10：指定市场和数量\n- 中文名、英文名、常用简称都可以',
-        '本群可查的市场：Jita 4-4 · Amarr · Dodixie · Rens · Hek',
+        '本群可查的市场：Jita（Jita 4-4） · Amarr · Dodixie · Rens · Hek',
       ].join('\n\n'))
       expect(buttonRows(sent)).toEqual([['查价 PLEX=>查价 PLEX', '输入物品=>查价 ']])
     }

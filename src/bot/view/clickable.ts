@@ -124,7 +124,7 @@ export function textActions(card: Card, opts: CommandNamer): Array<{ label: stri
  */
 export function choiceHint(card: Card, opts: CommandNamer, mode: 'buttons' | 'none' | 'text'): string {
   const valid = `${PENDING_MINUTES} 分钟内有效`
-  if (mode === 'buttons') return `${labeledChoices(card) ? '点按钮' : '点下面的编号'}，或者 @我 回复编号（${valid}）`
+  if (mode === 'buttons') return `${labeledChoices(card) ? '点按钮后再按发送' : '点下面的编号后再按发送'}，或者 @我 回复编号（${valid}）`
   const first = card.choices?.[0]
   const example = first ? `，也可以直接发送「${commandText(first.command, opts)}」` : ''
   return mode === 'none' ? `@我 回复编号（${valid}）${example}` : `编号 ${valid}${example}`

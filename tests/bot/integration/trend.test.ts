@@ -306,7 +306,7 @@ describe('走势: markets and items', () => {
   it('an unknown market offers only markets with a trading history (no player structures)', async () => {
     const e = await start({ config: { markets: MARKETS_WITH_ALLIANCE, access: allowed } })
     const sent = await e.h.group('走势 TEST 乌鸦级')
-    expect(card(sent)).toBe('未知市场：TEST\n\n当前可用市场：Jita 4-4 · Amarr · Dodixie · Rens · Hek')
+    expect(card(sent)).toBe('未知市场：TEST\n\n当前可用市场：Jita（Jita 4-4） · Amarr · Dodixie · Rens · Hek')
     expect(buttons(sent)).toEqual(['Jita=>走势 Jita 乌鸦级 月', 'Amarr=>走势 Amarr 乌鸦级 月', 'Dodixie=>走势 Dodixie 乌鸦级 月', 'Rens=>走势 Rens 乌鸦级 月', 'Hek=>走势 Hek 乌鸦级 月'])
     // 查价照样列出玩家建筑市场
     expect(card(await e.h.group('查价 TEST 乌鸦级'))).toContain(ALLIANCE_MARKET.name)
@@ -315,7 +315,7 @@ describe('走势: markets and items', () => {
   it('an unknown market keeps the item and the range in its buttons', async () => {
     const e = await start()
     const sent = await e.h.group('走势 TEST 乌鸦级 年')
-    expect(card(sent)).toBe('未知市场：TEST\n\n当前可用市场：Jita 4-4 · Amarr · Dodixie · Rens · Hek')
+    expect(card(sent)).toBe('未知市场：TEST\n\n当前可用市场：Jita（Jita 4-4） · Amarr · Dodixie · Rens · Hek')
     expect(buttonRows(sent)[0][0]).toBe('Jita=>走势 Jita 乌鸦级 年')
   })
 

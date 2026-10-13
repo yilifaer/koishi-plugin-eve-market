@@ -43,6 +43,8 @@ export interface IndustryArgsParts {
   location?: string
   me?: number
   te?: number
+  /** ME 或 TE 后面没写数字：原样带着，下一步还要提示 */
+  meteMissing?: 'me' | 'te'
   /** 建筑名称、'none'（无建筑加成）或 '?'（列出全部建筑） */
   structure?: string
   rigs?: 'default' | 'none'
@@ -75,6 +77,7 @@ export function industryArgsTail(p: Omit<IndustryArgsParts, 'item'>): string {
   if (p.location) words.push(p.location)
   if (p.me !== undefined) words.push(`ME${p.me}`)
   if (p.te !== undefined) words.push(`TE${p.te}`)
+  if (p.meteMissing) words.push(p.meteMissing.toUpperCase())
   if (p.structure !== undefined) words.push(structureWord(p.structure))
   if (p.rigs) words.push(p.rigs === 'none' ? '改装:无' : '改装:默认')
   if (p.facilityTaxPct !== undefined) words.push(`税:${trimNumber(p.facilityTaxPct)}%`)
@@ -103,6 +106,8 @@ interface Args {
   rigs?: 'default' | 'none'
   tax?: number
   runs?: number
+  /** ME 或 TE 后面没有数字（只记第一个） */
+  meteMissing?: 'me' | 'te'
   /** 单独写的「*10」（例如写在地点后面） */
   quantity?: number
   steps: boolean
@@ -177,7 +182,7 @@ function readArgs(tokens: readonly string[]): Args {
       const kind = m[1].toLowerCase() as 'me' | 'te'
       if (m[2] !== undefined) setLevel(args, kind, m[2])
       else if (next !== undefined && DIGITS.test(next)) setLevel(args, kind, tokens[++i])
-      // 只有「ME」没有数字（「自定义」按钮填进去还没补数字）：当作没写
+      else args.meteMissing ??= kind
     } else if ((m = LEVEL_PAIR.exec(word))) {
       setLevel(args, 'me', m[1])
       setLevel(args, 'te', m[2])
@@ -380,7 +385,9 @@ function parse(text: string, activity: IndustryActivity, access: Access, deps: I
   const res = picked.resolution
   if (res.kind !== 'unique') return itemFailure(picked, res, reader, activity, rest)
 
-  const mode: IndustryRequest['mode'] = args.steps ? 'steps'
+  // 反应没有 ME/TE，不提醒
+  const meteMissing = reaction ? undefined : args.meteMissing
+  const mode: IndustryRequest['mode'] = args.steps || meteMissing ? 'steps'
     : location ? 'advanced'
       // 建筑、改装件、税都要先有地点：没写地点时从第 1 步问起
       : args.structure !== undefined || args.rigs || args.tax !== undefined ? 'steps' : 'base'
@@ -393,6 +400,7 @@ function parse(text: string, activity: IndustryActivity, access: Access, deps: I
   if (parts.me !== undefined) req.me = parts.me
   if (parts.te !== undefined) req.te = parts.te
   if (args.tax !== undefined) req.facilityTaxPct = args.tax
+  if (meteMissing) req.meteMissing = meteMissing
   return req
 }
 

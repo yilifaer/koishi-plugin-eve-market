@@ -1,6 +1,7 @@
 // 反应（§2.8）走完整个插件：基础参考、结果、逐步选择（地点 → 建筑）、材料清单、高安不能反应、不是反应产物。
 // 地点、建筑、税率、价格、指数都是编造的，星系和物品是公共数据。
 
+import type { Context } from 'koishi'
 import { afterEach, describe, expect, it } from 'vitest'
 import { GROUP2 } from '../../harness'
 import { buttonRows, buttons, card } from './plugin-env'
@@ -21,6 +22,29 @@ async function start(options: IndustryEnvOptions = {}): Promise<PluginEnv> {
 }
 
 describe('反应', () => {
+  it('a reaction product with industry words but no command name suggests 反应', async () => {
+    const e = await start()
+    const sent = await e.h.group('碳化钨 高级')
+    expect(card(sent)).toBe('没看懂「碳化钨 高级」。是不是想用「反应 碳化钨 高级」？')
+    expect(buttons(sent)).toEqual(['反应 碳化钨 高级=>反应 碳化钨 高级', '帮助=>帮助'])
+  })
+
+  it('no suggestion when 反应 is not registered; the old short-text reply stays', async () => {
+    const e = await start({
+      before: (app: Context) => app.plugin({ name: 'old-reaction', apply: (ctx: Context) => { ctx.command('反应 [q:text]').action(() => '旧插件的反应') } }),
+    })
+    const sent = await e.h.group('碳化钨 高级')
+    expect(card(sent)).toBe('没看懂「碳化钨 高级」。你是想查价吗？')
+    expect(buttons(sent)).toEqual(['查价 碳化钨 高级=>查价 碳化钨 高级', '帮助=>帮助'])
+  })
+
+  it('industry words with no recognised item, or a long sentence, keep the old reply', async () => {
+    const e = await start()
+    expect(card(await e.h.group('没有这个东西 高级'))).toBe('没看懂「没有这个东西 高级」。你是想查价吗？')
+    const chat = await e.h.group('今天晚上有没有人一起去刷异常空间，带上你的乌鸦级 高级 ME7')
+    expect(chat.map((s) => s.text)).toEqual(['发「帮助」看我能做什么'])
+  })
+
   it('base reference: the formula, per-run materials and output value; three buttons', async () => {
     const e = await start()
     const sent = await e.h.group('反应 碳化钨')

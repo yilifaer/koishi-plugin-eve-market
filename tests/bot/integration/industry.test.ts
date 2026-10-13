@@ -236,7 +236,7 @@ describe('制造: advanced steps', () => {
       '2. XX-2 · 低安 · 中厂 · 系统指数 1.20%',
       '3. XX-3 · 高安 · 高安厂 · 系统指数 3.02%',
       '',
-      '点按钮，或者 @我 回复编号（5 分钟内有效）',
+      '点按钮后再按发送，或者 @我 回复编号（5 分钟内有效）',
     ].join('\n'))
     // 按钮上写选项本身（§2.6.3）
     expect(buttonRows(first)).toEqual([
@@ -261,9 +261,32 @@ describe('制造: advanced steps', () => {
     expect(result).toContain('XX-1 · 小厂 · 00\n蓝图 ME 7 / TE 14 · 1 流程（1 艘）\n改装件 未装\n系统指数 2.31% · 设施税 0.50% · SCC 附加费 4%')
   })
 
-  it('the custom button with a bare 「ME」 asks the same step again', async () => {
+  it('a bare 「ME」 or 「TE」 asks the ME/TE step again with a notice, also outside 高级', async () => {
     const e = await start()
-    expect(card(await e.h.group('制造 乌鸦级 XX-1 高级 ME'))).toContain('进度：地点 ✓ → **ME/TE → 建筑**')
+    const again = card(await e.h.group('制造 乌鸦级 XX-1 高级 ME'))
+    expect(again).toContain('进度：地点 ✓ → **ME/TE → 建筑**')
+    expect(again).toContain('⚠ ME 后面要写数字，例如 ME7 TE14')
+    const plain = card(await e.h.group('制造 乌鸦级 XX-1 TE'))
+    expect(plain).toContain('进度：地点 ✓ → **ME/TE → 建筑**')
+    expect(plain).toContain('⚠ TE 后面要写数字，例如 ME7 TE14')
+  })
+
+  it('a bare 「ME」 survives the location step and the notice shows on the ME/TE step', async () => {
+    const e = await start()
+    const first = await e.h.group('制造 乌鸦级 ME')
+    expect(card(first)).toContain('进度：**地点 → ME/TE → 建筑**')
+    expect(buttonRows(first)[0]).toEqual(['XX-1=>制造 乌鸦级 XX-1 ME 高级', 'XX-2=>制造 乌鸦级 XX-2 ME 高级', 'XX-3=>制造 乌鸦级 XX-3 ME 高级'])
+    const second = await e.h.group('1')
+    expect(card(second)).toContain('进度：地点 ✓ → **ME/TE → 建筑**')
+    expect(card(second)).toContain('⚠ ME 后面要写数字，例如 ME7 TE14')
+  })
+
+  it('industry words without the command name suggest 制造 with a button', async () => {
+    const e = await start()
+    const sent = await e.h.group('乌鸦级 高级')
+    expect(card(sent)).toBe('没看懂「乌鸦级 高级」。是不是想用「制造 乌鸦级 高级」？')
+    expect(buttons(sent)).toEqual(['制造 乌鸦级 高级=>制造 乌鸦级 高级', '帮助=>帮助'])
+    expect(card(await e.h.group('乌鸦级 你好'))).toBe('没看懂「乌鸦级 你好」。你是想查价吗？')
   })
 
   it('a location with one structure skips the structure step; one visible location skips the location step', async () => {
@@ -404,7 +427,7 @@ describe('制造: errors', () => {
       '3. 大型护盾扩展装置 II · Large Shield Extender II',
       '4. 巡航导弹发射器 II · Cruise Missile Launcher II',
       '',
-      '点下面的编号，或者 @我 回复编号（5 分钟内有效）',
+      '点下面的编号后再按发送，或者 @我 回复编号（5 分钟内有效）',
     ].join('\n'))
     expect(buttons(sent)[1]).toBe('2=>制造 损伤控制 II XX-1 ME8')
     expect(card(await e.h.group('2'))).toMatch(/^\*\*损伤控制 II Damage Control II · 高级制造计算\*\*\n\nXX-1 · 大厂（默认建筑） · 00\n蓝图 ME 8 \/ TE 4/)

@@ -17,6 +17,11 @@ async function start(): Promise<PluginEnv> {
 }
 
 describe('help topics of 0.0.3', () => {
+  it('the main help card says buttons only fill the input box', async () => {
+    const e = await start()
+    expect(card(await e.h.group('帮助'))).toContain('按钮只把命令填进输入框，要再按发送')
+  })
+
   it('帮助 走势', async () => {
     const e = await start()
     const sent = await e.h.group('帮助 走势')

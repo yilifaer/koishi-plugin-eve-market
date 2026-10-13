@@ -127,8 +127,10 @@ describe('industryArgs: parameters', () => {
       expect(ok(text), text).toEqual({ ...base, me: 10, te: 20 })
     }
     expect(ok('乌鸦级 ME0')).toEqual({ ...base, me: 0 })
-    // 「自定义」按钮填进去还没补数字的「ME」：当作没写
-    expect(ok('乌鸦级 XX-1 高级 ME')).toEqual({ ...base, mode: 'steps', location: 'XX-1' })
+    // 「自定义」按钮填进去还没补数字的「ME」：回到 ME/TE 这一步并提醒
+    expect(ok('乌鸦级 XX-1 高级 ME')).toEqual({ ...base, mode: 'steps', location: 'XX-1', meteMissing: 'me' })
+    expect(ok('乌鸦级 XX-1 ME7 TE')).toEqual({ ...base, mode: 'steps', location: 'XX-1', me: 7, meteMissing: 'te' })
+    expect(ok('乌鸦级 XX-1 TE')).toEqual({ ...base, mode: 'steps', location: 'XX-1', meteMissing: 'te' })
     // 编号待办把 ME7 TE14 接在命令后面
     expect(ok('乌鸦级 XX-1 高级 ME7 TE14')).toEqual({ ...base, mode: 'steps', location: 'XX-1', me: 7, te: 14 })
   })
