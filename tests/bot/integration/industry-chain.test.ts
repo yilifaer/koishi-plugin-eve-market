@@ -4,7 +4,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SLOW_HINT_MS } from '../../../src/constants'
 import { FakeTime } from '../../fakes/fake-time'
-import { USER } from '../../harness'
+import { GROUP2, USER } from '../../harness'
 import { TEST_START, buttonRows, buttons, card } from './plugin-env'
 import type { PluginEnv } from './plugin-env'
 import { INDUSTRY, LOCATIONS, STRUCTURES } from './industry-env'
@@ -204,6 +204,41 @@ describe('拆到原料：反应的地点', () => {
     expect(out).toContain('种反应没有地方做')
     expect(out).toContain('改成直接买')
     expect(out).toContain('没地方造')
+  })
+})
+
+describe('拆到原料：只在授权群的地点不出现在别的群', () => {
+  // XX-1 只在授权群，控制台的「默认反应地点」「提炼地点」都写它；XX-3 在高安，没有精炼厂
+  const industry = {
+    locations: LOCATIONS,
+    structures: [...STRUCTURES, { location: 'XX-1', name: '秘密提炼厂', structureType: 'Athanor', activities: 'reprocessing', reprocessingTaxPct: 0.5 }],
+    chainReactionLocation: 'XX-1',
+    reprocessLocation: 'XX-1',
+  }
+  const commands = [`制造 ${HOUND} XX-3 拆到原料`, `制造 ${HOUND} XX-3 反应:炼金`]
+
+  it('the allowed group uses the settings (so the check below means something)', async () => {
+    const e = await start({ industry })
+    expect(card(await e.h.group(commands[0]))).toContain('反应在 XX-1（XX-3 没有精炼厂）')
+    expect(card(await e.h.group(commands[1]))).toMatch(/提炼：秘密提炼厂（XX-1）/)
+  })
+
+  it('a public group: neither the card nor the buttons name the hidden location', async () => {
+    const e = await start({ industry })
+    for (const command of commands) {
+      const sent = await e.h.group(command, { channelId: GROUP2 })
+      const out = card(sent)
+      expect(out).toContain('**猎犬级 Hound · 拆到原料**')
+      for (const word of ['XX-1', '联盟工业点A', '秘密提炼厂', '反应塔', '大厂']) {
+        expect(out).not.toContain(word)
+        expect(buttons(sent).join('\n')).not.toContain(word)
+      }
+      expect(out).not.toMatch(/反应在 [^\n]*XX-1/)
+      expect(out).not.toMatch(/提炼：[^\n]*XX-1/)
+    }
+    // 反应改在本群能用的 XX-2 做；本群没有能提炼的建筑，照实说
+    expect(card(await e.h.group(commands[0], { channelId: GROUP2 }))).toContain('反应在 XX-2（XX-3 没有精炼厂）')
+    expect(card(await e.h.group(commands[1], { channelId: GROUP2 }))).toContain('⚠ 未配置提炼建筑，提炼税按 0 算')
   })
 })
 

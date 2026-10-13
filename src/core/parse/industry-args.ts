@@ -19,8 +19,8 @@ import { normalizeLine } from './text'
 export interface IndustryArgsLocations {
   /** 本群能看到的地点，按名称、别名、星系名；找不到返回 null */
   match(token: string, access: Access): { name: string } | null
-  /** 名称和别名最多几个词 */
-  maxWords(): number
+  /** 本群能用的名称和别名最多几个词 */
+  maxWords(access: Access): number
   /** 本群能用的地点（给了 activity 时只留能做这种活动的） */
   visible(access: Access, activity?: IndustryActivity): Array<{ name: string }>
 }
@@ -371,7 +371,7 @@ type LocationSplit =
 function splitLocation(words: readonly string[], reader: Reader, deps: IndustryArgsDeps, access: Access): LocationSplit {
   const whole = words.join(' ')
   if (words.length < 2 || reader.recognize(whole) === 'exact') return { kind: 'item', item: whole }
-  const max = Math.min(deps.locations.maxWords(), words.length - 1)
+  const max = Math.min(deps.locations.maxWords(access), words.length - 1)
   // 末尾的地点（所有者批准的写法）优先，再看开头；多词的名字按最长匹配
   for (let n = max; n >= 1; n--) {
     const location = deps.locations.match(words.slice(-n).join(' '), access)

@@ -6,7 +6,8 @@
 //   「提炼」用途不能用在「无」类型上（NPC 空间站可以）；「有超旗舰船坞」装不上或不在 00 时报告，开关不生效；
 // - 每座建筑按数据里的服务表算出实际有的服务（services），能造什么产品由 capabilities.ts 判断；
 //   这些判断（尺寸、安全等级、精炼厂）和计算时用的是同一套（modifiers.ts）；
-// - 可见范围按 Access：本群看不到的地点和不存在的一样。
+// - 可见范围按 Access：本群看不到的地点和不存在的一样。名字分两套：全部地点一套（授权群、控制台设置用），
+//   只有公开地点一套（其他群用），只在授权群的地点占不了公开地点的别名、星系名。
 // 每个数据版本建一次，数据更新后第一次用到时自动重建。
 
 import { DataNotReadyError } from '../data'
@@ -82,7 +83,7 @@ export interface IndustryLocation {
   /** 名称的比较键，表内唯一 */
   key: string
   name: string
-  /** 手写的别名，再加上星系的中英文名（和别的地点冲突时不加） */
+  /** 手写的别名，再加上星系的中英文名（和别的地点冲突时不加；按全部地点算） */
   aliases: readonly string[]
   system: IndustrySystem
   visibility: Visibility
@@ -111,8 +112,8 @@ export interface IndustryLocations {
   visible(access: Access, activity?: IndustryActivity): IndustryLocation[]
   /** 按名称、别名、星系名找本群能看到的地点（不看能不能做哪种活动，高安做反应由调用方回答）；找不到返回 null */
   match(token: string, access: Access): IndustryLocation | null
-  /** 名称和别名最多几个词（从命令里切出地点时用） */
-  maxWords(): number
+  /** 本群能用的名称和别名最多几个词（从命令里切出地点时用） */
+  maxWords(access: Access): number
   /** 按名称取，不看可见范围 */
   get(name: string): IndustryLocation | undefined
   /** 「快速计算」的默认地点；本群看不到、或者不能做这种活动时 undefined */
@@ -246,19 +247,27 @@ function rigName(r: RigInfo): string {
 
 // ------------------------------------------------------------------ 建表
 
+/** 一套名字：名称、手写别名、星系名，然后同样三层的去空白写法 */
+interface NameSet {
+  layers: Array<Map<string, IndustryLocation>>
+  maxWords: number
+}
+
 interface Built {
   key: string
   list: IndustryLocation[]
   reactionLocation?: IndustryLocation
   reprocessLocation?: IndustryLocation
   byKey: Map<string, IndustryLocation>
-  /** 名称、手写别名、星系名，然后同样三层的去空白写法 */
-  layers: Array<Map<string, IndustryLocation>>
-  maxWords: number
+  /** 全部地点的名字：授权群、控制台设置用 */
+  names: NameSet
+  /** 只有公开地点的名字：其他群、私聊用 */
+  publicNames: NameSet
   issues: ConfigIssue[]
 }
 
-const EMPTY: Built = { key: '', list: [], byKey: new Map(), layers: [], maxWords: 0, issues: [] }
+const NO_NAMES: NameSet = { layers: [], maxWords: 0 }
+const EMPTY: Built = { key: '', list: [], byKey: new Map(), names: NO_NAMES, publicNames: NO_NAMES, issues: [] }
 
 /** 星系名当别名：碰上名称、手写别名，或者是纯数字、命令的参数时不加 */
 const RESERVED_AUTO = new Set(['高级', '材料', '全部', 'all', '拆到原料', '明细', '反应', '组件', '其他', '低级反应', '高级反应'].map(marketKey))
@@ -270,30 +279,60 @@ function usableAuto(key: string): boolean {
 interface Draft {
   setting: IndustryLocationSetting
   system: IndustrySystem
-  hand: string[]
-  auto: string[]
 }
 
-function claimNames(drafts: Draft[]): Array<Map<string, Draft>> {
+/** 被别的地点先占了的手写别名（hand）或星系名（auto） */
+interface Dropped {
+  draft: Draft
+  text: string
+  key: string
+  kind: 'hand' | 'auto'
+  owner: Draft
+}
+
+interface Claimed {
+  layers: Array<Map<string, Draft>>
+  /** 每个地点拿到的手写别名、星系名 */
+  owned: Map<Draft, { hand: string[]; auto: string[] }>
+  dropped: Dropped[]
+}
+
+function claimNames(drafts: Draft[]): Claimed {
   const names = new Map<string, Draft>()
   const hand = new Map<string, Draft>()
   const auto = new Map<string, Draft>()
-  const taken = (key: string) => names.has(key) || hand.has(key) || auto.has(key)
+  const owned = new Map(drafts.map((d) => [d, { hand: [] as string[], auto: [] as string[] }]))
+  const dropped: Dropped[] = []
+  const ownerOf = (key: string) => names.get(key) ?? hand.get(key) ?? auto.get(key)
+  // 自己的名称、自己写重的别名不算被占
+  const drop = (draft: Draft, text: string, key: string, kind: Dropped['kind'], owner: Draft) => {
+    if (owner !== draft) dropped.push({ draft, text, key, kind, owner })
+  }
   for (const d of drafts) names.set(marketKey(d.setting.name), d)
   for (const d of drafts) {
     for (const alias of d.setting.aliases) {
       const key = marketKey(alias)
-      if (!key || taken(key)) continue
+      if (!key) continue
+      const owner = ownerOf(key)
+      if (owner) {
+        drop(d, alias, key, 'hand', owner)
+        continue
+      }
       hand.set(key, d)
-      d.hand.push(alias)
+      owned.get(d)!.hand.push(alias)
     }
   }
   for (const d of drafts) {
     for (const name of [d.system.en, d.system.zh]) {
       const key = name ? marketKey(name) : ''
-      if (!usableAuto(key) || taken(key)) continue
+      if (!usableAuto(key)) continue
+      const owner = ownerOf(key)
+      if (owner) {
+        drop(d, name, key, 'auto', owner)
+        continue
+      }
       auto.set(key, d)
-      d.auto.push(name)
+      owned.get(d)!.auto.push(name)
     }
   }
   // 去空白的一层收全部写法：名字里有没有空格、输入里多没多空格都能认出
@@ -305,7 +344,31 @@ function claimNames(drafts: Draft[]): Array<Map<string, Draft>> {
     }
     return out
   }
-  return [names, hand, auto, compact(names), compact(hand), compact(auto)]
+  return { layers: [names, hand, auto, compact(names), compact(hand), compact(auto)], owned, dropped }
+}
+
+function nameSet(claimed: Claimed, built: Map<Draft, IndustryLocation>): NameSet {
+  const layers = claimed.layers.map((layer) => new Map([...layer].map(([k, d]) => [k, built.get(d)!])))
+  let maxWords = 0
+  for (const layer of layers.slice(0, 3)) {
+    for (const k of layer.keys()) maxWords = Math.max(maxWords, k.split(' ').length)
+  }
+  return { layers, maxWords }
+}
+
+/** 名称、别名、星系名在全部地点里被别的地点先占了：报告。公开地点只被只在授权群的地点占了时，其他群里照样认它 */
+function reportDropped(dropped: readonly Dropped[], publicClaimed: Claimed, issues: ConfigIssue[]) {
+  for (const { draft, text, key, kind, owner } of dropped) {
+    const name = draft.setting.name
+    const what = kind === 'hand' ? '别名' : '星系名'
+    const publicOwner = publicClaimed.layers.slice(0, 3).map((layer) => layer.get(key)).find((d) => d)
+    const result = publicOwner === draft ? `只在看不到 ${owner.setting.name} 的群和私聊里认作 ${name}`
+      : kind === 'hand' ? '已跳过' : `不算 ${name} 的别名`
+    issues.push({
+      section: 'industry', table: LOC_TABLE, row: draft.setting.row, field: kind === 'hand' ? 'aliases' : 'system',
+      message: `地点 ${name} 的${what}「${text}」和地点 ${owner.setting.name} 重复，${result}`,
+    })
+  }
 }
 
 class StructureResolver {
@@ -497,10 +560,12 @@ function buildLocations(settings: IndustrySettings, data: DataSet): Built {
       id: info.id, en: info.en, zh: info.zh, regionId: info.regionId, security: info.security,
       secClass: secClassOf(info.security, info.regionId),
     })
-    drafts.push({ setting: loc, system, hand: [], auto: [] })
+    drafts.push({ setting: loc, system })
   }
 
-  const draftLayers = claimNames(drafts)
+  const claimed = claimNames(drafts)
+  const publicClaimed = claimNames(drafts.filter((d) => d.setting.visibility === 'public'))
+  reportDropped(claimed.dropped, publicClaimed, issues)
   // 按建筑表的顺序检查（问题也按行号报）；所属地点无效的建筑不再一行行报，地点那一行已经报过
   const resolver = new StructureResolver(data, lookups, settings, issues)
   const byName = new Map(drafts.map((d) => [d.setting.name, { draft: d, structures: [] as IndustryStructure[] }]))
@@ -512,11 +577,12 @@ function buildLocations(settings: IndustrySettings, data: DataSet): Built {
   const built = new Map<Draft, IndustryLocation>()
   for (const { draft: d, structures } of byName.values()) {
     const loc = d.setting
+    const own = claimed.owned.get(d)!
     built.set(d, Object.freeze({
       row: loc.row,
       key: marketKey(loc.name),
       name: loc.name,
-      aliases: Object.freeze([...d.hand, ...d.auto]),
+      aliases: Object.freeze([...own.hand, ...own.auto]),
       system: d.system,
       visibility: loc.visibility,
       isDefault: loc.isDefault,
@@ -527,12 +593,10 @@ function buildLocations(settings: IndustrySettings, data: DataSet): Built {
     }))
   }
   const list = drafts.map((d) => built.get(d)!)
-  const layers = draftLayers.map((layer) => new Map([...layer].map(([k, d]) => [k, built.get(d)!])))
-  let maxWords = 0
-  for (const layer of layers.slice(0, 3)) {
-    for (const k of layer.keys()) maxWords = Math.max(maxWords, k.split(' ').length)
+  const out: Built = {
+    key: data.key, list, byKey: new Map(list.map((l) => [l.key, l])),
+    names: nameSet(claimed, built), publicNames: nameSet(publicClaimed, built), issues,
   }
-  const out: Built = { key: data.key, list, byKey: new Map(list.map((l) => [l.key, l])), layers, maxWords, issues }
   const reaction = settingLocation(out, settings.chain.reactionLocation, '默认反应地点', 'chainReactionLocation',
     (l) => locationSupports(l, 'reaction'), '没有能反应的建筑（或在高安）')
   const reprocess = settingLocation(out, settings.chain.reprocessLocation, '提炼地点', 'reprocessLocation',
@@ -547,7 +611,7 @@ function settingLocation(
   built: Built, text: string, label: string, field: string, accept: (l: IndustryLocation) => boolean, lack: string,
 ): IndustryLocation | undefined {
   if (!text) return undefined
-  const found = findIn(built.layers, text, () => true)
+  const found = findIn(built.names.layers, text, () => true)
   const message = !found ? `「${label}」${text} 不是已配置的工业地点，已当作没填`
     : !accept(found) ? `「${label}」${found.name} ${lack}，已当作没填` : ''
   if (message) built.issues.push({ section: 'industry', field, message })
@@ -581,11 +645,11 @@ class Locations implements IndustryLocations {
   }
 
   match(token: string, access: Access): IndustryLocation | null {
-    return findIn(this.state().layers, token, (l) => locationVisibleTo(l, access)) ?? null
+    return findIn(this.namesFor(access).layers, token, (l) => locationVisibleTo(l, access)) ?? null
   }
 
-  maxWords(): number {
-    return this.state().maxWords
+  maxWords(access: Access): number {
+    return this.namesFor(access).maxWords
   }
 
   get(name: string): IndustryLocation | undefined {
@@ -626,6 +690,12 @@ class Locations implements IndustryLocations {
 
   issues(): ConfigIssue[] {
     return [...this.state().issues]
+  }
+
+  /** 授权的群和私聊用全部地点的名字，其他的只用公开地点的（和 locationVisibleTo 一致） */
+  private namesFor(access: Access): NameSet {
+    const built = this.state()
+    return access.allowed ? built.names : built.publicNames
   }
 
   /** 数据还没加载好时 null */

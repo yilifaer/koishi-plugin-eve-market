@@ -85,7 +85,7 @@ describe('IndustryLocations: locations', () => {
     expect(names(r.visible(PUBLIC))).toEqual(['联盟工业点A', 'XX-2'])
     expect(names(r.visible(ALLOWED))).toEqual(['XX-1', '联盟工业点A', 'XX-2', '虫洞点'])
     expect(locationVisibleTo(r.get('XX-1')!, PUBLIC)).toBe(false)
-    expect(r.maxWords()).toBe(1)
+    expect(r.maxWords(ALLOWED)).toBe(1)
   })
 
   it('a system name is an alias only once and never overrides names or hand-written aliases', () => {
@@ -104,7 +104,15 @@ describe('IndustryLocations: locations', () => {
     expect(r.match('jita', ALLOWED)?.name).toBe('XX-1')
     expect(r.match('吉他', ALLOWED)?.name).toBe('XX-2')
     expect(r.match('吉他制造点', ALLOWED)?.name).toBe('吉他 制造 点')
-    expect(r.maxWords()).toBe(3)
+    expect(r.maxWords(ALLOWED)).toBe(3)
+    // 没加上的星系名报告，说清楚写它时认作谁
+    expect(messages(r.issues())).toEqual([
+      '工业地点#2.system 地点 XX-2 的星系名「Jita」和地点 XX-1 重复，不算 XX-2 的别名',
+      '工业地点#3.system 地点 XX-3 的星系名「Jita」和地点 XX-1 重复，不算 XX-3 的别名',
+      '工业地点#3.system 地点 XX-3 的星系名「吉他」和地点 XX-2 重复，不算 XX-3 的别名',
+      '工业地点#4.system 地点 吉他 制造 点 的星系名「Jita」和地点 XX-1 重复，不算 吉他 制造 点 的别名',
+      '工业地点#4.system 地点 吉他 制造 点 的星系名「吉他」和地点 XX-2 重复，不算 吉他 制造 点 的别名',
+    ])
   })
 
   it('skips a location whose system is not in the data, together with its structures', () => {
@@ -145,7 +153,7 @@ describe('IndustryLocations: locations', () => {
     expect(notReady.all()).toEqual([])
     expect(notReady.match('XX-1', ALLOWED)).toBeNull()
     expect(notReady.issues()).toEqual([])
-    expect(notReady.maxWords()).toBe(0)
+    expect(notReady.maxWords(ALLOWED)).toBe(0)
   })
 
   it('rebuilds after a data update and checks the configuration again', () => {
@@ -159,6 +167,80 @@ describe('IndustryLocations: locations', () => {
     data.update(next)
     expect(names(r.all())).toEqual(['联盟工业点A', 'XX-2', '虫洞点'])
     expect(messages(r.issues())).toEqual(['工业地点#1.system 「星系」NIH-02 在数据里找不到，这个地点和它的建筑都不生效'])
+  })
+})
+
+describe('IndustryLocations: locations only for allowed groups do not take names from public ones', () => {
+  // 秘密点（只在授权群）排在前面，用了公共点的别名「大厂」，也在 Tama；还有一个三个词的别名
+  const secret = { name: '秘密点', aliases: '大厂, 秘密 二号 工业点', system: 'Tama', visibility: 'allowed' }
+  const open = [
+    { name: '公共点', aliases: '大厂', system: 'Tama', visibility: 'public' },
+    { name: 'XX-1', system: 'Jita', visibility: 'public' },
+  ]
+  const TOKENS = ['大厂', '大 厂', 'tama', '塔玛', '公共点', 'XX-1', '吉他', '秘密点', '秘密 二号 工业点', '秘密二号工业点']
+
+  it('other groups match the public location, as if the hidden one did not exist', () => {
+    const r = build({ locations: [secret, ...open] })
+    for (const token of ['大厂', '大 厂', 'tama', '塔玛']) expect(r.match(token, PUBLIC)?.name).toBe('公共点')
+    expect(r.match('秘密点', PUBLIC)).toBeNull()
+    expect(r.match('秘密 二号 工业点', PUBLIC)).toBeNull()
+    // 和没有秘密点时逐个一样：别的群看不出它存在
+    const without = build({ locations: open })
+    for (const token of TOKENS) expect(r.match(token, PUBLIC)?.name).toBe(without.match(token, PUBLIC)?.name)
+    expect(r.maxWords(PUBLIC)).toBe(without.maxWords(PUBLIC))
+  })
+
+  it('allowed groups keep today\'s behaviour: the first location in the table wins', () => {
+    const r = build({ locations: [secret, ...open] })
+    for (const token of ['大厂', 'tama', '塔玛', '秘密点', '秘密二号工业点']) expect(r.match(token, ALLOWED)?.name).toBe('秘密点')
+    expect(r.match('公共点', ALLOWED)?.name).toBe('公共点')
+    expect(r.get('秘密点')!.aliases).toEqual(['大厂', '秘密 二号 工业点', 'Tama', '塔玛'])
+    expect(r.get('公共点')!.aliases).toEqual([])
+  })
+
+  it('the names taken away are reported as configuration problems', () => {
+    const r = build({ locations: [secret, ...open] })
+    expect(messages(r.issues())).toEqual([
+      '工业地点#2.aliases 地点 公共点 的别名「大厂」和地点 秘密点 重复，只在看不到 秘密点 的群和私聊里认作 公共点',
+      '工业地点#2.system 地点 公共点 的星系名「Tama」和地点 秘密点 重复，只在看不到 秘密点 的群和私聊里认作 公共点',
+      '工业地点#2.system 地点 公共点 的星系名「塔玛」和地点 秘密点 重复，只在看不到 秘密点 的群和私聊里认作 公共点',
+    ])
+    // 公共点排在前面时照旧：秘密点的别名在控制台里就不生效，星系名不算它的
+    const { issues } = normalizeConfig({ industry: { locations: [...open, secret] } })
+    expect(issues.map((i) => i.message)).toEqual(['别名「大厂」和第 1 行冲突，这一行的不生效'])
+    const later = build({ locations: [...open, { ...secret, aliases: '秘密 二号 工业点' }] })
+    expect(later.match('大厂', ALLOWED)?.name).toBe('公共点')
+    expect(messages(later.issues())).toEqual([
+      '工业地点#3.system 地点 秘密点 的星系名「Tama」和地点 公共点 重复，不算 秘密点 的别名',
+      '工业地点#3.system 地点 秘密点 的星系名「塔玛」和地点 公共点 重复，不算 秘密点 的别名',
+    ])
+  })
+
+  it('a hidden location named like a public alias does not take it in other groups either', () => {
+    const r = build({ locations: [{ name: '大厂', system: 'NIH-02', visibility: 'allowed' }, ...open] })
+    expect(r.match('大厂', PUBLIC)?.name).toBe('公共点')
+    expect(r.match('大厂', ALLOWED)?.name).toBe('大厂')
+    expect(messages(r.issues())).toEqual(['工业地点#2.aliases 地点 公共点 的别名「大厂」和地点 大厂 重复，只在看不到 大厂 的群和私聊里认作 公共点'])
+  })
+
+  it('maxWords for other groups ignores the hidden locations\' multi-word names', () => {
+    const r = build({ locations: [secret, ...open] })
+    expect(r.maxWords(ALLOWED)).toBe(3)
+    expect(r.maxWords(PUBLIC)).toBe(1)
+  })
+
+  it('the default reaction and reprocessing locations set to a hidden location are empty for other groups, even by a shared alias', () => {
+    const structures = [
+      { location: '秘密点', name: '秘密反应塔', structureType: 'Athanor', activities: 'reaction-reprocessing', reprocessingTaxPct: 1 },
+      { location: '公共点', name: '公共反应塔', structureType: 'Athanor', activities: 'reaction-reprocessing', reprocessingTaxPct: 1 },
+    ]
+    for (const setting of ['秘密点', '大厂']) {
+      const r = build({ locations: [secret, ...open], structures, chainReactionLocation: setting, reprocessLocation: setting })
+      // 控制台里的设置按全部地点认：「大厂」是秘密点
+      expect(r.chainReactionLocation(ALLOWED)?.name).toBe('秘密点')
+      expect(r.reprocessLocation(ALLOWED)?.name).toBe('秘密点')
+      expect([r.chainReactionLocation(PUBLIC), r.reprocessLocation(PUBLIC)]).toEqual([undefined, undefined])
+    }
   })
 })
 

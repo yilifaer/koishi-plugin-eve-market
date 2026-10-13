@@ -567,20 +567,28 @@ function normalizeIndustry(raw: Raw, allIssues: IssueList): IndustrySettings {
     locations.push(loc)
     locationKeys.set(key, loc)
   })
-  // 地点别名：和其他地点的名称、别名冲突时后一个不生效
+  // 地点别名：和其他地点的名称、别名冲突时后一个不生效。
+  // 只在授权群的地点先占了的，公开地点照样留着（其他群里认它），由 core 按可见范围分开认、报告
   const locOwner = new Map<string, IndustryLocationSetting>()
-  for (const loc of locations) locOwner.set(nameKey(loc.name), loc)
+  const publicOwner = new Map<string, IndustryLocationSetting>()
+  for (const loc of locations) {
+    locOwner.set(nameKey(loc.name), loc)
+    if (loc.visibility === 'public') publicOwner.set(nameKey(loc.name), loc)
+  }
   for (const loc of locations) {
     loc.aliases = loc.aliases.filter((alias) => {
       const key = nameKey(alias)
-      const other = locOwner.get(key)
+      const first = locOwner.get(key)
+      const shadowed = first?.visibility === 'allowed' && loc.visibility === 'public'
+      const other = shadowed ? publicOwner.get(key) : first
       if (other === loc) return false
       if (other || reservedReason(alias, true)) {
         const why = other ? `和第 ${other.row} 行冲突` : '和命令的参数冲突'
         issues.add(s, `别名「${alias}」${why}，这一行的不生效`, { table: locTable, row: loc.row, field: 'aliases' })
         return false
       }
-      locOwner.set(key, loc)
+      if (!first) locOwner.set(key, loc)
+      if (loc.visibility === 'public') publicOwner.set(key, loc)
       return true
     })
   }
