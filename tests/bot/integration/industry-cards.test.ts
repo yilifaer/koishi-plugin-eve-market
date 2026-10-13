@@ -170,6 +170,13 @@ describe('result card: rigs and data age', () => {
   it('the only structure of the location is marked as such, a default among several as the default', () => {
     const only = md(resultCard(env(), example({ applied: { ...example().applied, defaulted: ['structure'], structureOnly: true } }), 'manufacturing', []))
     expect(only).toContain('XX-1 · 索迪约（该地点唯一） · 00')
+    // 别的建筑、地点因为造不了被筛掉：不能说「唯一」
+    const filtered = md(resultCard(env(), example({ applied: { ...example().applied, defaulted: ['location', 'structure'], structureOnly: true, structureFiltered: true, locationFiltered: true } }), 'manufacturing', []))
+    expect(filtered).toContain('XX-1（唯一能造的地点） · 索迪约（这里唯一能造的建筑） · 00')
+    expect(filtered).not.toContain('该地点唯一')
+    expect(filtered).not.toContain('本群唯一')
+    const plain = md(resultCard(env(), example({ applied: { ...example().applied, defaulted: ['location'] } }), 'manufacturing', []))
+    expect(plain).toContain('XX-1（本群唯一的地点）')
     const first = md(resultCard(env(), example({ applied: { ...example().applied, defaulted: ['structure'] } }), 'manufacturing', []))
     expect(first).toContain('XX-1 · 索迪约（默认建筑） · 00')
   })

@@ -140,8 +140,8 @@ function placeLine(r: IndustryResult): string {
   const { applied } = r
   const d = new Set(applied.defaulted)
   const parts: string[] = []
-  if (applied.location) parts.push(`${esc(applied.location)}${d.has('location') ? IND.defaulted.location : ''}`)
-  const mark = !d.has('structure') ? '' : applied.structureOnly ? IND.defaulted.structureOnly : IND.defaulted.structure
+  if (applied.location) parts.push(`${esc(applied.location)}${d.has('location') ? (applied.locationFiltered ? IND.defaulted.locationFiltered : IND.defaulted.location) : ''}`)
+  const mark = !d.has('structure') ? '' : applied.structureOnly ? (applied.structureFiltered ? IND.defaulted.structureFiltered : IND.defaulted.structureOnly) : IND.defaulted.structure
   // 自动挑的写「自动选择：名称」；地点只有一座时仍是「该地点唯一」
   if (applied.structure && applied.autoPicked) parts.push(IND.autoPicked(esc(applied.structure)))
   else parts.push(applied.structure ? `${esc(applied.structure)}${mark}` : IND.noStructure)

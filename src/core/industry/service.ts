@@ -90,6 +90,10 @@ interface Setup {
   defaulted: Defaulted[]
   /** 自动选中的建筑是这个地点唯一的一座 */
   only?: boolean
+  /** 唯一的建筑是筛过的（地点里还有别的建筑造不了） */
+  onlyFiltered?: boolean
+  /** 地点是筛过之后剩下的（另有地点造不了） */
+  locationFiltered?: boolean
 }
 
 interface UnitPrice {
@@ -324,6 +328,7 @@ class Service implements IndustryService {
     const defaulted: Defaulted[] = []
     let location: IndustryLocation | undefined
     let only = false
+    let locationFiltered = false
     let unable: Pick<BuildableLocations, 'unable' | 'need'> = { unable: 0 }
     if (req.location !== undefined) {
       const found = this.findLocation(job, req.location)
@@ -338,6 +343,7 @@ class Service implements IndustryService {
       if (list.length === 1) {
         location = list[0]
         only = true
+        locationFiltered = buildable.unable > 0
       } else if (req.mode === 'advanced') {
         const fallback = this.o.locations.defaultLocation(req.access, job.activity)
         location = fallback && list.includes(fallback) ? fallback : undefined
@@ -381,7 +387,11 @@ class Service implements IndustryService {
     if (req.facilityTaxPct === undefined) defaulted.push('tax')
 
     const setup: Setup = { location, structure, rigs: req.rigs ?? 'default', me, te, tax: req.facilityTaxPct, defaulted }
-    if (onlyStructure) setup.only = true
+    if (onlyStructure) {
+      setup.only = true
+      if (structuresFor(location, job.activity).length > 1) setup.onlyFiltered = true
+    }
+    if (locationFiltered) setup.locationFiltered = true
     if (probe) return READY
     const plan = this.production(job, setup, this.modifiers(job, setup))
     const wanted = plan.materials.map((m) => ({ typeId: m.typeId, qty: m.quantity }))
@@ -483,7 +493,9 @@ class Service implements IndustryService {
   /** 已选摘要：地点、ME/TE、建筑、数量和写了的参数；withStructure：问建筑的那一步不写（写的建筑可能找不到） */
   private summary(job: Job, req: IndustryRequest, location?: IndustryLocation, only = false, withStructure = true): string[] {
     const out: string[] = []
-    if (location) out.push(only ? `${location.name}（本群唯一的地点）` : location.name)
+    // 筛掉了别的地点时，「本群唯一」会误导
+    const onlyText = this.o.locations.buildable(req.access, job.activity, job.product).unable ? '（唯一能造的地点）' : '（本群唯一的地点）'
+    if (location) out.push(only ? `${location.name}${onlyText}` : location.name)
     if (job.activity === 'manufacturing') {
       if (req.me !== undefined) out.push(`ME ${req.me}`)
       if (req.te !== undefined) out.push(`TE ${req.te}`)
@@ -709,6 +721,8 @@ class Service implements IndustryService {
       const bonus = structureBonusOf(structure, job.activity)
       if (bonus) result.applied.structureBonus = bonus
       if (structure && setup.only) result.applied.structureOnly = true
+      if (structure && setup.only && setup.onlyFiltered) result.applied.structureFiltered = true
+      if (setup.locationFiltered) result.applied.locationFiltered = true
       result.applied.rigState = rigStateOf(setup, mods.applied.length)
     }
     if (location && costs) this.addJobCost(job, setup, mods, plan.jobs, costs, result)

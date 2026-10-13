@@ -1000,6 +1000,10 @@ export interface IndustryResult {
     defaulted: Array<'location' | 'me' | 'te' | 'structure' | 'rigs' | 'tax'>
     /** 自动选中的建筑是这个地点唯一能做这种活动的一座 */
     structureOnly?: boolean
+    /** structureOnly 时：这个地点里还有别的建筑，因为造不了被筛掉了 */
+    structureFiltered?: boolean
+    /** 地点是默认选的：别的地点因为造不了被筛掉了 */
+    locationFiltered?: boolean
     /** 建筑是自动挑的：在这么多座能做的里选了最合适的 */
     autoPicked?: { among: number }
     /** 改装件的情况（有地点时给，见 IndustryRigState） */

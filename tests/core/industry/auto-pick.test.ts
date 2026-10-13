@@ -90,6 +90,9 @@ describe('capability: which locations can build what', () => {
     const r = result(await plan(AEON))
     expect(r.applied).toMatchObject({ location: '星点甲', structure: '甲索迪约', structureOnly: true, defaulted: ['location', 'me', 'te', 'structure', 'rigs', 'tax'] })
     expect(service.locationsFor(ALLOWED, 'manufacturing', AEON)).toEqual([{ name: '星点甲', isDefault: true }])
+    // 别的地点、别的建筑是被筛掉的，不是「唯一」
+    expect(r.applied).toMatchObject({ locationFiltered: true, structureFiltered: true })
+    expect(step(await plan(AEON, { mode: 'steps' })).summary).toEqual(['星点甲（唯一能造的地点）'])
     // 写了别的地点：说清楚缺什么，列出能造的地点
     expect(failed(await plan(AEON, { location: '星点乙' }))).toMatchObject({
       code: 'UNKNOWN_LOCATION', reason: 'capability', token: '星点乙', need: '超级旗舰级船坞', locations: ['星点甲'],
@@ -189,6 +192,9 @@ describe('auto-pick the structure', () => {
     const r = result(await plan(RAVEN, { location: '星点乙' }))
     expect(r.applied).toMatchObject({ structure: '乙阿兹贝尔', structureOnly: true, defaulted: ['me', 'te', 'structure', 'rigs', 'tax'] })
     expect(r.applied.autoPicked).toBeUndefined()
+    // 什么都没筛掉：保持老说法
+    expect(r.applied.structureFiltered).toBeUndefined()
+    expect(r.applied.locationFiltered).toBeUndefined()
   })
 
   it('建筑:无, 改装:无 and 税: apply to every candidate', async () => {

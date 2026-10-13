@@ -63,6 +63,9 @@ export const IND = {
     meTeT2: '（T2 常见值）',
     structure: '（默认建筑）',
     structureOnly: '（该地点唯一）',
+    // 按产品筛掉了别的地点、建筑之后
+    locationFiltered: '（唯一能造的地点）',
+    structureFiltered: '（这里唯一能造的建筑）',
   },
   materialCost: '材料成本',
   eivCost: '基础物品成本',
