@@ -10,8 +10,13 @@ describe('rankStructures', () => {
   it('cost ascending first', () => {
     expect(names(rankStructures([r('a', 300, 1, true, 0), r('b', 100, 9, false, 1), r('c', 200, 5, false, 2)]))).toEqual(['b', 'c', 'a'])
   })
-  it('costs within 1 ISK tie, then time', () => {
-    expect(names(rankStructures([r('a', 100.9, 50, true, 0), r('b', 100, 60, false, 1), r('c', 100.2, 40, false, 2)]))).toEqual(['c', 'a', 'b'])
+  it('costs equal after rounding to whole ISK tie, then time', () => {
+    expect(names(rankStructures([r('a', 100.4, 50, true, 0), r('b', 100, 60, false, 1), r('c', 99.6, 40, false, 2)]))).toEqual(['c', 'a', 'b'])
+  })
+  it('the pick does not depend on the input order (costs 100, 100.9, 101.8)', () => {
+    const list = [r('a', 100, 30, false, 0), r('b', 100.9, 20, false, 1), r('c', 101.8, 10, false, 2)]
+    const perms = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]]
+    for (const p of perms) expect(names(rankStructures(p.map((i) => list[i])))).toEqual(['a', 'b', 'c'])
   })
   it('a difference of 1 ISK or more is not a tie', () => {
     expect(names(rankStructures([r('a', 101, 1, false, 0), r('b', 100, 9, false, 1)]))).toEqual(['b', 'a'])

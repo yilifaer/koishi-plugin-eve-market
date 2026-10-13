@@ -507,6 +507,14 @@ describe('normalizeConfig: industry (0.2.0)', () => {
     ],
   }
 
+  it('a non-numeric reprocessing tax says only that it is not a number, not also that it is blank', () => {
+    const { lines } = run({ industry: {
+      locations: [{ name: 'XX-1', system: 'NIH-02' }],
+      structures: [{ location: 'XX-1', name: '炼厂', structureType: 'Athanor', activities: 'reprocessing', reprocessingTaxPct: 'abc' }],
+    } })
+    expect(lines).toEqual(['工业建筑第 1 行「提炼税」不是数字，已改用默认值 0'])
+  })
+
   it('parses locations and structures and keeps one default of each', () => {
     const { settings, lines } = run({ industry })
     const ind = settings.industry

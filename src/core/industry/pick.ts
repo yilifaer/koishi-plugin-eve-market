@@ -5,13 +5,13 @@ import type { AdjustedPrices } from './indices'
 
 export interface Ranked<T> { item: T; cost: number; time: number; isDefault: boolean; row: number }
 
-/** 成本差小于 1 ISK 算一样 */
-const COST_TIE = 1
+/** 成本按整 ISK 比（取整后相同算一样；逐对比差值的话传递性不成立，排序结果会看输入顺序） */
+const whole = (cost: number) => Math.round(cost)
 
-/** 成本升序（相差 < 1 ISK 算一样）→ 时间升序 → 默认建筑在前 → 行号升序 */
+/** 成本升序（取整到 ISK 后相同算一样）→ 时间升序 → 默认建筑在前 → 行号升序 */
 export function rankStructures<T>(list: readonly Ranked<T>[]): Ranked<T>[] {
   return [...list].sort((a, b) => {
-    if (Math.abs(a.cost - b.cost) >= COST_TIE) return a.cost - b.cost
+    if (whole(a.cost) !== whole(b.cost)) return whole(a.cost) - whole(b.cost)
     return a.time - b.time || Number(b.isDefault) - Number(a.isDefault) || a.row - b.row
   })
 }
