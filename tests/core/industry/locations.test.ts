@@ -105,14 +105,8 @@ describe('IndustryLocations: locations', () => {
     expect(r.match('吉他', ALLOWED)?.name).toBe('XX-2')
     expect(r.match('吉他制造点', ALLOWED)?.name).toBe('吉他 制造 点')
     expect(r.maxWords(ALLOWED)).toBe(3)
-    // 没加上的星系名报告，说清楚写它时认作谁
-    expect(messages(r.issues())).toEqual([
-      '工业地点#2.system 地点 XX-2 的星系名「Jita」和地点 XX-1 重复，不算 XX-2 的别名',
-      '工业地点#3.system 地点 XX-3 的星系名「Jita」和地点 XX-1 重复，不算 XX-3 的别名',
-      '工业地点#3.system 地点 XX-3 的星系名「吉他」和地点 XX-2 重复，不算 XX-3 的别名',
-      '工业地点#4.system 地点 吉他 制造 点 的星系名「Jita」和地点 XX-1 重复，不算 吉他 制造 点 的别名',
-      '工业地点#4.system 地点 吉他 制造 点 的星系名「吉他」和地点 XX-2 重复，不算 吉他 制造 点 的别名',
-    ])
+    // 几个地点在同一个星系很正常：星系名归第一个，不报配置问题（管理员也没法消掉）
+    expect(messages(r.issues())).toEqual([])
   })
 
   it('skips a location whose system is not in the data, together with its structures', () => {
@@ -202,18 +196,13 @@ describe('IndustryLocations: locations only for allowed groups do not take names
     const r = build({ locations: [secret, ...open] })
     expect(messages(r.issues())).toEqual([
       '工业地点#2.aliases 地点 公共点 的别名「大厂」和地点 秘密点 重复，只在看不到 秘密点 的群和私聊里认作 公共点',
-      '工业地点#2.system 地点 公共点 的星系名「Tama」和地点 秘密点 重复，只在看不到 秘密点 的群和私聊里认作 公共点',
-      '工业地点#2.system 地点 公共点 的星系名「塔玛」和地点 秘密点 重复，只在看不到 秘密点 的群和私聊里认作 公共点',
     ])
-    // 公共点排在前面时照旧：秘密点的别名在控制台里就不生效，星系名不算它的
+    // 公共点排在前面时照旧：秘密点的别名在控制台里就不生效，星系名归公共点（星系名不报）
     const { issues } = normalizeConfig({ industry: { locations: [...open, secret] } })
     expect(issues.map((i) => i.message)).toEqual(['别名「大厂」和第 1 行冲突，这一行的不生效'])
     const later = build({ locations: [...open, { ...secret, aliases: '秘密 二号 工业点' }] })
     expect(later.match('大厂', ALLOWED)?.name).toBe('公共点')
-    expect(messages(later.issues())).toEqual([
-      '工业地点#3.system 地点 秘密点 的星系名「Tama」和地点 公共点 重复，不算 秘密点 的别名',
-      '工业地点#3.system 地点 秘密点 的星系名「塔玛」和地点 公共点 重复，不算 秘密点 的别名',
-    ])
+    expect(messages(later.issues())).toEqual([])
   })
 
   it('a hidden location named like a public alias does not take it in other groups either', () => {

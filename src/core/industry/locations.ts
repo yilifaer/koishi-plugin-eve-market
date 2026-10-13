@@ -356,17 +356,19 @@ function nameSet(claimed: Claimed, built: Map<Draft, IndustryLocation>): NameSet
   return { layers, maxWords }
 }
 
-/** 名称、别名、星系名在全部地点里被别的地点先占了：报告。公开地点只被只在授权群的地点占了时，其他群里照样认它 */
+/**
+ * 手写的别名在全部地点里被别的地点先占了：报告。公开地点只被只在授权群的地点占了时，其他群里照样认它。
+ * 星系名不报：几个地点在同一个星系很正常，星系名归表里第一个，管理员也没法消掉这条提示
+ */
 function reportDropped(dropped: readonly Dropped[], publicClaimed: Claimed, issues: ConfigIssue[]) {
   for (const { draft, text, key, kind, owner } of dropped) {
+    if (kind !== 'hand') continue
     const name = draft.setting.name
-    const what = kind === 'hand' ? '别名' : '星系名'
     const publicOwner = publicClaimed.layers.slice(0, 3).map((layer) => layer.get(key)).find((d) => d)
-    const result = publicOwner === draft ? `只在看不到 ${owner.setting.name} 的群和私聊里认作 ${name}`
-      : kind === 'hand' ? '已跳过' : `不算 ${name} 的别名`
+    const result = publicOwner === draft ? `只在看不到 ${owner.setting.name} 的群和私聊里认作 ${name}` : '已跳过'
     issues.push({
-      section: 'industry', table: LOC_TABLE, row: draft.setting.row, field: kind === 'hand' ? 'aliases' : 'system',
-      message: `地点 ${name} 的${what}「${text}」和地点 ${owner.setting.name} 重复，${result}`,
+      section: 'industry', table: LOC_TABLE, row: draft.setting.row, field: 'aliases',
+      message: `地点 ${name} 的别名「${text}」和地点 ${owner.setting.name} 重复，${result}`,
     })
   }
 }
