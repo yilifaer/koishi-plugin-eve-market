@@ -142,7 +142,7 @@ describe('制造: result with a location', () => {
   it('only the location (or its alias): defaults are filled in and marked, the same numbers as writing them out', async () => {
     const e = await start()
     const out = card(await e.h.group('制造 乌鸦级 联盟工业点A'))
-    expect(out).toContain('XX-1 · 大厂 · 00\n蓝图 ME 10 / TE 20（地点默认） · 1 流程（1 艘）')
+    expect(out).toContain('XX-1 · 自动选择：大厂 · 00\n蓝图 ME 10 / TE 20（地点默认） · 1 流程（1 艘）')
     expect(out).toContain('- **预计总成本** `148,247,029 ISK`（148.25M）')
     // 写在物品前面也认
     expect(card(await e.h.group('制造 XX-1 乌鸦级'))).toContain('- **预计总成本** `148,247,029 ISK`（148.25M）')
@@ -262,7 +262,7 @@ describe('制造: advanced steps', () => {
 
     const third = await e.h.group('ME7 TE14')
     expect(card(third)).toContain('进度：地点 ✓ → ME/TE ✓ → **建筑**\n已选：XX-1 · ME 7 · TE 14')
-    expect(card(third)).toContain('1. 大厂 · 预计总成本 152.74M · 材料 -1%，时间 -30%，费用 -5% · 改装件 屹立超大型舰船制造效率 I\n2. 小厂 · 预计总成本 158.24M · 材料 -1%，时间 -15%，费用 -3% · 没有装改装件')
+    expect(card(third)).toContain('1. 大厂（推荐） · 预计总成本 152.74M · 材料 -1%，时间 -30%，费用 -5% · 改装件 屹立超大型舰船制造效率 I\n2. 小厂 · 预计总成本 158.24M · 材料 -1%，时间 -15%，费用 -3% · 没有装改装件')
     expect(buttonRows(third)[0]).toEqual(['大厂=>制造 乌鸦级 XX-1 ME7 TE14 建筑:大厂', '小厂=>制造 乌鸦级 XX-1 ME7 TE14 建筑:小厂'])
 
     const result = card(await e.h.group('2'))
@@ -372,7 +372,7 @@ describe('制造: materials', () => {
       'Megacyte\t1665', 'Core Temperature Regulator\t1', 'Life Support Backup Unit\t65', 'Auto-Integrity Preservation Seal\t129',
     ])
     // 按钮挂在卡片上，回到成本明细
-    expect(buttonRows(sent)).toEqual([['成本明细=>制造 乌鸦级 XX-1']])
+    expect(buttonRows(sent)).toEqual([['成本明细=>制造 乌鸦级 XX-1 建筑:大厂']])
   })
 
   it('base materials in a direct chat; Chinese names when the console says so', async () => {
@@ -439,7 +439,7 @@ describe('制造: errors', () => {
       '点下面的编号后再按发送，或者 @我 回复编号（5 分钟内有效）',
     ].join('\n'))
     expect(buttons(sent)[1]).toBe('2=>制造 损伤控制 II XX-1 ME8')
-    expect(card(await e.h.group('2'))).toMatch(/^\*\*损伤控制 II Damage Control II · 高级制造计算\*\*\n\nXX-1 · 大厂 · 00\n蓝图 ME 8 \/ TE 4/)
+    expect(card(await e.h.group('2'))).toMatch(/^\*\*损伤控制 II Damage Control II · 高级制造计算\*\*\n\nXX-1 · 自动选择：大厂 · 00\n蓝图 ME 8 \/ TE 4/)
     // 拼音、包含这类模糊命中也要确认
     expect(buttons(await e.h.group('制造 wuya XX-1'))).toEqual(['1=>制造 乌鸦级 XX-1'])
   })
@@ -507,8 +507,8 @@ describe('制造: 拆到原料的词跟着按钮走', () => {
 
   it('falls back to #typeID when the chain words push the command over 100 chars', async () => {
     const e = await start()
-    // 命令名改成 54 字：带上层词和明细后超过 100 字
-    const long = '制造'.repeat(27)
+    // 命令名改成 48 字：带上层词和明细后超过 100 字
+    const long = '制造'.repeat(24)
     const command = (e.h.app as any).$commander.get('制造')
     command.displayName = long
     const sent = await e.h.group('制造 大型护盾扩展装置 II*1000 XX-1 拆到原料 低级反应:买 高级反应:买 组件:买 其他:造 明细 税:12.5%')

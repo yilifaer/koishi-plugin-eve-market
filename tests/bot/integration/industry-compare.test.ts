@@ -26,7 +26,7 @@ const RAVEN_COMPARE = [
   '**乌鸦级 · 制造地点比价**',
   'ME 10 / TE 20 · 1 流程 · 材料按 Jita 4-4 出售价',
   '',
-  '1. **XX-1 · 大厂 💰最低 ⚡最快**',
+  '1. **XX-1 · 大厂（自动选择） 💰最低 ⚡最快**',
   '    - 成本 `148.25M` · 1 小时 37 分 · 利润 110.15M（42.6%）',
   '2. **XX-3 · 高安厂（改装件对它不生效）**',
   '    - 成本 `155.15M` · 3 小时 24 分 · 利润 103.25M（40%）',
@@ -46,7 +46,7 @@ describe('制造比价', () => {
     expect(sent).toHaveLength(1)
     expect(sent[0].markdown?.startsWith(RAVEN_COMPARE)).toBe(true)
     expect(sent[0].markdown).toMatch(/\n欧服 · 价格更新于 \d\d:\d\d · 星系成本指数更新于 \d\d:\d\d$/)
-    expect(buttonRows(sent)).toEqual([['XX-1 详情=>制造 乌鸦级 XX-1 ME10 TE20', 'XX-3 详情=>制造 乌鸦级 XX-3 ME10 TE20', 'XX-2 详情=>制造 乌鸦级 XX-2 ME10 TE20']])
+    expect(buttonRows(sent)).toEqual([['XX-1 详情=>制造 乌鸦级 XX-1 ME10 TE20 建筑:大厂', 'XX-3 详情=>制造 乌鸦级 XX-3 ME10 TE20', 'XX-2 详情=>制造 乌鸦级 XX-2 ME10 TE20']])
     // 编号回复也行：第 2 行是 XX-3
     expect(card(await e.h.group('2'))).toMatch(/^\*\*乌鸦级 Raven · 高级制造计算\*\*\n\nXX-3 · 高安厂（该地点唯一） · 高安\n蓝图 ME 10 \/ TE 20 · 1 流程/)
     // 星系成本指数和调整价只取了一次
@@ -66,33 +66,33 @@ describe('制造比价', () => {
     const e = await start()
     const sent = await e.h.group('制造比价 乌鸦级 拆到原料 组件:买')
     expect(card(sent)).toContain('ME 10 / TE 20 · 1 流程 · 比价不拆到原料 · 材料按 Jita 4-4 出售价')
-    expect(card(sent)).toContain('1. **XX-1 · 大厂 💰最低 ⚡最快**')
-    expect(buttons(sent)[0]).toBe('XX-1 详情=>制造 乌鸦级 XX-1 ME10 TE20')
+    expect(card(sent)).toContain('1. **XX-1 · 大厂（自动选择） 💰最低 ⚡最快**')
+    expect(buttons(sent)[0]).toBe('XX-1 详情=>制造 乌鸦级 XX-1 ME10 TE20 建筑:大厂')
     expect(card(await e.h.group('制造比价 乌鸦级'))).not.toContain('比价不拆到原料')
   })
 
   it('T2: ME 2 / TE 4 by default; a location written by mistake is ignored', async () => {
     const e = await start()
     expect(card(await e.h.group('制造比价 损伤控制 II'))).toContain('**损伤控制 II · 制造地点比价**\nME 2 / TE 4 · 1 流程')
-    expect(card(await e.h.group('制造比价 乌鸦级 XX-1'))).toContain('1. **XX-1 · 大厂 💰最低 ⚡最快**')
-    expect(card(await e.h.group('制造比价 乌鸦级 XX-9'))).toContain('1. **XX-1 · 大厂 💰最低 ⚡最快**')
+    expect(card(await e.h.group('制造比价 乌鸦级 XX-1'))).toContain('1. **XX-1 · 大厂（自动选择） 💰最低 ⚡最快**')
+    expect(card(await e.h.group('制造比价 乌鸦级 XX-9'))).toContain('1. **XX-1 · 大厂（自动选择） 💰最低 ⚡最快**')
   })
 
   it('改装:无 and 税: apply to every location, are shown once, and are carried by the details (the same total as the row)', async () => {
     const e = await start()
     const taxed = await e.h.group('制造比价 乌鸦级 税:3%')
     expect(card(taxed)).toContain('ME 10 / TE 20 · 1 流程 · 设施税 3.00% · 材料按 Jita 4-4 出售价')
-    expect(card(taxed)).toContain('1. **XX-1 · 大厂 💰最低 ⚡最快**\n    - 成本 `151.01M`')
-    expect(buttons(taxed)[0]).toBe('XX-1 详情=>制造 乌鸦级 XX-1 ME10 TE20 税:3%')
+    expect(card(taxed)).toContain('1. **XX-1 · 大厂（自动选择） 💰最低 ⚡最快**\n    - 成本 `151.01M`')
+    expect(buttons(taxed)[0]).toBe('XX-1 详情=>制造 乌鸦级 XX-1 ME10 TE20 建筑:大厂 税:3%')
     // 148,247,029 + EIV 138,275,000 × (3% − 1%)
     expect(card(await e.h.group('1'))).toContain('- **预计总成本** `151,012,529 ISK`（151.01M）')
 
     const off = await e.h.group('制造比价 乌鸦级 改装:无')
     expect(card(off)).toContain('ME 10 / TE 20 · 1 流程 · 不用改装件 · 材料按 Jita 4-4 出售价')
     // 改装件是用户关掉的：不写「未装」「不生效」；没有改装件时小厂更便宜，自动挑小厂
-    expect(card(off)).toContain('1. **XX-1 · 小厂 💰最低**\n    - 成本 `153.50M`')
+    expect(card(off)).toContain('1. **XX-1 · 小厂（自动选择） 💰最低**\n    - 成本 `153.50M`')
     expect(card(off)).not.toMatch(/未装改装件|改装件对它不生效/)
-    expect(buttons(off)[0]).toBe('XX-1 详情=>制造 乌鸦级 XX-1 ME10 TE20 改装:无')
+    expect(buttons(off)[0]).toBe('XX-1 详情=>制造 乌鸦级 XX-1 ME10 TE20 建筑:小厂 改装:无')
     const detail = card(await e.h.group('1'))
     expect(detail).toContain('改装件 不用（改装:无）')
     expect(detail).toContain('（153.50M）')

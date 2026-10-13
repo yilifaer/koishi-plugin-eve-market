@@ -14,6 +14,8 @@ import type { Clock, Logger, ModuleStore, Scheduler } from '../../../src/core/po
 import { FakeEsi, rawOrder } from '../../fakes/fake-esi'
 import type { RawOrder } from '../../fakes/fake-esi'
 import { bundledDir, cleanupDirs, makeVersion } from '../../core/data/helpers'
+import type { Json } from '../../core/data/helpers'
+import type { DataFileName } from '../../../src/core/data'
 import { startHarness, startRealQQ } from '../../harness'
 import type { Harness, HarnessOptions, RealQQ, Sent } from '../../harness'
 
@@ -83,6 +85,8 @@ export interface EnvOptions extends Pick<HarnessOptions, 'help' | 'onebot'> {
   setup?: (app: Context) => void
   /** 在本插件之前装（例如抢先注册同名命令的旧插件） */
   before?: (app: Context) => void
+  /** 改自带的小数据集（例如补几个舰船蓝图），在写进临时目录以前 */
+  data?: (json: Record<DataFileName, Json>) => void
   /** 插件和假 ESI 的时钟；默认 testClock() */
   clock?: Clock
   /** 插件的定时器（core 的时限、慢提示）；默认 ctx.setTimeout */
@@ -152,6 +156,7 @@ export function addOrders(fake: FakeEsi, region: number, orders: RawOrder[]) {
 }
 
 interface InstallSetup {
+  data?: EnvOptions['data']
   fake: FakeEsi
   store: ModuleStore
   logger: RecordingLogger
@@ -165,7 +170,7 @@ interface InstallSetup {
 }
 
 function pluginInstaller(setup: InstallSetup, config: Record<string, unknown>) {
-  const data = bundledDir(makeVersion())
+  const data = bundledDir(makeVersion({ edit: setup.data }))
   const { fake, store, logger, clock, scheduler, watchdogScheduler, onStop } = setup
   return (app: Context) => {
     const fork = app.plugin({
@@ -207,7 +212,7 @@ export async function startPlugin(options: EnvOptions = {}): Promise<PluginEnv> 
   // 删临时目录以前等本插件停完（Koishi 不等异步的停用，建筑市场的缓存可能还在写）
   const stopping: Array<Promise<void>> = []
   const install = pluginInstaller({
-    fake, store, logger, clock, scheduler: options.scheduler, watchdogScheduler: options.watchdogScheduler,
+    fake, store, logger, clock, scheduler: options.scheduler, watchdogScheduler: options.watchdogScheduler, data: options.data,
     onStop: (done) => stopping.push(done), installed: (fork) => { plugin = fork },
   }, options.config ?? {})
   let server: ForkScope | undefined

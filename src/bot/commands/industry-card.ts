@@ -142,7 +142,9 @@ function placeLine(r: IndustryResult): string {
   const parts: string[] = []
   if (applied.location) parts.push(`${esc(applied.location)}${d.has('location') ? IND.defaulted.location : ''}`)
   const mark = !d.has('structure') ? '' : applied.structureOnly ? IND.defaulted.structureOnly : IND.defaulted.structure
-  parts.push(applied.structure ? `${esc(applied.structure)}${mark}` : IND.noStructure)
+  // 自动挑的写「自动选择：名称」；地点只有一座时仍是「该地点唯一」
+  if (applied.structure && applied.autoPicked) parts.push(IND.autoPicked(esc(applied.structure)))
+  else parts.push(applied.structure ? `${esc(applied.structure)}${mark}` : IND.noStructure)
   if (applied.secClass) parts.push(SEC_CLASS[applied.secClass])
   return parts.join(' · ')
 }
@@ -425,10 +427,11 @@ export function stepCard(product: ItemInfo, activity: IndustryActivity, step: In
   else if (step.step === 'mete') lines.push({ text: IND.askMeTe })
   else lines.push({ text: IND.askStructure(activity) })
   if (step.step === 'mete' && step.custom) lines.push({ text: IND.customMeTe })
+  if (step.note) lines.push({ text: esc(scrubUrls(step.note)) })
   card.sections.push({ style: 'plain', lines })
   // 按钮上写选项本身（地点名、10/20、建筑名），编号回复照样能用
   card.choices = step.options.map((o, i): Choice => {
-    const choice: Choice = { no: i + 1, label: esc(o.label), command: how.option(o.command), button: o.button ?? o.label }
+    const choice: Choice = { no: i + 1, label: `${esc(o.label)}${o.recommended ? IND.recommended : ''}`, command: how.option(o.command), button: o.button ?? o.label }
     if (o.detail) choice.detail = esc(o.detail)
     return choice
   })
@@ -449,7 +452,7 @@ export function compareCard(env: IndustryEnv, c: LocationComparison, actions: Ac
   for (const row of c.rows) {
     const r = row.result
     const marks = [row.cheapest ? IND.cheapest : '', row.fastest ? IND.fastest : ''].filter(Boolean).join(' ')
-    const where = row.structure ? esc(row.structure) : IND.noStructure
+    const where = row.structure ? `${esc(row.structure)}${row.autoPicked ? IND.autoMark : ''}` : IND.noStructure
     const state = row.structure ? rigStateOf(r) : 'impossible'
     const rigNote = state === 'not-installed' ? IND.noRigsInstalled : state === 'not-applicable' ? IND.noRigsMatch : ''
     lines.push({ text: `**${esc(row.location)}** · ${where}${rigNote}${marks ? ` ${marks}` : ''}` })
@@ -467,6 +470,7 @@ export function compareCard(env: IndustryEnv, c: LocationComparison, actions: Ac
     const fees = env.industry.sellFeesPct > 0 ? IND.compareFees(pctTrim(env.industry.sellFeesPct)) : IND.compareNoFees
     tail.push({ text: `${IND.compareProduct(marketName(env, v.marketKey), SIDE_SHORT[v.side], value)} · ${fees}` })
   }
+  if (c.unable) tail.push({ text: IND.compareUnable(c.unable.count, esc(c.unable.need)) })
   if (c.rows.length) tail.push({ text: IND.compareHint })
   card.sections.push({ style: 'plain', lines: tail })
   // 每个地点都一样的警告（T2 说明、市场不可用）只写一次

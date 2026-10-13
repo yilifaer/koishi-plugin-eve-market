@@ -48,6 +48,7 @@ export const IND = {
   blueprint: (me: number, te: number) => `蓝图 ME ${me} / TE ${te}`,
   runs: (runs: string, n: string, unit: string) => `${runs} 流程（${n} ${unit}）`,
   noStructure: '无建筑加成',
+  autoPicked: (name: string) => `自动选择：${name}`,
   rigsApplied: (list: string) => `改装件 ${list}`,
   rigEffect: (name: string, parts: string) => `${name}（${parts}）`,
   rigsNone: '改装件 不用（改装:无）',
@@ -115,6 +116,9 @@ export const IND = {
   askStructure: (activity: IndustryActivity) => `请选择${ACTIVITY[activity]}建筑：`,
 
   // ---------------------------------------------------------------- 比价
+  recommended: '（推荐）',
+  autoMark: '（自动选择）',
+  compareUnable: (count: number, need: string) => `另有 ${count} 个地点造不了（需要${need}）`,
   cheapest: '💰最低',
   fastest: '⚡最快',
   noRigsInstalled: '（未装改装件）',
@@ -160,6 +164,11 @@ export const IND = {
   highsec: (name: string) => `高安不能进行反应（${name} 在高安）。`,
   locationsHere: (activity: IndustryActivity, list: string) => `本群可以${ACTIVITY[activity]}的地点：${list}`,
   noLocationsHere: (activity: IndustryActivity) => `本群还没有可以${ACTIVITY[activity]}的工业地点。`,
+  cannotBuild: (place: string, activity: IndustryActivity, name: string, need: string) =>
+    `${place} ${activity === 'manufacturing' ? '造' : '反应'}不了${name}：需要${need}`,
+  noCapable: (activity: IndustryActivity, name: string, need: string) =>
+    `本群没有能${activity === 'manufacturing' ? '造' : '反应'}${name}的工业地点：需要${need}`,
   compareTooFew: '本群可比较的工业地点不足 2 个。',
+  compareTooFewNeed: (need: string) => `本群可比较的工业地点不足 2 个（其余地点造不了：需要${need}）。`,
   slowCompare: '⏳ 正在比较各个地点…',
 } as const

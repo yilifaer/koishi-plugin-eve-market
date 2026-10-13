@@ -78,19 +78,20 @@ const amountOf = (req: Pick<IndustryRequest, 'quantity' | 'runs' | 'chain'>): Pa
 /** 这次计算的参数（写了什么就带什么；地点用规范的名字，建筑用实际选中的那座） */
 function currentParts(req: IndustryRequest, r: IndustryResult): Parts {
   const parts: Parts = { ...amountOf(req), location: r.applied.location, me: req.me, te: req.te, rigs: req.rigs, facilityTaxPct: req.facilityTaxPct }
-  if (req.structure !== undefined) parts.structure = r.applied.structure ?? 'none'
+  // 自动挑的建筑也带上：以后的材料、改装开关、改税用的还是同一座
+  if (req.structure !== undefined || r.applied.autoPicked) parts.structure = r.applied.structure ?? 'none'
   return parts
 }
 
-/** 没写地点时「快速计算」用的地点：默认地点，或者本群唯一的地点 */
-function quickLocation(inv: Invocation, activity: IndustryActivity): string | undefined {
-  const list = inv.core.industry.locations(inv.access, activity)
+/** 没写地点时「快速计算」用的地点：造得了这个产品的默认地点，或者唯一能造的地点（没有就不给按钮） */
+function quickLocation(inv: Invocation, activity: IndustryActivity, product: ItemInfo): string | undefined {
+  const list = inv.core.industry.locationsFor(inv.access, activity, product.typeId)
   return (list.find((l) => l.isDefault) ?? (list.length === 1 ? list[0] : undefined))?.name
 }
 
-/** 本群能比较制造地点（制造比价注册了、能看到 2 个以上能制造的地点） */
-function canCompare(inv: Invocation): boolean {
-  return inv.commands.registry.has('manufactureCompare') && inv.core.industry.locations(inv.access, 'manufacturing').length >= 2
+/** 本群能比较制造地点（制造比价注册了、能看到 2 个以上能造这个产品的地点） */
+function canCompare(inv: Invocation, product: ItemInfo): boolean {
+  return inv.commands.registry.has('manufactureCompare') && inv.core.industry.locationsFor(inv.access, 'manufacturing', product.typeId).length >= 2
 }
 
 function rows(...list: Array<Array<Action | undefined>>): Action[][] {
@@ -100,12 +101,12 @@ function rows(...list: Array<Array<Action | undefined>>): Action[][] {
 function baseActions(inv: Invocation, id: PlanId, req: IndustryRequest, product: ItemInfo): Action[][] {
   const activity = ACTIVITY_OF[id]
   const keep: Parts = { ...amountOf(req), me: req.me, te: req.te }
-  const quick = quickLocation(inv, activity)
+  const quick = quickLocation(inv, activity, product)
   return rows([
     quick ? { label: IND.quick, command: commandOf(inv, id, product, { ...keep, location: quick }), primary: true } : undefined,
     { label: IND.advanced, command: commandOf(inv, id, product, { ...keep, steps: true }) },
     { label: IND.materials, command: commandOf(inv, id, product, { ...keep, materials: true }) },
-    activity === 'manufacturing' && canCompare(inv)
+    activity === 'manufacturing' && canCompare(inv, product)
       ? { label: IND.compare, command: commandOf(inv, 'manufactureCompare', product, keep) }
       : undefined,
   ])
@@ -119,10 +120,12 @@ function resultActions(inv: Invocation, id: PlanId, req: IndustryRequest, r: Ind
   // 改建筑、改税率：ME/TE 写明，免得重新问第 2 步
   const fixed: Parts = { ...current, me: manufacturing ? applied.me : undefined, te: manufacturing ? applied.te : undefined }
   const structure = applied.structure ?? (req.structure === 'none' ? 'none' : undefined)
+  // 开关改装件后建筑要重新挑：自动选的不带，用户自己写的才带
+  const toggled: Parts = req.structure === undefined ? { ...current, structure: undefined } : current
   // 只在改装件能开关时给（「建筑:无」、NPC 空间站装不了；没装、不生效时开关没有区别）
   const rigsToggle: Action | undefined = applied.rigState === 'disabled'
-    ? { label: IND.rigsOn, command: commandOf(inv, id, product, { ...current, rigs: 'default' }) }
-    : applied.rigState === 'applied' ? { label: IND.rigsOff, command: commandOf(inv, id, product, { ...current, rigs: 'none' }) }
+    ? { label: IND.rigsOn, command: commandOf(inv, id, product, { ...toggled, rigs: 'default' }) }
+    : applied.rigState === 'applied' ? { label: IND.rigsOff, command: commandOf(inv, id, product, { ...toggled, rigs: 'none' }) }
       : undefined
   return rows(
     [
@@ -131,7 +134,7 @@ function resultActions(inv: Invocation, id: PlanId, req: IndustryRequest, r: Ind
         ? { label: IND.changeMeTe, command: commandOf(inv, id, product, { ...current, me: undefined, te: undefined, structure, steps: true }) }
         : undefined,
       { label: IND.changeLocation, command: commandOf(inv, id, product, { ...amounts, me: req.me, te: req.te, steps: true }) },
-      manufacturing && canCompare(inv)
+      manufacturing && canCompare(inv, product)
         ? { label: IND.compareAgain, command: commandOf(inv, 'manufactureCompare', product, { ...amounts, me: applied.me, te: applied.te }) }
         : undefined,
     ],
@@ -282,15 +285,20 @@ function otherActivityCard(inv: Invocation, failure: CoreFailure, activity: Indu
 function locationCard(inv: Invocation, id: PlanId, failure: CoreFailure, req?: IndustryRequest): Card {
   const activity = ACTIVITY_OF[id]
   const token = failure.token ?? ''
+  const product = req ? inv.core.items.byId(req.typeId) : undefined
   const title = failure.code === 'HIGHSEC_REACTION' ? IND.highsec(safeEcho(token))
-    : failure.reason === 'activity' ? IND.wrongActivity(safeEcho(token), activity)
+    : failure.reason === 'capability' && product ? IND.cannotBuild(safeEcho(token), activity, escapeMarkdown(itemName(product)), escapeMarkdown(failure.need ?? ''))
+      : failure.reason === 'activity' ? IND.wrongActivity(safeEcho(token), activity)
       : IND.unknownLocation(safeEcho(token))
   const card = emptyCard(title)
+  // 能造的地点一个都没有：说明缺什么，不是「还没有工业地点」
+  const noneText = failure.reason === 'capability' && product
+    ? IND.noCapable(activity, escapeMarkdown(itemName(product)), escapeMarkdown(failure.need ?? '')) : IND.noLocationsHere(activity)
   const locations = failure.locations ?? inv.core.industry.locations(inv.access, activity).map((l) => l.name)
   const usable = locations.filter((name) => name !== token)
   card.sections.push({
     style: 'plain',
-    lines: [{ text: usable.length ? IND.locationsHere(activity, usable.map(escapeMarkdown).join(' · ')) : IND.noLocationsHere(activity) }],
+    lines: [{ text: usable.length ? IND.locationsHere(activity, usable.map(escapeMarkdown).join(' · ')) : noneText }],
   })
   // 按钮：parser 给的 rest 是去掉那个词以后的参数；服务给的（地点存在但不能用）按请求重新拼
   const rest = failure.rest ?? (req ? restOf(inv, id, req) : '')
@@ -315,11 +323,18 @@ function restOf(inv: Invocation, id: PlanId, req: IndustryRequest): string {
 
 function noLocationsCard(inv: Invocation, id: PlanId | 'manufactureCompare', failure: CoreFailure, activity: IndustryActivity, req?: IndustryRequest): Card {
   const locations = failure.locations ?? []
-  const card = emptyCard(id === 'manufactureCompare' ? IND.compareTooFew : IND.noLocationsHere(activity))
-  if (locations.length) card.sections.push({ style: 'plain', lines: [{ text: IND.locationsHere(activity, locations.map(escapeMarkdown).join(' · ')) }] })
   const product = req ? inv.core.items.byId(req.typeId) : undefined
+  // 本群有地点，但没有一个造得了这个产品：说明缺什么
+  const capable = failure.reason === 'capability' && product
+  const need = escapeMarkdown(failure.need ?? '')
+  const title = capable && id === 'manufactureCompare' && locations.length ? IND.compareTooFewNeed(need)
+    : capable ? IND.noCapable(activity, escapeMarkdown(itemName(product)), need)
+      : id === 'manufactureCompare' ? IND.compareTooFew
+        : IND.noLocationsHere(activity)
+  const card = emptyCard(title)
+  if (locations.length) card.sections.push({ style: 'plain', lines: [{ text: IND.locationsHere(activity, locations.map(escapeMarkdown).join(' · ')) }] })
   const planId: PlanId = activity === 'reaction' ? 'reaction' : 'manufacture'
-  if (product && inv.commands.registry.has(planId)) {
+  if (product && !capable && inv.commands.registry.has(planId)) {
     const base = commandOf(inv, planId, product, { ...amountOf(req!), me: req!.me, te: req!.te })
     card.actions.push([{ label: IND.basic, command: base, primary: true }])
   }
@@ -351,7 +366,10 @@ async function sendCompare(inv: Invocation, req: IndustryRequest, c: LocationCom
   // 详情和比价的这一行一致：写了的改装件、税也带上
   // 比价不拆到原料，详情也不带层设置
   const parts: Parts = { ...amountOf(req), chain: undefined, me: c.me, te: c.te, rigs: req.rigs, facilityTaxPct: req.facilityTaxPct }
-  const commands = c.rows.map((row) => commandOf(inv, 'manufacture', c.product, { ...parts, location: row.location }))
+  // 自动挑的建筑也带上，详情和这一行是同一座
+  const commands = c.rows.map((row) => commandOf(inv, 'manufacture', c.product, {
+    ...parts, location: row.location, ...row.autoPicked && row.structure ? { structure: row.structure } : {},
+  }))
   const actions: Action[][] = inv.commands.registry.has('manufacture')
     ? [c.rows.slice(0, MAX_ACTIONS_PER_ROW).map((row, i) => ({ label: detailLabel(row.location), command: commands[i] }))]
     : []

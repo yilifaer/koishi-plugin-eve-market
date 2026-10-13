@@ -197,7 +197,8 @@ class Service implements IndustryService {
       const buildable = this.o.locations.buildable(req.access, req.activity, job.product)
       const list = buildable.usable
       if (list.length < 2) {
-        return failure('NOT_CONFIGURED', { locations: list.map((l) => l.name), message: '本群可比较的工业地点不足 2 个' })
+        const why = buildable.unable ? { reason: 'capability' as const, need: buildable.need } : {}
+        return failure('NOT_CONFIGURED', { locations: list.map((l) => l.name), ...why, message: '本群可比较的工业地点不足 2 个' })
       }
       const fallback = job.t2 ? T2_ME_TE_CHOICES[0] : COMPARE_ME_TE
       const reaction = job.activity === 'reaction'
