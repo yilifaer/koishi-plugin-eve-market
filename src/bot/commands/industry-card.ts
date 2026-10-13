@@ -443,7 +443,7 @@ export function compareCard(env: IndustryEnv, c: LocationComparison, actions: Ac
   const first = c.rows[0]?.result
   const materials = c.materialMarketKey ? IND.materialsAt(marketName(env, c.materialMarketKey), SIDE_LABEL[c.materialSide]) : ''
   // 命令里写的「改装:无」「税:」对每个地点都一样，写在这里
-  const written = [c.rigsOff ? IND.compareRigsOff : '', c.facilityTaxPct === undefined ? '' : IND.facilityTax(pctFixed(c.facilityTaxPct))]
+  const written = [c.rigsOff ? IND.compareRigsOff : '', c.facilityTaxPct === undefined ? '' : IND.facilityTax(pctFixed(c.facilityTaxPct)), c.chainIgnored ? IND.compareNoChain : '']
   card.meta = [[`ME ${c.me} / TE ${c.te}`, `${qty(env, c.runs)} 流程`, ...written, materials].filter(Boolean).join(' · ')]
   const lines: Line[] = []
   for (const row of c.rows) {

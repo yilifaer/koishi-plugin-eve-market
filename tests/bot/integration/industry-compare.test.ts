@@ -62,6 +62,15 @@ describe('制造比价', () => {
     expect(buttons(sent)).toEqual(['XX-3 详情=>制造 乌鸦级*2 XX-3 ME8 TE16', 'XX-2 详情=>制造 乌鸦级*2 XX-2 ME8 TE16'])
   })
 
+  it('chain words are ignored and the card says the compare does not break down to raw materials', async () => {
+    const e = await start()
+    const sent = await e.h.group('制造比价 乌鸦级 拆到原料 组件:买')
+    expect(card(sent)).toContain('ME 10 / TE 20 · 1 流程 · 比价不拆到原料 · 材料按 Jita 4-4 出售价')
+    expect(card(sent)).toContain('1. **XX-1 · 大厂 💰最低 ⚡最快**')
+    expect(buttons(sent)[0]).toBe('XX-1 详情=>制造 乌鸦级 XX-1 ME10 TE20')
+    expect(card(await e.h.group('制造比价 乌鸦级'))).not.toContain('比价不拆到原料')
+  })
+
   it('T2: ME 2 / TE 4 by default; a location written by mistake is ignored', async () => {
     const e = await start()
     expect(card(await e.h.group('制造比价 损伤控制 II'))).toContain('**损伤控制 II · 制造地点比价**\nME 2 / TE 4 · 1 流程')

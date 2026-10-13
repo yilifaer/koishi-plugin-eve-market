@@ -429,12 +429,12 @@ class Service implements IndustryService {
   // ------------------------------------------------------------------ 步骤
 
   private command(job: Job, parts: Omit<IndustryArgsParts, 'item'>): string {
-    return industryArgsText({ item: this.o.items.commandName(job.product), ...parts })
+    return industryArgsText({ item: this.o.items.commandName(job.product), ...parts }, this.o.settings.chain)
   }
 
-  /** 每一步都原样带上的参数：数量、改装件、税、材料 */
+  /** 每一步都原样带上的参数：数量、拆到原料、改装件、税、材料 */
   private carried(req: IndustryRequest): Omit<IndustryArgsParts, 'item'> {
-    return { quantity: req.quantity, runs: req.runs, rigs: req.rigs, facilityTaxPct: req.facilityTaxPct, materials: req.materials }
+    return { quantity: req.quantity, runs: req.runs, chain: req.chain, rigs: req.rigs, facilityTaxPct: req.facilityTaxPct, materials: req.materials }
   }
 
   /** 已选摘要：地点、ME/TE、建筑、数量和写了的参数；withStructure：问建筑的那一步不写（写的建筑可能找不到） */

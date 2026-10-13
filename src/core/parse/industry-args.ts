@@ -7,7 +7,7 @@
 
 import { MAX_ME, MAX_RUNS, MAX_TE } from '../../constants'
 import { DataNotReadyError } from '../data'
-import type { Access, CoreFailure, FailureReason, IndustryActivity, IndustryRequest, ItemResolver, Resolution, Scope } from '../types'
+import type { AlchemyMode, Access, ChainLayer, ChainOptions, CoreFailure, FailureReason, IndustryActivity, IndustryRequest, ItemResolver, LayerMode, Resolution, Scope } from '../types'
 import { chooseHypothesis } from './choose'
 import type { Judged } from './choose'
 import { looksLikeQuantity, parseQuantity, readLine } from './quantity'
@@ -53,6 +53,42 @@ export interface IndustryArgsParts {
   steps?: boolean
   /** 「材料」：材料清单 */
   materials?: boolean
+  /** 拆到原料：只带命令里写了的层（layers 实际只有写了的那几层）；details = 「明细」 */
+  chain?: Partial<ChainOptions> & { on: true, details?: boolean }
+}
+
+const CHAIN_LAYERS: ChainLayer[] = ['reaction1', 'reaction2', 'component', 'other']
+const LAYER_NAME: Record<ChainLayer, string> = { reaction1: '低级反应', reaction2: '高级反应', component: '组件', other: '其他' }
+const MODE_WORD: Record<LayerMode, string> = { build: '造', buy: '买' }
+const ALCHEMY_WORD: Record<AlchemyMode, string> = { alchemy: '炼金', normal: '正常', auto: '自动' }
+
+/**
+ * 拆到原料的参数词：只写和控制台默认不一样的层（没给 defaults 时写命令里有的全部）。
+ * 炼金模式写在「低级反应:」后面（它同时表示低级反应自己造）；一个层的词都不用写时单写「拆到原料」
+ */
+function chainWords(chain: NonNullable<IndustryArgsParts['chain']>, defaults?: ChainOptions): string[] {
+  const layers: Partial<Record<ChainLayer, LayerMode>> = chain.layers ?? {}
+  const alchemy = chain.alchemy !== undefined && chain.alchemy !== defaults?.alchemy && layers.reaction1 !== 'buy' ? chain.alchemy : undefined
+  const mode = (layer: ChainLayer) => {
+    const m = layers[layer]
+    return m !== undefined && m !== defaults?.layers[layer] ? m : undefined
+  }
+  const words: string[] = []
+  const low = mode('reaction1')
+  const high = mode('reaction2')
+  if (alchemy) words.push(`低级反应:${ALCHEMY_WORD[alchemy]}`)
+  if (!alchemy && low && low === high) words.push(`反应:${MODE_WORD[low]}`)
+  else {
+    if (!alchemy && low) words.push(`低级反应:${MODE_WORD[low]}`)
+    if (high) words.push(`高级反应:${MODE_WORD[high]}`)
+  }
+  for (const layer of ['component', 'other'] as const) {
+    const m = mode(layer)
+    if (m) words.push(`${LAYER_NAME[layer]}:${MODE_WORD[m]}`)
+  }
+  if (!words.length) words.push('拆到原料')
+  if (chain.details) words.push('明细')
+  return words
 }
 
 /** 1.5 → 1.5，1 → 1（不带多余的 0） */
@@ -71,7 +107,7 @@ function structureWord(structure: string): string {
  * 物品名后面的部分：以「*」（数量紧贴物品名）或空格开头，什么都没有时是 ''。
  * 「物品名 + 这一段」就是完整的参数（候选按钮把物品名换成精确名时用）
  */
-export function industryArgsTail(p: Omit<IndustryArgsParts, 'item'>): string {
+export function industryArgsTail(p: Omit<IndustryArgsParts, 'item'>, chainDefaults?: ChainOptions): string {
   const words: string[] = []
   if (p.runs !== undefined) words.push(`${p.runs}流程`)
   if (p.location) words.push(p.location)
@@ -81,6 +117,7 @@ export function industryArgsTail(p: Omit<IndustryArgsParts, 'item'>): string {
   if (p.structure !== undefined) words.push(structureWord(p.structure))
   if (p.rigs) words.push(p.rigs === 'none' ? '改装:无' : '改装:默认')
   if (p.facilityTaxPct !== undefined) words.push(`税:${trimNumber(p.facilityTaxPct)}%`)
+  if (p.chain) words.push(...chainWords(p.chain, chainDefaults))
   if (p.steps) words.push('高级')
   if (p.materials) words.push('材料')
   const quantity = p.runs === undefined && p.quantity !== undefined ? `*${p.quantity}` : ''
@@ -88,8 +125,8 @@ export function industryArgsTail(p: Omit<IndustryArgsParts, 'item'>): string {
 }
 
 /** 制造 乌鸦级 XX-1 ME10 TE20 建筑:索迪约 改装:默认 税:1% 高级 材料 的参数部分 */
-export function industryArgsText(p: IndustryArgsParts): string {
-  return `${p.item}${industryArgsTail(p)}`
+export function industryArgsText(p: IndustryArgsParts, chainDefaults?: ChainOptions): string {
+  return `${p.item}${industryArgsTail(p, chainDefaults)}`
 }
 
 /** 换地点时还能带着的「建筑:」：建筑名只属于原来的地点，「建筑:无」「建筑:?」哪里都能用 */
@@ -112,6 +149,8 @@ interface Args {
   quantity?: number
   steps: boolean
   materials: boolean
+  /** 拆到原料：写了「拆到原料」或任何一个层的参数词 */
+  chain?: NonNullable<IndustryArgsParts['chain']>
   /** 写错的参数（只记第一个） */
   bad?: { reason: FailureReason; message: string }
   /** 不是参数的词，按原来的顺序 */
@@ -126,6 +165,7 @@ const RUNS_WORD = /^(?:流程|runs?)$/i
 const DIGITS = /^\d+$/
 const STAR_QUANTITY = /^[*×](.+)$/
 const TAX = /^(\d+(?:\.\d+)?)%?$/
+const LAYER = /^(低级反应|高级反应|反应|组件|其他)[=:：](造|买|炼金|正常|自动)$/
 const RIGS_ON = /^(?:默认|default|有|用|on|yes)$/i
 const RIGS_OFF = /^(?:无|none|不用|没有|off|no|0)$/i
 const STRUCTURE_NONE = /^(?:无|none|-)$/i
@@ -135,7 +175,7 @@ const WORD_RIGS_ON = /^用改装件?$/
 /** 这个词自己就是一个参数（「建筑:」后面空着时，下一个词是不是它的值） */
 function isArgWord(word: string): boolean {
   return LEVEL.test(word) || LEVEL_PAIR.test(word) || KEY_VALUE.test(word) || RUNS.test(word)
-    || word === '高级' || word === '材料' || WORD_RIGS_OFF.test(word) || WORD_RIGS_ON.test(word)
+    || word === '高级' || word === '材料' || word === '拆到原料' || word === '明细' || LAYER.test(word) || WORD_RIGS_OFF.test(word) || WORD_RIGS_ON.test(word)
 }
 
 function setBad(args: Args, reason: FailureReason, message: string) {
@@ -171,9 +211,32 @@ function setRuns(args: Args, value: string) {
   args.runs = n
 }
 
+const LAYER_KEY: Record<string, ChainLayer[]> = {
+  低级反应: ['reaction1'], 高级反应: ['reaction2'], 反应: ['reaction1', 'reaction2'], 组件: ['component'], 其他: ['other'],
+}
+const MODE_KEY: Record<string, LayerMode> = { 造: 'build', 买: 'buy' }
+const ALCHEMY_KEY: Record<string, AlchemyMode> = { 炼金: 'alchemy', 正常: 'normal', 自动: 'auto' }
+
+/** 「反应:造」这样的层参数：写了就算拆到原料；炼金、正常、自动只认在「反应:」「低级反应:」后面 */
+function setLayer(args: Args, name: string, value: string) {
+  const chain = (args.chain ??= { on: true })
+  const layers = (chain.layers ??= {} as ChainOptions['layers'])
+  const alchemy = ALCHEMY_KEY[value]
+  if (!alchemy) {
+    for (const layer of LAYER_KEY[name]) layers[layer] = MODE_KEY[value]
+  } else if (name === '反应' || name === '低级反应') {
+    layers.reaction1 = 'build'
+    chain.alchemy = alchemy
+  } else {
+    setBad(args, 'chain-option', `「${name}:${value}」不对：炼金、正常、自动只能写在「反应:」或「低级反应:」后面`)
+  }
+}
+
 /** 从任意位置取出参数词，剩下的词按原来的顺序留在 words 里 */
 function readArgs(tokens: readonly string[]): Args {
   const args: Args = { steps: false, materials: false, words: [] }
+  // 「明细」只在拆到原料时有用
+  let detail = false
   for (let i = 0; i < tokens.length; i++) {
     const word = tokens[i]
     const next = tokens[i + 1]
@@ -205,6 +268,12 @@ function readArgs(tokens: readonly string[]): Args {
       args.steps = true
     } else if (word === '材料') {
       args.materials = true
+    } else if (word === '拆到原料') {
+      args.chain ??= { on: true }
+    } else if (word === '明细') {
+      detail = true
+    } else if ((m = LAYER.exec(word))) {
+      setLayer(args, m[1], m[2])
     } else if (WORD_RIGS_OFF.test(word)) {
       args.rigs = 'none'
     } else if (WORD_RIGS_ON.test(word)) {
@@ -213,6 +282,7 @@ function readArgs(tokens: readonly string[]): Args {
       args.words.push(word)
     }
   }
+  if (args.chain && detail) args.chain.details = true
   return args
 }
 
@@ -369,6 +439,7 @@ function parse(text: string, activity: IndustryActivity, access: Access, deps: I
     facilityTaxPct: args.tax,
     steps: args.steps,
     materials: args.materials,
+    chain: args.chain,
   }
   const reader = new Reader(deps.items, reaction ? 'reaction' : 'industry')
   const split = splitLocation(args.words, reader, deps, access)
@@ -401,6 +472,7 @@ function parse(text: string, activity: IndustryActivity, access: Access, deps: I
   if (parts.te !== undefined) req.te = parts.te
   if (args.tax !== undefined) req.facilityTaxPct = args.tax
   if (meteMissing) req.meteMissing = meteMissing
+  if (args.chain) req.chain = args.chain
   return req
 }
 

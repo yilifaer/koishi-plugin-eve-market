@@ -489,3 +489,34 @@ describe('查价 and 帮助 with industry', () => {
 function escapeRe(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
+
+describe('制造: 拆到原料的词跟着按钮走', () => {
+  const buttonTexts = (sent: Parameters<typeof buttonRows>[0]) => buttonRows(sent).flat()
+
+  it('keeps the chain words, leaves out layers equal to the console defaults', async () => {
+    const e = await start()
+    const sent = await e.h.group('制造 乌鸦级 拆到原料 组件:买 其他:买')
+    const texts = buttonTexts(sent)
+    expect(texts.length).toBeGreaterThan(0)
+    for (const t of texts) {
+      if (!t.includes('=>制造 ')) continue
+      expect(t, t).toContain(' 组件:买')
+      expect(t, t).not.toContain('其他:')
+    }
+  })
+
+  it('falls back to #typeID when the chain words push the command over 100 chars', async () => {
+    const e = await start()
+    // 命令名改成 54 字：带上层词和明细后超过 100 字
+    const long = '制造'.repeat(27)
+    const command = (e.h.app as any).$commander.get('制造')
+    command.displayName = long
+    const sent = await e.h.group('制造 大型护盾扩展装置 II*1000 XX-1 拆到原料 低级反应:买 高级反应:买 组件:买 其他:造 明细 税:12.5%')
+    const commands = buttonTexts(sent).map((t) => t.split('=>')[1] ?? '').filter((c) => c.startsWith(long))
+    expect(commands.length).toBeGreaterThan(0)
+    for (const c of commands) {
+      expect(c.length, c).toBeLessThanOrEqual(100)
+    }
+    expect(commands.some((c) => / #\d+\*1000 /.test(c))).toBe(true)
+  })
+})

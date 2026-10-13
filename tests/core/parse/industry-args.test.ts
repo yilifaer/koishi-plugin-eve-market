@@ -7,7 +7,7 @@ import { DataNotReadyError } from '../../../src/core/data'
 import { createIndustryLocations } from '../../../src/core/industry'
 import { createMarketRegistry } from '../../../src/core/market'
 import { createIndustryArgs, createQueryParser, industryArgsTail, industryArgsText } from '../../../src/core/parse'
-import type { Access, CoreFailure, IndustryActivity, IndustryRequest } from '../../../src/core/types'
+import type { Access, ChainOptions, CoreFailure, IndustryActivity, IndustryRequest } from '../../../src/core/types'
 import { staticDataService } from '../../fixtures/data/load'
 import { fixtureResolver } from '../items/helpers'
 
@@ -268,5 +268,96 @@ describe('QueryParser.industryArgs', () => {
     expect(wired.industryArgs('乌鸦级 XX-1', 'manufacturing', ALLOWED)).toMatchObject({ typeId: RAVEN, location: 'XX-1', mode: 'advanced' })
     const bare = createQueryParser({ items, markets })
     expect(bare.industryArgs('乌鸦级', 'manufacturing', ALLOWED)).toMatchObject({ ok: false, code: 'NOT_CONFIGURED' })
+  })
+})
+
+// ------------------------------------------------------------------ 拆到原料
+
+const DEFAULTS: ChainOptions = { layers: { reaction1: 'build', reaction2: 'build', component: 'build', other: 'buy' }, alchemy: 'auto' }
+
+describe('industryArgs: 拆到原料', () => {
+  it('no chain words → no chain; the bare word turns it on', () => {
+    expect(ok('乌鸦级').chain).toBeUndefined()
+    expect(ok('乌鸦级 拆到原料')).toEqual({ ...base, chain: { on: true } })
+    expect(ok('乌鸦级 拆到原料 明细').chain).toEqual({ on: true, details: true })
+    // 明细 单独写没有用
+    expect(ok('乌鸦级 明细')).toEqual(base)
+  })
+
+  it('every layer word, half- and full-width colon, implies 拆到原料', () => {
+    expect(ok('乌鸦级 组件:买').chain).toEqual({ on: true, layers: { component: 'buy' } })
+    expect(ok('乌鸦级 组件=造').chain).toEqual({ on: true, layers: { component: 'build' } })
+    expect(ok('乌鸦级 其他：造').chain).toEqual({ on: true, layers: { other: 'build' } })
+    expect(ok('乌鸦级 低级反应:买').chain).toEqual({ on: true, layers: { reaction1: 'buy' } })
+    expect(ok('乌鸦级 高级反应:买').chain).toEqual({ on: true, layers: { reaction2: 'buy' } })
+    expect(ok('乌鸦级 反应:买').chain).toEqual({ on: true, layers: { reaction1: 'buy', reaction2: 'buy' } })
+    // 后写的盖掉先写的
+    expect(ok('乌鸦级 反应:买 高级反应:造').chain).toEqual({ on: true, layers: { reaction1: 'buy', reaction2: 'build' } })
+  })
+
+  it('炼金/正常/自动 only after 反应: or 低级反应:, meaning reaction1 build + that mode', () => {
+    for (const [word, alchemy] of [['炼金', 'alchemy'], ['正常', 'normal'], ['自动', 'auto']] as const) {
+      expect(ok(`乌鸦级 反应:${word}`).chain, word).toEqual({ on: true, layers: { reaction1: 'build' }, alchemy })
+      expect(ok(`乌鸦级 低级反应:${word}`).chain, word).toEqual({ on: true, layers: { reaction1: 'build' }, alchemy })
+    }
+    for (const text of ['乌鸦级 组件:炼金', '乌鸦级 高级反应:正常', '乌鸦级 其他:自动']) {
+      expect(bad(text), text).toMatchObject({ code: 'BAD_ARGUMENT', reason: 'chain-option' })
+    }
+  })
+
+  it('works for reactions too, and keeps the chain words in failure rest', () => {
+    expect(ok('碳化钨 XX-1 反应:买 拆到原料', ALLOWED, 'reaction').chain).toEqual({ on: true, layers: { reaction1: 'buy', reaction2: 'buy' } })
+    expect(bad('乌鸦级 完全不存在 组件:买')).toMatchObject({ code: 'UNKNOWN_LOCATION', rest: '乌鸦级 组件:买' })
+  })
+
+  it('does not read 建筑: value as a chain word', () => {
+    expect(ok('乌鸦级 XX-1 建筑: 组件:买').structure).toBe('?')
+  })
+})
+
+describe('industryArgsTail: 拆到原料', () => {
+  it('writes only layers that differ from the defaults', () => {
+    const tail = (chain: NonNullable<Parameters<typeof industryArgsTail>[0]['chain']>) => industryArgsTail({ chain }, DEFAULTS)
+    expect(tail({ on: true })).toBe(' 拆到原料')
+    expect(tail({ on: true, layers: { reaction1: 'build', other: 'buy' } as ChainOptions['layers'] })).toBe(' 拆到原料')
+    expect(tail({ on: true, layers: { component: 'buy', other: 'buy' } as ChainOptions['layers'] })).toBe(' 组件:买')
+    expect(tail({ on: true, layers: { reaction1: 'buy', reaction2: 'buy' } as ChainOptions['layers'] })).toBe(' 反应:买')
+    expect(tail({ on: true, layers: { reaction1: 'buy', reaction2: 'build' } as ChainOptions['layers'] })).toBe(' 低级反应:买')
+    expect(tail({ on: true, layers: { other: 'build' } as ChainOptions['layers'], details: true })).toBe(' 其他:造 明细')
+    expect(tail({ on: true, alchemy: 'alchemy' })).toBe(' 低级反应:炼金')
+    // 炼金模式和默认一样就不写
+    expect(tail({ on: true, alchemy: 'auto' })).toBe(' 拆到原料')
+    // 低级反应买：炼金模式没有意义
+    expect(tail({ on: true, alchemy: 'normal', layers: { reaction1: 'buy' } as ChainOptions['layers'] })).toBe(' 低级反应:买')
+    // 默认低级反应是买时，「造」要写出来
+    const buyDefaults: ChainOptions = { ...DEFAULTS, layers: { ...DEFAULTS.layers, reaction1: 'buy' } }
+    expect(industryArgsTail({ chain: { on: true, layers: { reaction1: 'build' } as ChainOptions['layers'] } }, buyDefaults)).toBe(' 低级反应:造')
+  })
+
+  it('without defaults writes every layer it has', () => {
+    expect(industryArgsTail({ chain: { on: true, layers: { other: 'buy', component: 'build' } as ChainOptions['layers'] } })).toBe(' 组件:造 其他:买')
+  })
+
+  it('round-trips through the parser', () => {
+    const cases: Array<NonNullable<Parameters<typeof industryArgsTail>[0]['chain']>> = [
+      { on: true },
+      { on: true, details: true },
+      { on: true, layers: { component: 'buy' } as ChainOptions['layers'] },
+      { on: true, layers: { reaction1: 'buy', reaction2: 'buy', other: 'build' } as ChainOptions['layers'] },
+      { on: true, layers: { reaction1: 'build', reaction2: 'buy' } as ChainOptions['layers'], alchemy: 'alchemy' },
+      { on: true, layers: { reaction1: 'build' } as ChainOptions['layers'], alchemy: 'normal', details: true },
+    ]
+    for (const chain of cases) {
+      const text = industryArgsText({ item: '乌鸦级', quantity: 5, location: 'XX-1', me: 10, materials: true, chain })
+      const r = ok(text)
+      expect(r.chain, text).toEqual(chain)
+      expect([r.quantity, r.location, r.me, r.materials], text).toEqual([5, 'XX-1', 10, true])
+    }
+  })
+
+  it('stays short enough: all four layers + alchemy fit a button command with the usual item name', () => {
+    const chain = { on: true, details: true, alchemy: 'alchemy', layers: { reaction1: 'build', reaction2: 'buy', component: 'buy', other: 'build' } } as const
+    const text = industryArgsText({ item: '#638', quantity: 100, location: '联盟 工业点 B', me: 10, te: 20, chain: { ...chain, layers: { ...chain.layers } } })
+    expect(`制造 ${text}`.length).toBeLessThanOrEqual(100)
   })
 })

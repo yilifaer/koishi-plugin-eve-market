@@ -63,6 +63,8 @@ export type FailureReason =
   | 'activity'
   /** UNKNOWN_LOCATION：地点能做这种活动，但建筑的能力造不了这个产品 */
   | 'capability'
+  /** 工业：拆到原料的层参数写错（例如「组件:炼金」） */
+  | 'chain-option'
   /** 工业：拆到原料涉及的物品超过 CHAIN_MAX_TYPES */
   | 'chain-size'
 
@@ -967,8 +969,8 @@ export interface IndustryRequest {
   me?: number
   te?: number
   facilityTaxPct?: number
-  /** 拆到原料：命令里写的层设置，没写的用控制台默认 */
-  chain?: Partial<ChainOptions>
+  /** 拆到原料：命令里写的层设置（layers 只有写了的层），没写的用控制台默认；undefined = 不是拆到原料；details = 「明细」 */
+  chain?: Partial<ChainOptions> & { on: true, details?: boolean }
   /** 命令里的 ME 或 TE 后面没写数字：回到 ME/TE 这一步并提醒（只对制造） */
   meteMissing?: 'me' | 'te'
   access: Access
@@ -1068,6 +1070,8 @@ export interface LocationComparison {
   facilityTaxPct?: number
   /** 按产品筛过地点：造不了这个产品的地点数和缺什么（例如「旗舰级船坞」） */
   unable?: { count: number; need: string }
+  /** 命令里写了拆到原料的参数词：比价不拆到原料，卡片上提示一句 */
+  chainIgnored?: boolean
 }
 
 export interface IndustryLocationInfo {
@@ -1095,7 +1099,7 @@ export type LayerMode = 'build' | 'buy'
 export type AlchemyMode = 'auto' | 'normal' | 'alchemy'
 export interface ChainOptions { layers: Record<ChainLayer, LayerMode>; alchemy: AlchemyMode }
 /** 命令里写的；没写的用控制台默认 */
-export interface ChainRequest extends IndustryRequest { chain: Partial<ChainOptions> }
+export interface ChainRequest extends IndustryRequest { chain: NonNullable<IndustryRequest['chain']> }
 export interface ChainNode {
   item: ItemInfo; layer: ChainLayer | 'product'; activity: IndustryActivity
   /** surplus = output - demand（整批） */

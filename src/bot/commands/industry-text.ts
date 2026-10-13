@@ -20,6 +20,7 @@ export const BAD_ARG: Partial<Record<FailureReason, string>> = {
   'runs-range': `流程数只能是 1–${MAX_RUNS}`,
   'tax-range': '税率要写成「税:1.5%」（0–100）',
   'rig-option': '改装件只能写「改装:默认」或「改装:无」',
+  'chain-option': '炼金、正常、自动只能写在「反应:」或「低级反应:」后面',
 }
 
 export const IND = {
@@ -139,6 +140,7 @@ export const IND = {
   changeMeTe: '修改ME/TE',
   changeStructure: '改建筑/改装件',
   rigsOff: '不用改装件',
+  compareNoChain: '比价不拆到原料',
   rigsOn: '用改装件',
   changeTax: '改税率',
   custom: '自定义',

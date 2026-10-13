@@ -61,7 +61,7 @@ function env(inv: Invocation): IndustryEnv {
 
 /** 命令名 + 物品 + 参数；整条命令超过 100 字时物品换成 #typeID。tail：接在最后的文字（「税:」） */
 function commandOf(inv: Invocation, id: CommandId, product: ItemInfo, parts: Parts, tail = ''): CommandRef {
-  return { id, args: itemArgs(inv.core, inv.render, id, product, (item) => `${industryArgsText({ item, ...parts })}${tail}`) }
+  return { id, args: itemArgs(inv.core, inv.render, id, product, (item) => `${industryArgsText({ item, ...parts }, inv.commands.settings.industry.chain)}${tail}`) }
 }
 
 /** core 给的步骤参数以 commandName 开头：整条命令太长时同样换成 #typeID */
@@ -72,8 +72,8 @@ function fitArgs(inv: Invocation, id: CommandId, product: ItemInfo, args: string
   return itemArgs(inv.core, inv.render, id, product, (item) => `${item}${rest}`)
 }
 
-/** 数量和流程数：每条按钮命令都带着 */
-const amountOf = (req: Pick<IndustryRequest, 'quantity' | 'runs'>): Parts => ({ quantity: req.quantity, runs: req.runs })
+/** 数量、流程数和拆到原料的设置：每条按钮命令都带着 */
+const amountOf = (req: Pick<IndustryRequest, 'quantity' | 'runs' | 'chain'>): Parts => ({ quantity: req.quantity, runs: req.runs, chain: req.chain })
 
 /** 这次计算的参数（写了什么就带什么；地点用规范的名字，建筑用实际选中的那座） */
 function currentParts(req: IndustryRequest, r: IndustryResult): Parts {
@@ -343,12 +343,14 @@ async function runCompare(inv: Invocation, text: string): Promise<void> {
     .finally(() => hint.stop())
   await hint.sent()
   if (isFailure(out)) return planFailure(inv, 'manufactureCompare', out, req)
+  if (req.chain) out.chainIgnored = true
   await sendCompare(inv, req, out)
 }
 
 async function sendCompare(inv: Invocation, req: IndustryRequest, c: LocationComparison): Promise<void> {
   // 详情和比价的这一行一致：写了的改装件、税也带上
-  const parts: Parts = { ...amountOf(req), me: c.me, te: c.te, rigs: req.rigs, facilityTaxPct: req.facilityTaxPct }
+  // 比价不拆到原料，详情也不带层设置
+  const parts: Parts = { ...amountOf(req), chain: undefined, me: c.me, te: c.te, rigs: req.rigs, facilityTaxPct: req.facilityTaxPct }
   const commands = c.rows.map((row) => commandOf(inv, 'manufacture', c.product, { ...parts, location: row.location }))
   const actions: Action[][] = inv.commands.registry.has('manufacture')
     ? [c.rows.slice(0, MAX_ACTIONS_PER_ROW).map((row, i) => ({ label: detailLabel(row.location), command: commands[i] }))]
