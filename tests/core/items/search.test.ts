@@ -151,7 +151,7 @@ describe('names', () => {
   })
 
   it('reports counts', () => {
-    expect(items.stats()).toMatchObject({ items: 144, adminAliases: 0, sets: 8 })
+    expect(items.stats()).toMatchObject({ items: 254, adminAliases: 0, sets: 8 })
     expect(items.stats().marketItems).toBeGreaterThan(100)
     expect(items.report().sets).toEqual({ count: 8, skipped: [] })
     expect(items.report().hulls).toBeGreaterThan(5)

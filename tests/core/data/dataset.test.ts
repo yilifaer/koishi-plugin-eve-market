@@ -115,6 +115,59 @@ describe('industry', () => {
   })
 })
 
+describe('services and reprocessing tables', () => {
+  const data = loadFixtureData()
+
+  it('reads both tables from the fixture', () => {
+    const services = data.industry.services!
+    expect(services.map((s) => s.id)).toContain(35881)
+    expect(services.find((s) => s.id === 35877)).toMatchObject({ key: 'supercapital', activity: 'm', fitTypes: [35827], sec: { h: false, l: false, n: true } })
+    expect(services.find((s) => s.id === 35899)?.activity).toBe('rp')
+    // 29663 的产出里 16669 是反应产物（主产物），16648 是副产品
+    const row = data.industry.reprocessing!.get(29663)!
+    expect(row).toMatchObject({ portion: 1, skill: null, main: 16669 })
+    expect(row.materials).toEqual([{ typeId: 16648, quantity: 173 }, { typeId: 16669, quantity: 73 }])
+  })
+
+  it('has no main product unless exactly one output is a reaction product', () => {
+    const none = load(makeVersion({ edit: (j) => { j['industry.json'].reprocessing[0].materials = [[16648, 1], [34, 1]] } }))
+    expect(none.industry.reprocessing!.get(29663)?.main).toBeNull()
+  })
+
+  it('treats old data without the tables as null', () => {
+    const old = load(makeVersion({ edit: (j) => { delete j['industry.json'].services; delete j['industry.json'].reprocessing } }))
+    expect(old.industry.services).toBeNull()
+    expect(old.industry.reprocessing).toBeNull()
+    expect(tableCounts(old)).toMatchObject({ services: 0, reprocessing: 0 })
+  })
+
+  it('skips services with an unknown activity', () => {
+    const v = load(makeVersion({ edit: (j) => { j['industry.json'].services.push({ ...j['industry.json'].services[0], id: 1, activity: 'zz' }) } }))
+    expect(v.industry.services).toHaveLength(data.industry.services!.length)
+  })
+
+  it('rejects the whole data when a present table is malformed', () => {
+    const badSec = makeVersion({ edit: (j) => { j['industry.json'].services[0].sec.h = 'yes' } })
+    expect(failure(badSec)).toMatchObject({ kind: 'format', message: expect.stringContaining('sec.h') })
+    const noField = makeVersion({ edit: (j) => { delete j['industry.json'].services[0].fitTypes } })
+    expect(failure(noField).kind).toBe('columns')
+    const notList = makeVersion({ edit: (j) => { j['industry.json'].reprocessing = {} } })
+    expect(failure(notList).kind).toBe('format')
+    const badMaterial = makeVersion({ edit: (j) => { j['industry.json'].reprocessing[0].materials = [[16648, 'x']] } })
+    expect(failure(badMaterial).kind).toBe('format')
+    const unknown = makeVersion({ edit: (j) => { j['industry.json'].reprocessing[0].materials = [[999999, 1]] } })
+    expect(failure(unknown).kind).toBe('reference')
+  })
+
+  it('checkShrink rejects new data that lost the services table', () => {
+    const lost = load(makeVersion({ edit: (j) => { delete j['industry.json'].services } }))
+    expect(() => checkShrink(data, lost)).toThrow(/services/)
+    // 手上的数据本来就没有时不受影响
+    expect(() => checkShrink(lost, data)).not.toThrow()
+    expect(() => checkShrink(lost, lost)).not.toThrow()
+  })
+})
+
 describe('universe', () => {
   const data = loadFixtureData()
 
@@ -223,6 +276,7 @@ describe('checkShrink', () => {
         j['types.json'].types = types.filter((r) => keep.has(r[0]))
         j['industry.json'].blueprints = (j['industry.json'].blueprints as Array<[number, string, number, number, number[][], number[][]]>)
           .filter((b) => keep.has(b[0]) && [...b[4], ...b[5]].every(([id]) => keep.has(id)))
+        j['industry.json'].reprocessing = []
       },
     }))
     expect(() => checkShrink(current, shrunk)).toThrow(/types/)

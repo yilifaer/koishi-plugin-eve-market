@@ -162,6 +162,11 @@ export function openObjects<K extends string>(file: string, raw: JsonObject, key
   return list as Array<Record<K, unknown>>
 }
 
+/** 可选的对象数组表：键不存在 = null（旧数据）；存在就和 openObjects 一样严格，格式错整份数据不用 */
+export function readOptionalObjects<K extends string>(file: string, raw: JsonObject, key: string, need: Record<K, Cell>): Array<Record<K, unknown>> | null {
+  return key in raw ? openObjects(file, raw, key, need) : null
+}
+
 /** 一个嵌套值的格式问题（蓝图的材料、改装件的 effects 等） */
 export function badValue(where: string, what: string, value: unknown): DataError {
   return new DataError('format', `${where}：${what} 不对：${show(value)}`)

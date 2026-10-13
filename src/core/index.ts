@@ -20,7 +20,7 @@ import { createIndustryArgs, createQueryParser } from './parse'
 import type { CorePorts, Logger } from './ports'
 import { createAuthService } from './sso'
 import type {
-  Access, AuthService, ConfigIssue, ConfigSection, CoreOverrides, CoreStatus, DataService, EveCore, ItemIndexStats, Settings,
+  Access, AuthService, ConfigIssue, ConfigSection, CoreOverrides, CoreStatus, DataService, DataSet, EveCore, ItemIndexStats, Settings,
 } from './types'
 import { createIncursions, createInfluenceMaps, createServerStatus, createUniverseService } from './universe'
 
@@ -54,7 +54,7 @@ export function describeIssue(issue: ConfigIssue): string {
 
 interface CheckDeps {
   settings: Settings
-  data: Pick<DataService, 'status'>
+  data: Pick<DataService, 'status' | 'current'>
   items: ManagedItemResolver
   markets: ManagedMarketRegistry
   industry: Pick<IndustryLocations, 'issues'>
@@ -92,6 +92,18 @@ function authIssues(settings: Settings, auth: Pick<AuthService, 'profiles'>): Co
     })
 }
 
+/** 数据里缺新表、或提炼有专用技能的物品（炼金术不算） */
+function industryDataIssues(data: DataSet): ConfigIssue[] {
+  const { services, reprocessing } = data.industry
+  const issue = (message: string): ConfigIssue => ({ section: 'industry', message })
+  if (!services || !reprocessing) return [issue('数据较旧：地点不按产品筛选、炼金术不可用')]
+  return [...reprocessing.values()].filter((r) => r.skill !== null).map((r) => {
+    const row = data.types.rowOf(r.id)
+    const name = row < 0 ? `#${r.id}` : data.types.zh[row] || data.types.en[row]
+    return issue(`${name} 有专用提炼技能，炼金术不计算这一种`)
+  })
+}
+
 class ConfigChecks {
   /** 这次加载里已经写过日志的问题 */
   private readonly logged = new Set<string>()
@@ -102,7 +114,7 @@ class ConfigChecks {
   dataIssues(): ConfigIssue[] {
     const { settings, data, items, markets, industry } = this.deps
     if (!data.status().ready) return []
-    return [...markets.issues(), ...items.issues(), ...quantityIssues(settings, items), ...industry.issues()]
+    return [...markets.issues(), ...items.issues(), ...quantityIssues(settings, items), ...industry.issues(), ...industryDataIssues(this.deps.data.current())]
   }
 
   all(): ConfigIssue[] {

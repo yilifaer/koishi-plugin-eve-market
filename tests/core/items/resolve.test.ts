@@ -178,7 +178,10 @@ describe('tier 4: contains, pinyin, near', () => {
   })
 
   it('offers close names when nothing matches', () => {
-    expect(market('syhj')).toMatchObject({ kind: 'none', suggestions: [{ zh: '三钛合金' }] })
+    // 夹具里加了铯铬合金，同样只差一个字母，所以不只一个
+    const near = market('syhj')
+    if (near.kind !== 'none') throw new Error(near.kind)
+    expect(near.suggestions.map((i) => i.zh)).toContain('三钛合金')
     const r = market('乌鸦机')
     if (r.kind !== 'none') throw new Error(r.kind)
     expect(ens(r.suggestions)).toEqual(['Raven', 'Raven Navy Issue', 'Raven State Issue'])

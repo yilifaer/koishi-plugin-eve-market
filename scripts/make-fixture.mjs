@@ -35,6 +35,12 @@ const TYPES = [
   'Large Shield Extender II Blueprint', 'Damage Control II Blueprint', 'Tungsten Carbide Reaction Formula', 'Tungsten Carbide',
 ]
 
+/** 能力测试用的舰船：超旗舰、泰坦、航母、货舰、虎鲸、逆戟鲸 */
+const CAPABILITY_SHIPS = ['Aeon', 'Erebus', 'Thanatos', 'Charon', 'Orca', 'Rorqual']
+
+/** 整条制造链（拆到原料用）：从产品往下，把每层的蓝图和材料都收进来。Hound 是 T2 护卫舰，Unrefined Ferrofluid 是炼金术的例子 */
+const CHAIN_PRODUCTS = ['Hound', 'Unrefined Ferrofluid']
+
 /** 植入体套装：[等级, 英文套装名]（§6.1.5 的测试：高级水晶、高级九头蛇、中级仿生、低级强势、低级分裂、低级圣杯；水晶三个等级） */
 const IMPLANT_SETS = [
   ['High', 'Crystal'], ['Mid', 'Crystal'], ['Low', 'Crystal'], ['High', 'Hydra'], ['Mid', 'Mimesis'],
@@ -96,7 +102,7 @@ function pickTypeIds(types) {
   const groupCol = columns(types, 'groupColumns')
   const categoryOfGroup = new Map(types.groups.map((g) => [groupCol(g, 'id'), groupCol(g, 'category')]))
   const find = byName(types.types, col, '物品')
-  const ids = new Set(TYPES.map((name) => col(find(name), 'id')))
+  const ids = new Set([...TYPES, ...CAPABILITY_SHIPS].map((name) => col(find(name), 'id')))
   for (const [grade, set] of IMPLANT_SETS) {
     for (const part of SET_PARTS) ids.add(col(find(`${grade}-grade ${set} ${part}`), 'id'))
   }
@@ -116,6 +122,38 @@ function pickBlueprints(industry, typeIds) {
   for (const row of rows) {
     for (const [id] of [...col(row, 'products'), ...col(row, 'materials')]) typeIds.add(id)
   }
+  return rows
+}
+
+/** 沿制造和反应蓝图一路往下收：产品、材料、蓝图本身（拆到原料的测试要完整的一条链） */
+function addChains(industry, typeIds, types) {
+  const col = columns(types, 'columns')
+  const bcol = columns(industry, 'blueprintColumns')
+  const find = byName(types.types, col, '物品')
+  const byProduct = new Map()
+  for (const row of industry.blueprints) {
+    if (bcol(row, 'activity') !== 'm' && bcol(row, 'activity') !== 'r') continue
+    for (const [id] of bcol(row, 'products')) byProduct.set(id, row)
+  }
+  const walk = (id) => {
+    if (typeIds.has(id)) return
+    typeIds.add(id)
+    const row = byProduct.get(id)
+    if (!row) return
+    typeIds.add(bcol(row, 'blueprint'))
+    for (const [material] of bcol(row, 'materials')) walk(material)
+  }
+  for (const name of CHAIN_PRODUCTS) {
+    // 已经在表里的（例如被别的链先收进来）也要往下走，所以先拿掉
+    typeIds.delete(col(find(name), 'id'))
+    walk(col(find(name), 'id'))
+  }
+}
+
+/** 提炼表只留产出的是选中物品的行，并把这些行的材料也收进来 */
+function pickReprocessing(industry, typeIds) {
+  const rows = industry.reprocessing.filter((row) => typeIds.has(row.id))
+  for (const row of rows) for (const [id] of row.materials) typeIds.add(id)
   return rows
 }
 
@@ -167,10 +205,11 @@ function fixtureTypes(types, typeIds) {
   }
 }
 
-function fixtureIndustry(industry, blueprintRows) {
+function fixtureIndustry(industry, blueprintRows, reprocessing) {
   return {
     ...industry,
     blueprints: blueprintRows,
+    reprocessing,
     rigs: industry.rigs.filter((rig) => RIGS.includes(rig.id)),
   }
 }
@@ -234,11 +273,13 @@ function main() {
   const full = Object.fromEntries(DATA_FILES.map((name) => [name, JSON.parse(files[name].toString('utf8'))]))
 
   const typeIds = pickTypeIds(full['types.json'])
+  addChains(full['industry.json'], typeIds, full['types.json'])
   const blueprintRows = pickBlueprints(full['industry.json'], typeIds)
+  const reprocessing = pickReprocessing(full['industry.json'], typeIds)
   addVariationParents(full['types.json'], typeIds)
   const out = {
     'types.json': fixtureTypes(full['types.json'], typeIds),
-    'industry.json': fixtureIndustry(full['industry.json'], blueprintRows),
+    'industry.json': fixtureIndustry(full['industry.json'], blueprintRows, reprocessing),
     'universe.json': fixtureUniverse(full['universe.json']),
   }
 

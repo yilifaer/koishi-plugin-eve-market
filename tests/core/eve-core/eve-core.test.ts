@@ -44,7 +44,7 @@ afterEach(async () => {
   cleanupDirs()
 })
 
-async function make(raw: Record<string, unknown> = {}, setupEsi?: (fake: FakeEsi) => void, saved: AuthRecord[] = []): Promise<Made> {
+async function make(raw: Record<string, unknown> = {}, setupEsi?: (fake: FakeEsi) => void, saved: AuthRecord[] = [], version = makeVersion()): Promise<Made> {
   const fake = new FakeEsi()
   setupEsi?.(fake)
   await fake.start()
@@ -53,7 +53,6 @@ async function make(raw: Record<string, unknown> = {}, setupEsi?: (fake: FakeEsi
   fake.clock = () => clock.now()
   const web = new FakeHttp()
   const logger = new MemoryLogger()
-  const version = makeVersion()
   const { settings } = normalizeConfig({ advanced: { manifestUrl: '', glossaryUrl: '' }, ...raw })
   const unused = () => { throw new Error('这个测试用不到') }
   const core = createEveCore({
@@ -95,6 +94,20 @@ describe('createEveCore: lifecycle and status', () => {
     ])
     expect(status.esi).toMatchObject({ pausedUntil: null })
     expect(status.industry).toBeUndefined()
+  })
+
+  it('hints at old data without the services and reprocessing tables', async () => {
+    const old = makeVersion({ edit: (j) => { delete j['industry.json'].services; delete j['industry.json'].reprocessing } })
+    const { core } = await make({}, undefined, [], old)
+    await core.start()
+    expect(core.status().issues.map(describeIssue)).toEqual(['工业：数据较旧：地点不按产品筛选、炼金术不可用'])
+  })
+
+  it('reports a reprocessing row with its own skill', async () => {
+    const odd = makeVersion({ edit: (j) => { j['industry.json'].reprocessing[0].skill = 12345 } })
+    const { core } = await make({}, undefined, [], odd)
+    await core.start()
+    expect(core.status().issues.map(describeIssue)).toEqual(['工业：粗糙的铁磁流体 有专用提炼技能，炼金术不计算这一种'])
   })
 
   it('stop cancels the data checks', async () => {

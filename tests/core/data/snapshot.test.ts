@@ -55,6 +55,11 @@ describe('bundled snapshot (data/)', () => {
     const counts = tableCounts(data)
     expect(counts.structures).toBeGreaterThanOrEqual(14)
     expect(counts.factions).toBeGreaterThanOrEqual(27)
+    const { manifest } = data
+    expect(manifest.dataRevision).toBeGreaterThanOrEqual(2)
+    expect(data.industry.services?.map((s) => s.id)).toEqual(expect.arrayContaining([35877, 35881, 35899]))
+    expect(data.industry.reprocessing?.size).toBe(17)
+    expect(data.industry.reprocessing?.get(29663)).toMatchObject({ main: 16669, skill: null })
   })
 
   it('ships a usable glossary', () => {

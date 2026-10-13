@@ -1,13 +1,13 @@
 {
 "schema": 1,
-"dataRevision": 1,
-"buildNumber": 3586130,
-"sdeReleaseDate": "2026-10-07T11:10:05Z",
-"generatedAt": "2026-10-07T18:57:28.294Z",
+"dataRevision": 2,
+"buildNumber": 3607705,
+"sdeReleaseDate": "2026-10-12T11:08:38Z",
+"generatedAt": "2026-10-13T12:38:32.089Z",
 "files": {
-"types.json": {"sha256":"bfec9e9db5231b91204428dd818b8e6254eb9a1a2695ff0b1b469f375b181207","bytes":28536,"rows":144},
-"industry.json": {"sha256":"b8401465fba8fead64767f945201859eed83f91e6bdaef08d0ef3c4290dd75df","bytes":6784,"rows":9},
+"types.json": {"sha256":"6b4798d2b2819b2b11e18ae63b6f4c49f772e8abceca3b69c690f684b7ddcffe","bytes":43368,"rows":254},
+"industry.json": {"sha256":"3b19a72ea3924365ba5239ab0defe07df6106bce70bbbd517a6f71907c1f1dac","bytes":12048,"rows":50},
 "universe.json": {"sha256":"f9816f55392bc0c7c40a2b5e2297adc13176ce5d56024fa7c5028ef0701d4b11","bytes":8528,"rows":16}
 },
-"sourceCommit": "1ca04b702f7bfdb6191451df7221985eb6e78a39"
+"sourceCommit": "d6c992430c94eb17e55c0c19fdf660aaa4320d03"
 }

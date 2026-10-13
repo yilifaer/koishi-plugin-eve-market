@@ -74,6 +74,8 @@ export function tableCounts(data: DataSet): Record<string, number> {
     structures: data.industry.structures.size,
     rigs: data.industry.rigs.size,
     filters: data.industry.filters.size,
+    services: data.industry.services?.length ?? 0,
+    reprocessing: data.industry.reprocessing?.size ?? 0,
     regions: data.universe.regions.size,
     constellations: data.universe.constellations.size,
     systems: data.universe.systems.size,
