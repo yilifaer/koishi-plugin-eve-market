@@ -25,8 +25,6 @@ export interface JobCtx {
   costs: CostInputs
   /** 要写进结果的警告（去重） */
   warnings: Set<string>
-  /** 提炼建筑的税，第一次用到时查 */
-  reprocess?: { pct: number; at?: string }
 }
 
 export interface JobSpec {

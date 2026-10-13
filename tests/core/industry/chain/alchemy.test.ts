@@ -200,4 +200,15 @@ describe('alchemy: byproducts, tax', () => {
     const r = chainResult(await go({ on: true, alchemy: 'alchemy' }))
     expect(node(r, FERROFLUID).alchemy?.reprocessAt).toBe('乙提炼厂')
   })
+
+  it('no 提炼地点 and no reprocessing at the command location: the first visible location that has one', async () => {
+    const stations = [
+      ...STRUCTURES,
+      { location: '星点乙', name: '乙提炼厂', structureType: 'Athanor', activities: 'reprocessing', reprocessingTaxPct: 3 },
+    ]
+    const { go } = ferrofluid({ industry: { structures: stations } })
+    const r = chainResult(await go({ on: true, alchemy: 'alchemy' }))
+    expect(node(r, FERROFLUID).alchemy?.reprocessAt).toBe('乙提炼厂')
+    expect(r.warnings).not.toContain('未配置提炼建筑，提炼税按 0 算')
+  })
 })

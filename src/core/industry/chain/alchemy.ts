@@ -8,6 +8,7 @@ import { runsForQuantity } from '../formulas'
 import { reprocessOut, scrapYield } from '../reprocess'
 import { evaluateAt } from './job'
 import type { JobCtx, JobEval } from './job'
+import type { IndustryLocation } from '../locations'
 import type { AlchemyPlan, PlanNode } from './expand'
 import { unitOf } from './prices'
 
@@ -30,17 +31,17 @@ export interface AlchemyRoute {
   timeSeconds: number
 }
 
-/** 提炼税最低的提炼建筑：提炼地点设置 → 命令里的地点；一座都没有按 0% */
-function reprocessing(ctx: JobCtx): { pct: number; at?: string } {
-  if (ctx.reprocess) return ctx.reprocess
-  for (const location of [ctx.host.locations.reprocessLocation(ctx.access), ctx.location]) {
+/** 提炼税最低的提炼建筑：提炼地点设置 → 命令里的地点 → 低级反应实际做的地点 → 本群第一个有提炼建筑的地点；一座都没有按 0% */
+function reprocessing(ctx: JobCtx, at: IndustryLocation | null): { pct: number; at?: string } {
+  const candidates = [ctx.host.locations.reprocessLocation(ctx.access), ctx.location, at, ...ctx.host.locations.visible(ctx.access)]
+  for (const location of candidates) {
     const list = location?.structures.filter((s) => s.purposes.includes('reprocessing')) ?? []
     if (!list.length) continue
     const best = list.reduce((a, b) => (b.taxPct.reprocessing < a.taxPct.reprocessing ? b : a))
-    return (ctx.reprocess = { pct: best.taxPct.reprocessing, at: best.name })
+    return { pct: best.taxPct.reprocessing, at: best.name }
   }
   ctx.warnings.add('未配置提炼建筑，提炼税按 0 算')
-  return (ctx.reprocess = { pct: 0 })
+  return { pct: 0 }
 }
 
 /** 产出（数量 × 材料市场单价）的总价值；有缺价格的 null */
@@ -76,7 +77,7 @@ export function alchemyRoute(ctx: JobCtx, node: PlanNode, plan: AlchemyPlan, dem
   const ev = evaluateAt(ctx, {
     item: plan.unrefined, bp: plan.bp, activity: 'reaction', runs, me: 0, te: 0, techLevel: null, location: node.place.location, rigs: 'default',
   }, plan.structures)
-  const station = reprocessing(ctx)
+  const station = reprocessing(ctx, node.place.location)
   const value = worth(ctx, [{ typeId: main.typeId, quantity: output }, ...byproducts])
   const reprocessTax = value === null ? null : roundHalfAway(value * station.pct / 100, 2)
   // 副产品先抵自己这条路线里同种材料
