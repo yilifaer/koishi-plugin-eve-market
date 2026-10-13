@@ -289,11 +289,9 @@ function locationCard(inv: Invocation, id: PlanId, failure: CoreFailure, req?: I
   const token = failure.token ?? ''
   const product = req ? inv.core.items.byId(req.typeId) : undefined
   const direct = inv.access.isDirect
-  const hidden = failure.code === 'UNKNOWN_LOCATION' && !failure.reason && inv.core.industry.locationHidden(token, inv.access)
   const title = failure.code === 'HIGHSEC_REACTION' ? IND.highsec(safeEcho(token))
     : failure.reason === 'capability' && product ? IND.cannotBuild(safeEcho(token), activity, escapeMarkdown(itemName(product)), escapeMarkdown(failure.need ?? ''))
       : failure.reason === 'activity' ? IND.wrongActivity(safeEcho(token), activity)
-      : hidden ? IND.locationHidden(safeEcho(token))
         : IND.unknownLocation(safeEcho(token))
   const card = emptyCard(title)
   // 能造的地点一个都没有：说明缺什么，不是「还没有工业地点」

@@ -1086,8 +1086,6 @@ export interface IndustryLocationInfo {
 export interface IndustryService {
   /** 本群能用的工业地点，按表格顺序；给了 activity 时只列能做这种活动的（帮助、「快速计算」「制造比价」按钮用） */
   locations(access: Access, activity?: IndustryActivity): IndustryLocationInfo[]
-  /** 地点存在，但这个群、这个私聊看不到（例如只给授权群用） */
-  locationHidden(token: string, access: Access): boolean
   /** 本群能用、并且造得了这个产品的工业地点（「快速计算」按钮用）；数据没有服务表时同 locations */
   locationsFor(access: Access, activity: IndustryActivity, typeId: TypeId): IndustryLocationInfo[]
   /** steps 模式缺参数时返回下一步 */

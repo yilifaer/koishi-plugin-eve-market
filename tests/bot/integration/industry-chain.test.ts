@@ -218,7 +218,7 @@ describe('拆到原料：高级、出错、慢提示', () => {
   it('an unknown location is the same card as 制造, with the chain words kept in the buttons', async () => {
     const e = await start()
     const sent = await e.h.group(`制造 ${HOUND} 没有的地方 反应:买`)
-    expect(card(sent)).toContain('没有的地方 尚未配置为工业地点。')
+    expect(card(sent)).toContain('这里没有叫 没有的地方 的工业地点。')
     expect(buttons(sent).some((b) => b.includes('反应:买'))).toBe(true)
   })
 

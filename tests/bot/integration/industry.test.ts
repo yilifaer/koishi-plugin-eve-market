@@ -309,9 +309,9 @@ describe('制造: advanced steps', () => {
 
   it('a private chat never says 本群: location lists, missing locations and the only-location mark', async () => {
     const e = await start()
-    // XX-1 只在授权群：单聊里存在但不能用；XX-9 根本没有
-    expect(card(await e.h.direct('制造 乌鸦级 XX-1'))).toBe('XX-1 在这里不能用。\n\n私聊里可以制造的地点：XX-2 · XX-3')
-    expect(card(await e.h.direct('制造 乌鸦级 XX-9'))).toBe('XX-9 尚未配置为工业地点。\n\n私聊里可以制造的地点：XX-2 · XX-3')
+    // XX-1 只在授权群：私聊里和根本没有的 XX-9 回同一句，看不出它存在
+    expect(card(await e.h.direct('制造 乌鸦级 XX-1'))).toBe('这里没有叫 XX-1 的工业地点。\n\n私聊里可以制造的地点：XX-2 · XX-3')
+    expect(card(await e.h.direct('制造 乌鸦级 XX-9'))).toBe('这里没有叫 XX-9 的工业地点。\n\n私聊里可以制造的地点：XX-2 · XX-3')
     expect(card(await e.h.group('制造 乌鸦级 XX-9'))).toContain('本群可以制造的地点：')
     await e.stop()
     env = await startIndustry({ industry: { locations: [LOCATIONS[1]], structures: [STRUCTURES[3]] } })
@@ -427,17 +427,17 @@ describe('制造: errors', () => {
   it('an unknown location, or one this group cannot see, lists the usable ones with buttons keeping the rest', async () => {
     const e = await start()
     const unknown = await e.h.group('制造 乌鸦级*2 XX-9 ME9')
-    expect(card(unknown)).toBe('XX-9 尚未配置为工业地点。\n\n本群可以制造的地点：XX-1 · XX-2 · XX-3')
+    expect(card(unknown)).toBe('这里没有叫 XX-9 的工业地点。\n\n本群可以制造的地点：XX-1 · XX-2 · XX-3')
     expect(buttons(unknown)).toEqual(['XX-1=>制造 乌鸦级*2 ME9 XX-1', 'XX-2=>制造 乌鸦级*2 ME9 XX-2', 'XX-3=>制造 乌鸦级*2 ME9 XX-3'])
     // 授权群才看得到的地点：在别的群里和不存在一样（别名也一样）
     const hidden = await e.h.group('制造 乌鸦级 XX-1', { channelId: GROUP2 })
     const alias = await e.h.group('制造 乌鸦级 联盟工业点A', { channelId: GROUP2 })
     const missing = await e.h.group('制造 乌鸦级 XX-9', { channelId: GROUP2 })
-    // 存在但这里用不了：不说「尚未配置」，列表和不存在的一样
-    expect(card(hidden)).toBe('XX-1 在这里不能用。\n\n本群可以制造的地点：XX-2 · XX-3')
-    expect(card(alias)).toBe('联盟工业点A 在这里不能用。\n\n本群可以制造的地点：XX-2 · XX-3')
+    // 存在但这里用不了：和不存在的回同一句、同一组按钮，别的群看不出联盟在哪里有工业地点
+    expect(card(hidden)).toBe('这里没有叫 XX-1 的工业地点。\n\n本群可以制造的地点：XX-2 · XX-3')
+    expect(card(alias)).toBe('这里没有叫 联盟工业点A 的工业地点。\n\n本群可以制造的地点：XX-2 · XX-3')
     expect(buttons(hidden)).toEqual(buttons(missing))
-    expect(card(missing)).toBe('XX-9 尚未配置为工业地点。\n\n本群可以制造的地点：XX-2 · XX-3')
+    expect(card(missing)).toBe('这里没有叫 XX-9 的工业地点。\n\n本群可以制造的地点：XX-2 · XX-3')
     // 建筑名只属于写错的那个地点，按钮里不带；「改装:」「税:」「高级」「材料」照样带着
     const all = await e.h.group('制造 乌鸦级*2 XX-9 ME4 TE8 建筑:大工厂 改装:无 税:1.25% 高级 材料')
     expect(buttons(all)[0]).toBe('XX-1=>制造 乌鸦级*2 ME4 TE8 改装:无 税:1.25% 高级 材料 XX-1')

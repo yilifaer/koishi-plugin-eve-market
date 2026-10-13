@@ -183,10 +183,6 @@ class Service implements IndustryService {
     return this.o.locations.visible(access, activity).map((l) => ({ name: l.name, isDefault: l.isDefault }))
   }
 
-  locationHidden(token: string, access: Access): boolean {
-    return !this.o.locations.match(token, access) && this.o.locations.exists(token)
-  }
-
   locationsFor(access: Access, activity: IndustryActivity, typeId: TypeId): IndustryLocationInfo[] {
     const product = this.o.items.byId(typeId)
     const list = product ? this.o.locations.buildable(access, activity, product).usable : this.o.locations.visible(access, activity)

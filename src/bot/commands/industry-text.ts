@@ -166,9 +166,8 @@ export const IND = {
   notReactable: (name: string) => `${name} 没有可用的反应配方。`,
   isReaction: (name: string, command: string) => `${name} 是反应产物，请用：${command}`,
   notReaction: (name: string, command: string) => `${name} 不是反应产物，请用：${command}`,
-  unknownLocation: (token: string) => `${token} 尚未配置为工业地点。`,
-  // 地点存在，但这个群、这个私聊用不了（例如只给授权群用）
-  locationHidden: (token: string) => `${token} 在这里不能用。`,
+  // 不存在和这里看不到（只给授权群的地点）回同一句，不让别的群、私聊看出联盟在哪里有工业地点
+  unknownLocation: (token: string) => `这里没有叫 ${token} 的工业地点。`,
   wrongActivity: (name: string, activity: IndustryActivity) => `${name} 没有可以${ACTIVITY[activity]}的建筑。`,
   highsec: (name: string) => `高安不能进行反应（${name} 在高安）。`,
   locationsHere: (activity: IndustryActivity, list: string, direct = false) => `${scope(direct)}可以${ACTIVITY[activity]}的地点：${list}`,

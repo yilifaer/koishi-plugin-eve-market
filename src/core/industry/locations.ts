@@ -111,8 +111,6 @@ export interface IndustryLocations {
   visible(access: Access, activity?: IndustryActivity): IndustryLocation[]
   /** 按名称、别名、星系名找本群能看到的地点（不看能不能做哪种活动，高安做反应由调用方回答）；找不到返回 null */
   match(token: string, access: Access): IndustryLocation | null
-  /** 这个词是不是某个地点的名称、别名或星系名，不看可见范围 */
-  exists(token: string): boolean
   /** 名称和别名最多几个词（从命令里切出地点时用） */
   maxWords(): number
   /** 按名称取，不看可见范围 */
@@ -584,10 +582,6 @@ class Locations implements IndustryLocations {
 
   match(token: string, access: Access): IndustryLocation | null {
     return findIn(this.state().layers, token, (l) => locationVisibleTo(l, access)) ?? null
-  }
-
-  exists(token: string): boolean {
-    return findIn(this.state().layers, token, () => true) !== undefined
   }
 
   maxWords(): number {
