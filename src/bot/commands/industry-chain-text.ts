@@ -41,6 +41,8 @@ export const CH = {
   alchemyLine: (count: number, compare: string) => `炼金 ${count} 种${compare ? `：${compare}` : ''}`,
   alchemyAt: (building: string, place: string, pct: string) => `提炼：${building}（${place}）税 ${pct}`,
   alchemyNone: '炼金 0 种：都是正常路线更划算',
+  alchemyMissing: '炼金缺价格，没法比',
+  alchemyNoneSome: (normal: number, missing: number) => `炼金 0 种：${normal} 种是正常路线更划算，${missing} 种炼金缺价格，没法比`,
   alchemyCheaper: (diff: string) => `比正常省 ${diff}`,
   alchemyDearer: (diff: string) => `比正常贵 ${diff}`,
   alchemyMoreTime: (time: string) => `多 ${time}`,

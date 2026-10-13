@@ -254,6 +254,41 @@ describe('编出来的结果', () => {
     expect(md(overviewCard(env0, withNode({}), [], false))).not.toContain('提炼：')
   })
 
+  it('no alchemy chosen: the normal route is only called cheaper when both routes have prices', () => {
+    const alchemy = (cost: number | null) => ({
+      unrefined: PYERITE, units: 25, runs: 25, yieldPct: 55, perUnit: 40, byproducts: [], reprocessTax: null,
+      other: { route: 'alchemy' as const, cost, timeSeconds: 1800 },
+    })
+    const line = (...nodes: ChainNode[]) => md(overviewCard(env0, result({ nodes: [result().nodes[0], ...nodes] }), [], false))
+    const priced = node({ route: 'normal', alchemy: alchemy(5000) })
+    expect(line(priced)).toContain('炼金 0 种：都是正常路线更划算')
+    // 炼金路线缺价格
+    const noAlchemyPrice = node({ route: 'normal', alchemy: alchemy(null) })
+    expect(line(noAlchemyPrice)).toContain('炼金 0 种：炼金缺价格，没法比')
+    expect(line(noAlchemyPrice)).not.toContain('都是正常路线更划算')
+    // 正常路线缺价格
+    expect(line(node({ route: 'normal', buildCost: null, alchemy: alchemy(5000) }))).toContain('炼金 0 种：炼金缺价格，没法比')
+    // 一部分缺
+    const mixed = line(priced, noAlchemyPrice)
+    expect(mixed).toContain('炼金 0 种：1 种是正常路线更划算，1 种炼金缺价格，没法比')
+  })
+
+  it('the scrap-rule note appears only when some node had an alchemy candidate', () => {
+    const none = result({ inventionExcluded: true })
+    expect(md(overviewCard(env0, none, [], false))).toContain('⚠ T2 发明成本不计入\n')
+    expect(md(overviewCard(env0, none, [], false))).not.toContain('废料')
+    expect(md(detailsCard(env0, none, []))).not.toContain('废料')
+    const candidate = node({
+      route: 'normal',
+      alchemy: { unrefined: PYERITE, units: 1, runs: 1, yieldPct: 53, perUnit: 40, byproducts: [], reprocessTax: 1, other: { route: 'alchemy', cost: 5000, timeSeconds: 1 } },
+    })
+    const some = result({ inventionExcluded: true, nodes: [result().nodes[0], candidate] })
+    expect(md(overviewCard(env0, some, [], false))).toContain('⚠ T2 发明成本不计入 · 炼金按废料 53% 规则计算')
+    expect(md(detailsCard(env0, some, []))).toContain('炼金按废料 53% 规则计算')
+    // 只有废料规则可写、没有发明提示时也单独成行
+    expect(md(overviewCard(env0, result({ nodes: some.nodes }), [], false))).toContain('⚠ 炼金按废料 53% 规则计算')
+  })
+
   it('the unused layer is explained by the bought layer above it', () => {
     const r = result({
       options: { layers: { reaction1: 'build', reaction2: 'build', component: 'buy', other: 'buy' }, alchemy: 'auto' },

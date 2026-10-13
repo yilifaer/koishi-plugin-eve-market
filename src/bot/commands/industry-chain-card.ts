@@ -131,7 +131,13 @@ function alchemyLines(env: IndustryEnv, r: ChainResult): Line[] {
   const candidates = r.nodes.filter((n) => n.alchemy)
   if (!candidates.length) return []
   const used = candidates.filter((n) => n.route === 'alchemy')
-  if (!used.length) return [{ text: CH.alchemyNone, indent: 1 }]
+  if (!used.length) {
+    // 两条路线有一条缺价格就没法比，不能说正常路线更划算
+    const missing = candidates.filter((n) => n.buildCost === null || n.alchemy!.other.cost === null).length
+    if (!missing) return [{ text: CH.alchemyNone, indent: 1 }]
+    const text = missing === candidates.length ? CH.alchemyLine(0, CH.alchemyMissing) : CH.alchemyNoneSome(candidates.length - missing, missing)
+    return [{ text, indent: 1 }]
+  }
   const known = used.every((n) => n.buildCost !== null && n.alchemy!.other.cost !== null)
   if (!known) return [{ text: CH.alchemyLine(used.length, CH.alchemyNoCompare), indent: 1 }, ...reprocessLines(used)]
   const saved = used.reduce((sum, n) => sum + (n.alchemy!.other.cost! - n.buildCost!), 0)
