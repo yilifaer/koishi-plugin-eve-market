@@ -115,6 +115,8 @@ export function expand(
   const warnings = new Set<string>()
   const post: TypeId[] = []
   const stack = new Set<TypeId>()
+  // 放不下的反应合成一行警告
+  const noReaction = new Set<string>()
   const places = new Map<string, Place | null>()
 
   const place = (item: ItemInfo, activity: IndustryActivity): Place | null => {
@@ -175,9 +177,8 @@ export function expand(
     const activity = activityOf(layer)
     const found = place(item, activity)
     if (!found) {
-      warnings.add(activity === 'reaction'
-        ? `没有能做 ${nameOf(item)} 的反应建筑，改成直接买`
-        : `${env.location ? `${env.location.name} ` : ''}造不了 ${nameOf(item)}，改成直接买`)
+      if (activity === 'reaction') noReaction.add(nameOf(item))
+      else warnings.add(`${env.location ? `${env.location.name} ` : ''}造不了 ${nameOf(item)}，改成直接买`)
       return { typeId, node: false, kind: 'unbuildable' }
     }
     visit(item, layer, activity, (activity === 'reaction' ? industry.reactions : industry.manufacturing).get(typeId)!, found)
@@ -185,5 +186,11 @@ export function expand(
   }
 
   visit(seed.item, 'product', seed.activity, seed.bp, seed.place)
+  if (noReaction.size) {
+    const names = [...noReaction]
+    warnings.add(env.location
+      ? `${names.length} 种反应没有地方做，改成直接买（${names.slice(0, 2).join('、')}${names.length > 2 ? '等' : ''}）`
+      : '没写地点，反应全部按直接买算')
+  }
   return { nodes, order: post.reverse(), closure, warnings: [...warnings] }
 }

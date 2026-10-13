@@ -165,7 +165,7 @@ describe('chain: where things are made', () => {
     const r = chainResult(await run(HOUND))
     expect(r.nodes.some((n) => n.activity === 'reaction')).toBe(false)
     expect(leaf(r, FERROGEL)).toMatchObject({ kind: 'unbuildable' })
-    expect(r.warnings.some((w) => w.startsWith('没有能做') && w.endsWith('的反应建筑，改成直接买'))).toBe(true)
+    expect(r.warnings.some((w) => /^\d+ 种反应没有地方做，改成直接买（/.test(w))).toBe(true)
     expect(layer(r, 'reaction1').used).toBe(false)
   })
 
