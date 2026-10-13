@@ -4,18 +4,21 @@
 // - 时间：收到消息超过 290 秒就不再发送，只写日志（适配器 298 秒后会悄悄改成主动消息）。
 // - 降级链：Markdown + 按钮 → 去掉按钮（动作写成文字）→ 纯文字。每条用户消息只降级一次，再失败就停。
 // - 熔断：10 分钟内 Markdown 失败 3 次，之后 30 分钟全部发纯文字。
+// - 引用 / 提醒：每次回复的第一条文字或 Markdown 消息引用用户的消息（回复里已经有消息带过引用，后面的就不再带），QQ 群里第一张 Markdown 卡片开头 @ 提问的人；
+//   单张卡片可以不带（attach: 'none'），或一定要带、不看「平台拒绝过」的记录（attach: 'always'，样式自检用）；
+//   带着它们的发送被平台以客户端错误拒绝时，去掉再发一次，成功就记下这类消息不支持，之后不再带。
 // - 每次发送成功后把发出去的文字按频道记 60 秒，供自我回声保护用。
 
 import type { Session } from 'koishi'
 import {
-  HARD_MAX_MESSAGE_CHARS, MAX_MESSAGE_CHARS, MAX_SPLIT_PARTS, QQ_ERROR, REPLY_BUDGET_DIRECT, REPLY_BUDGET_GROUP,
+  HARD_MAX_MESSAGE_CHARS, MAX_MESSAGE_CHARS, MAX_SPLIT_PARTS, MENTION_USER, QQ_ERROR, QUOTE_REPLY, REPLY_BUDGET_DIRECT, REPLY_BUDGET_GROUP,
   REPLY_CUTOFF_SEC,
 } from '../../constants'
 import type { Logger, ModuleStore } from '../../core/ports'
 import type { OutputMode } from '../../core/types'
 import type { Card, CardRenderOptions, KeyboardRow } from '../view/card'
 import { keyboardRows } from '../view/clickable'
-import { scrubUrls } from '../view/escape'
+import { escapeAttr, scrubUrls } from '../view/escape'
 import { markdownLayout } from '../view/markdown'
 import { hardCut, planSplit, renderPart, split } from '../view/split'
 import type { Layout, SplitPlan } from '../view/split'
@@ -31,12 +34,14 @@ export interface SendState {
   breaker: Breaker
   echo: EchoLog
   logs: LogGate
+  /** 平台拒绝过的附加项（「markdown:quote」「markdown:mention」「text:quote」），之后的回复不再带 */
+  rejected: Set<string>
 }
 
 export const SEND_STATE_KEY = 'bot/send'
 
 export function createSendState(): SendState {
-  return { breaker: new Breaker(), echo: new EchoLog(), logs: new LogGate() }
+  return { breaker: new Breaker(), echo: new EchoLog(), logs: new LogGate(), rejected: new Set() }
 }
 
 export function sendState(store: ModuleStore): SendState {
@@ -65,6 +70,11 @@ export interface TextOptions {
   quote?: string
   /** 单条上限，默认 MAX_MESSAGE_CHARS，最多 HARD_MAX_MESSAGE_CHARS（样式自检的长消息用） */
   maxChars?: number
+}
+
+export interface CardOptions extends Pick<TextOptions, 'maxChars'> {
+  /** 'none'：这张卡片不带自动的引用 / @（留给后面的消息）；'always'：一定带，不看平台拒绝过的记录（成功了就清掉记录） */
+  attach?: 'none' | 'always'
 }
 
 type Level = 'markdown' | 'no-buttons' | 'text'
@@ -106,11 +116,22 @@ export class Replier {
   private stopped = false
   private scrub = false
   private hinted = false
+  /** 还没用掉的引用 / 提醒（第一条文字或 Markdown 消息成功后清掉） */
+  private pendingQuote: string | undefined
+  private pendingMention: boolean
+  /** 正在发的卡片的 attach 选项 */
+  private attach: CardOptions['attach']
   private readonly now: () => number
 
   constructor(private readonly session: Session, private readonly sender: Sender, private readonly opts: ReplierOptions) {
     this.now = opts.now ?? Date.now
     this.level = sender.rich && opts.mode === 'markdown' ? 'markdown' : 'text'
+    this.pendingQuote = QUOTE_REPLY ? session.messageId || undefined : undefined
+    this.pendingMention = MENTION_USER && this.canMention()
+  }
+
+  private canMention(): boolean {
+    return this.sender.rich && this.session.platform === 'qq' && !this.session.isDirect && !!this.session.userId
   }
 
   remaining(): number {
@@ -118,7 +139,20 @@ export class Replier {
   }
 
   /** 渲染 → 分段 → 发送 → 失败降级；然后单独发 copyBlocks。全部发出去时返回 true */
-  async card(card: Card, options: Pick<TextOptions, 'maxChars'> = {}): Promise<boolean> {
+  async card(card: Card, options: CardOptions = {}): Promise<boolean> {
+    this.attach = options.attach
+    try {
+      if (options.attach === 'always') {
+        this.pendingQuote = this.session.messageId || undefined
+        this.pendingMention = this.canMention()
+      }
+      return await this.cardParts(card, options)
+    } finally {
+      this.attach = undefined
+    }
+  }
+
+  private async cardParts(card: Card, options: CardOptions): Promise<boolean> {
     const copies = (card.copyBlocks ?? []).filter((c) => c.trim())
     const parts = this.layout(card, copies.length, Math.min(HARD_MAX_MESSAGE_CHARS, options.maxChars ?? MAX_MESSAGE_CHARS))
     for (let i = 0; i < parts.plan.parts.length; i++) {
@@ -222,17 +256,62 @@ export class Replier {
     return this.finish(await this.attempt('text', content, [], quote))
   }
 
-  /** 检查预算和时间后发一条；没发（预算用完、太晚）时返回 null */
+  /** 检查预算和时间后发一条；没发（预算用完、太晚）时返回 null。quote：调用方指定的引用，不受「平台不支持」记录的影响 */
   private async attempt(kind: 'markdown' | 'text', content: string, rows: KeyboardRow[] = [], quote?: string): Promise<SendResult | null> {
     if (!this.gate()) return null
     const body = clip(this.scrub ? scrubUrls(content) : content)
-    const result = kind === 'markdown'
-      ? await this.sender.markdown(this.session, body, rows)
-      : quote ? await this.sender.text(this.session, body, quote) : await this.sender.text(this.session, body)
+    const state = this.opts.state.rejected
+    const auto = this.attach !== 'none'
+    const always = this.attach === 'always'
+    const useQuote = quote ?? (auto && this.pendingQuote && (always || !state.has(`${kind}:quote`)) ? this.pendingQuote : undefined)
+    const mention = auto && kind === 'markdown' && this.pendingMention && (always || !state.has('markdown:mention'))
+    let refused = false
+    let result = await this.deliver(kind, body, rows, useQuote, mention)
     this.used += result.sent
-    if (result.ok) this.remember(body)
-    else this.logFailure(result, kind, body.length)
+    if (!result.ok && (useQuote || mention) && this.isClientError(result)) {
+      // 可能是引用 / 提醒被拒绝：去掉再发一次；失败的发送不占预算，也不算 Markdown 失败
+      const retry = await this.deliver(kind, body, rows)
+      this.used += retry.sent
+      if (retry.ok) this.noteRejected(kind, !!useQuote, mention, result)
+      refused = true
+      result = retry
+    }
+    if (result.ok) {
+      this.remember(body)
+      // 实测带着发成功了：之前记下的「不支持」作废
+      if (always && !refused) {
+        if (useQuote) state.delete(`${kind}:quote`)
+        if (mention) state.delete('markdown:mention')
+      }
+      // 已经有消息带过引用（自动的或调用方指定的），后面的不再带
+      if (useQuote) this.pendingQuote = undefined
+      if (auto && kind === 'markdown') this.pendingMention = false
+    } else this.logFailure(result, kind, body.length)
     return result
+  }
+
+  private deliver(kind: 'markdown' | 'text', body: string, rows: KeyboardRow[], quote?: string, mention = false): Promise<SendResult> {
+    if (kind === 'markdown') {
+      const md = mention ? `<qqbot-at-user id="${escapeAttr(this.session.userId!)}" /> ${body}` : body
+      return quote ? this.sender.markdown(this.session, md, rows, quote) : this.sender.markdown(this.session, md, rows)
+    }
+    return quote ? this.sender.text(this.session, body, quote) : this.sender.text(this.session, body)
+  }
+
+  /** 平台明确拒绝了请求（有错误码、不是服务器错误），而且不是额度用完、网址被拒或内容超长（这些和引用 / @ 无关） */
+  private isClientError(failure: SendFailure): boolean {
+    return failure.code !== undefined && (failure.status === undefined || failure.status < 500)
+      && failure.code !== QQ_ERROR.REPLY_LIMIT && failure.code !== QQ_ERROR.URL_NOT_ALLOWED
+      && failure.code !== QQ_ERROR.MARKDOWN_TOO_LONG
+  }
+
+  private noteRejected(kind: 'markdown' | 'text', quoted: boolean, mentioned: boolean, failure: SendFailure) {
+    const keys = [quoted ? `${kind}:quote` : '', mentioned ? 'markdown:mention' : ''].filter(Boolean)
+    const fresh = keys.filter((key) => !this.opts.state.rejected.has(key))
+    for (const key of keys) this.opts.state.rejected.add(key)
+    if (!fresh.length) return
+    const what = [quoted ? '引用' : '', mentioned ? '@提醒' : ''].filter(Boolean).join('和')
+    this.opts.logger.warn(`${kind === 'markdown' ? 'Markdown' : '纯文字'}消息带${what}被平台拒绝（${failure.code} ${failure.message}），去掉后发送成功，之后不再带`)
   }
 
   private finish(result: SendResult | null): boolean {

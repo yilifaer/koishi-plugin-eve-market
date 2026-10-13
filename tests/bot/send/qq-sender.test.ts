@@ -34,6 +34,12 @@ describe('markdownElements', () => {
     expect(el.children[0].attrs.content).toBe(md)
   })
 
+  it('puts the quote element in front when quoting a message', () => {
+    const els = markdownElements('x', [row('a')], 'MSG-1')
+    expect(els.map((e) => e.type)).toEqual(['quote', 'qq:markdown', 'button'])
+    expect(els[0].attrs.id).toBe('MSG-1')
+  })
+
   it('alternates bare rows and button-groups, at most 5 rows of 5', () => {
     const els = markdownElements('x', [row('a', 'b'), row('c'), row('d'), row('e'), row('1', '2', '3', '4', '5', '6'), row('dropped')])
     expect(els.map((e) => e.type)).toEqual(['qq:markdown', 'button', 'button', 'button-group', 'button', 'button-group', ...Array(5).fill('button')])

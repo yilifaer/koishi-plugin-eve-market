@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { Channel, h, User } from 'koishi'
 import type { Context, Session } from 'koishi'
 import { GROUP, GROUP2, MEMBER, MEMBER2, QQ_SELF, dispatch, messageEvent } from '../../harness'
-import { MARKETS_WITH_ALLIANCE, RAVEN, THE_FORGE, addOrders, buttonRows, buttons, card, jitaOrders, startPlugin } from './plugin-env'
+import { MARKETS_WITH_ALLIANCE, RAVEN, THE_FORGE, addOrders, buttonRows, buttons, card, jitaOrders, plainCmdInput, startPlugin } from './plugin-env'
 import type { EnvOptions, PluginEnv } from './plugin-env'
 
 let env: PluginEnv | undefined
@@ -306,7 +306,7 @@ describe('搜索 (§2.5)', () => {
   it('an exact name lists related items with prices; numbers price them; skins are offered', async () => {
     const e = await start()
     const sent = await e.h.group('搜索 乌鸦级')
-    expect(sent[0].markdown).toBe([
+    expect(plainCmdInput(sent[0].markdown!)).toBe([
       '**「乌鸦级」相关物品 · Jita 4-4 · 共 7 个**\n另有涂装 3 个',
       [
         '1. 乌鸦级 · Raven · 出售 258.40M · 收购 249.00M',
@@ -317,12 +317,14 @@ describe('搜索 (§2.5)', () => {
         '点下面的编号，或者 @我 回复编号（5 分钟内有效）',
       ].join('\n'),
     ].join('\n\n'))
+    // 列表项本身可点（输入框里填「@机器人 查价 乌鸦级」）
+    expect(sent[0].markdown).toContain('1. <qqbot-cmd-input text="查价 乌鸦级" show="乌鸦级" reference="false" /> · Raven')
     expect(buttons(sent)).toEqual(['1=>查价 乌鸦级', '2=>查价 乌鸦级海军型', '3=>查价 乌鸦级政府型', '4=>查价 乌鸦级蓝图', '涂装 3 个=>搜索 乌鸦级 涂装'])
     expect(card(await e.h.group('2'))).toContain('**乌鸦级海军型 Raven Navy Issue')
     // 按钮上的个数和点开以后列出的个数一样（不能上市场的涂装也列出，只是不写价格）
     const skins = await e.h.group('搜索 乌鸦级 涂装')
     expect(skins[0].markdown?.split('\n')[0]).toBe('**「乌鸦级」的搜索结果 · Jita 4-4 · 共 3 个**')
-    expect(skins[0].markdown).toContain('乌鸦级YC117年涂装 · Raven Serenity YC117 SKIN\n')
+    expect(plainCmdInput(skins[0].markdown!)).toContain('乌鸦级YC117年涂装 · Raven Serenity YC117 SKIN\n')
   })
 
   it.each([

@@ -1,8 +1,9 @@
 // 样式自检（§2.17）走完整个插件：只对管理员存在；每页最多 4 条测试消息，每条开头写清楚正常是什么样子；
 // 单聊的额度少 1 条时怎么合并或省略。最后用真实的 adapter-qq 看第 2 页真正发出去的请求（图片 + 说明合成一条、
-// 引用回复、Markdown 里的 @ 提醒、3,900 字的长消息）。
+// 引用回复、Markdown 卡片上的引用和 @ 提醒、3,900 字的长消息）。
 
 import { afterEach, describe, expect, it } from 'vitest'
+import { sendState } from '../../../src/bot/send/replier'
 import { SELFTEST_IMAGE, SELFTEST_LONG_CHARS } from '../../../src/bot/commands/selftest'
 import { imageSize } from '../../../src/render'
 import { GROUP2, MEMBER, MEMBER2, REAL_MEMBER, USER } from '../../harness'
@@ -96,6 +97,17 @@ describe('样式自检 1', () => {
     ].join('\n'))
   })
 
+  it('1-1 carries no automatic quote or @; the next card does', async () => {
+    const e = await start()
+    const sent = await e.h.group('样式自检 1', { messageId: 'SELFTEST-1' })
+    expect(sent[0].quote).toBeUndefined()
+    expect(sent[0].mention).toBeUndefined()
+    expect(sent[0].markdown?.startsWith('**样式自检 1-1')).toBe(true)
+    expect(sent[1].quote).toBe('SELFTEST-1')
+    expect(sent[1].mention).toBe(MEMBER)
+    expect(sent[2].quote).toBeUndefined()
+  })
+
   it('in a direct chat (3 messages) the report format goes into the third message', async () => {
     const e = await start()
     const sent = await e.h.direct('样式自检')
@@ -117,8 +129,14 @@ describe('样式自检 2', () => {
     expect(sent[1].elements.map((el) => el.type)).toEqual(['quote', 'text'])
     expect(sent[1].elements[0].attrs.id).toBe('SELFTEST-2')
     expect(sent[1].text).toContain('样式自检 2-2：这条消息应该引用了你刚才发的「样式自检 2」')
-    // 2-3：@ 提醒写在 Markdown 里
-    expect(sent[2].markdown).toContain(`<qqbot-at-user id="${MEMBER}" /> 这一行开头应该是 @你的名字`)
+    // 2-3：第一张 Markdown 卡片带引用和开头的 @ 提醒（由 Replier 加，写明正常的样子）
+    expect(sent[2].markdown).toContain('正常：这张卡片引用了你刚发的那条消息，开头是 @你的名字')
+    expect(sent[2].markdown).toContain('每次都会尝试带引用和 @，即使之前的回复已经不带了')
+    expect(sent[2].quote).toBe('SELFTEST-2')
+    expect(sent[2].mention).toBe(MEMBER)
+    // 引用和提醒都只在这一张卡片上
+    expect(sent[3].quote).toBeUndefined()
+    expect(sent[3].mention).toBeUndefined()
     // 2-4：按发出去的 Markdown 正好 3,900 字，最后一行是结束标记
     expect(sent[3].markdown).toHaveLength(SELFTEST_LONG_CHARS)
     // 用一行数字补齐，句子后面不接一串「。」
@@ -133,10 +151,28 @@ describe('样式自检 2', () => {
     const e = await start()
     const sent = await e.h.direct('样式自检 2')
     expect(sent).toHaveLength(3)
-    expect(sent.map((s) => s.markdown ?? s.text).join('\n')).not.toContain('qqbot-at-user')
+    expect(sent.map((s) => s.mention)).toEqual([undefined, undefined, undefined])
+    // 单聊没有 @ 提醒；2-2 已经带过引用，长消息不再重复引用
+    expect(sent[1].quote).toBeTruthy()
+    expect(sent[2].quote).toBeUndefined()
     expect(sent[2].markdown).toHaveLength(SELFTEST_LONG_CHARS)
     expect(sent[2].markdown).toContain('2-1 正常 / 2-2 不正常（没有引用）/ 2-4 长消息正常、长图看不清')
     expect(sent[2].markdown).not.toContain('2-3')
+  })
+
+  it('2-3 tries quote and @ again even when the platform refused them earlier', async () => {
+    const e = await start()
+    const first = await e.h.group('帮助')
+    expect(first[0].quote).toBeTruthy()
+    // 模拟之前的回复被平台拒绝过引用 / @ 以后记下的状态
+    const state = sendState(e.store)
+    for (const key of ['markdown:quote', 'markdown:mention', 'text:quote']) state.rejected.add(key)
+    const plain = await e.h.group('帮助', { messageId: 'H2' })
+    expect(plain[0].quote).toBeUndefined()
+    const sent = await e.h.group('样式自检 2', { messageId: 'SELFTEST-2' })
+    expect(sent[2].quote).toBe('SELFTEST-2')
+    expect(sent[2].mention).toBe(MEMBER)
+    expect(state.rejected.size).toBe(1)
   })
 
   it('a long image QQ refuses is said in one line, and the other checks still go out', async () => {
@@ -149,7 +185,7 @@ describe('样式自检 2', () => {
       '样式自检 2-1、2-4：长图没有发出去（QQ 没有接受这张 1440×8000 的图片，原因见日志），这两项的图片部分记成不正常',
       '样式自检 2-2：这条消息应该引用了你刚才发的「样式自检 2」（上面有一个小框显示那条消息）；没有引用就不正常',
     ])
-    expect(sent[1].markdown).toContain('<qqbot-at-user')
+    expect(sent[1].mention).toBe(MEMBER)
     expect(sent[2].markdown).toHaveLength(SELFTEST_LONG_CHARS)
     expect(e.logger.at('warn').join('\n')).toContain('40034004')
   })
@@ -179,7 +215,8 @@ describe('样式自检 2 on the real QQ adapter', () => {
     expect(imageSize(upload.data)).toEqual({ width: 1440, height: 8000 })
     expect((sent[1].body as { message_reference?: { message_id: string } }).message_reference).toEqual({ message_id: 'REAL-SELFTEST-2' })
     expect(sent[2].body.msg_type).toBe(2)
-    expect(sent[2].body.markdown?.content).toContain(`<qqbot-at-user id="${REAL_MEMBER}" />`)
+    expect(sent[2].body.markdown?.content.startsWith(`<qqbot-at-user id="${REAL_MEMBER}" /> `)).toBe(true)
+    expect((sent[2].body as { message_reference?: unknown }).message_reference).toEqual({ message_id: 'REAL-SELFTEST-2' })
     expect(sent[3].body.markdown?.content).toHaveLength(SELFTEST_LONG_CHARS)
   })
 })

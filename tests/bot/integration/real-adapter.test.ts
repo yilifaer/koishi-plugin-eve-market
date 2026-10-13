@@ -34,7 +34,10 @@ describe('the whole plugin on the real QQ adapter', () => {
     expect(msg.body.msg_id).toBe('REAL-PRICE-1')
     expect(msg.body.msg_seq).toBe(1)
     expect(msg.body.content).toBeUndefined()
-    expect(msg.body.markdown?.content).toMatch(/^\*\*乌鸦级 Raven · 战列舰\*\*\n\n\*\*Jita 4-4\*\*\n\n- 出售 `258,400,000 ISK`（258\.40M）/)
+    // 群里第一张 Markdown 卡片：引用收到的消息，开头 @ 提问的人
+    expect((msg.body as { message_reference?: unknown }).message_reference).toEqual({ message_id: 'REAL-PRICE-1' })
+    expect(msg.body.markdown?.content).toMatch(new RegExp(`^<qqbot-at-user id="${REAL_MEMBER}" /> \\*\\*乌鸦级`))
+    expect(msg.body.markdown?.content).toMatch(/\*\*乌鸦级 Raven · 战列舰\*\*\n\n\*\*Jita 4-4\*\*\n\n- 出售 `258,400,000 ISK`（258\.40M）/)
     const row = msg.body.keyboard!.content.rows[0].buttons
     expect(row.map((b) => b.render_data.label)).toEqual(['月度走势', '季度走势', '相关物品', '制造成本'])
     expect(row[0].action).toMatchObject({ type: 2, permission: { type: 2 }, data: '走势 乌鸦级 月' })
@@ -76,11 +79,12 @@ describe('the whole plugin on the real QQ adapter', () => {
 
   it('when Markdown is rejected the same card goes out once as plain text', async () => {
     const { qq } = await start()
-    qq.api.fault(/^\/v2\/groups\/[^/]+\/messages$/, { status: 400, code: 40054007, message: 'markdown 长度超限' }, { when: (req) => req.json?.msg_type === 2 })
+    qq.api.fault(/^\/v2\/groups\/[^/]+\/messages$/, { status: 400, code: 40054007, message: 'markdown 长度超限' }, { times: 1, when: (req) => req.json?.msg_type === 2 })
     const sent = await qq.group('查价 乌鸦级')
     expect(sent).toHaveLength(1)
     expect(sent[0].body.msg_type).toBe(0)
     expect(sent[0].body.content).toMatch(/^乌鸦级 Raven · 战列舰\n【Jita 4-4】\n出售 258,400,000 ISK \(258\.40M\)/)
+    // 超长和引用 / @ 无关，不重发，直接改发纯文字
     expect(qq.api.sends.map((r) => r.json?.msg_type)).toEqual([2, 0])
   })
 })

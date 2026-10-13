@@ -178,12 +178,12 @@ export const TEXT_ACTION_LINES = 2
 
 // ------------------------------------------------------------------ 要等样式自检才能定的开关
 
-/** 列表项写成 <qqbot-cmd-input>（确认群里点击会自动带 @机器人 以后再开） */
-export const CMD_INPUT_IN_LISTS = false
-/** 回复时引用用户的消息（message_reference） */
-export const QUOTE_REPLY = false
-/** 用 <qqbot-at-user> 提醒提问的人 */
-export const MENTION_USER = false
+/** 列表项写成 <qqbot-cmd-input>；样式自检已确认 */
+export const CMD_INPUT_IN_LISTS = true
+/** 每次回复的第一条文字 / Markdown 消息引用用户的消息（message_reference）；样式自检已确认 */
+export const QUOTE_REPLY = true
+/** QQ 群里第一张 Markdown 卡片开头用 <qqbot-at-user> 提醒提问的人；样式自检已确认 */
+export const MENTION_USER = true
 /** 势力图下面附一行说明文字（和图片合成一条）；样式自检 2-1 已确认 QQ 会显示 */
 export const MAP_CAPTION = true
 

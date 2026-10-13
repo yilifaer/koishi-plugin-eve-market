@@ -48,8 +48,12 @@ export function testClock(start = TEST_START): Clock {
 
 // ------------------------------------------------------------------ 读发出去的消息
 
-/** 发出去的几条消息（Markdown 或纯文字），用 ---- 隔开 */
-export const card = (sent: Sent[]) => sent.map((s) => s.markdown ?? s.text).join('\n----\n')
+/** 列表项里的 <qqbot-cmd-input …show="名字" /> 还原成名字（断言只看文字） */
+export const plainCmdInput = (md: string): string => md.replace(/<qqbot-cmd-input [^>]*?show="([^"]*)"[^>]*\/>/g, (_, show: string) =>
+  show.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&'))
+
+/** 发出去的几条消息（Markdown 或纯文字），用 ---- 隔开；列表项里的可点文字还原成名字 */
+export const card = (sent: Sent[]) => sent.map((s) => plainCmdInput(s.markdown ?? s.text)).join('\n----\n')
 /** 按钮按行：[['标签=>命令', …], …] */
 export const buttonRows = (sent: Sent[]) => sent.flatMap((s) => s.rows.map((r) => r.map((b) => `${b.label}=>${b.text}`)))
 /** 所有按钮排成一列 */

@@ -29,7 +29,8 @@ export type SendResult = { ok: true; sent: number } | SendFailure
 export interface Sender {
   /** 能发 Markdown 和按钮（QQ）；沙盒只发纯文字 */
   readonly rich: boolean
-  markdown(session: Session, md: string, rows: KeyboardRow[]): Promise<SendResult>
+  /** quote：引用这条消息（message_reference） */
+  markdown(session: Session, md: string, rows: KeyboardRow[], quote?: string): Promise<SendResult>
   /** quote：引用这条消息（message_reference） */
   text(session: Session, text: string, quote?: string): Promise<SendResult>
   image(session: Session, data: Buffer, mime: ImageMime, caption?: string): Promise<SendResult>
@@ -57,8 +58,9 @@ function buttonElement(button: KeyboardButton): h {
  * 所以交替排：第 1 行裸按钮，第 2 行包一层 button-group，第 3 行裸按钮（正好填进 group 留下的空行），依此类推，
  * 键盘里不会出现空行
  */
-export function markdownElements(md: string, rows: KeyboardRow[]): h[] {
-  const elements: h[] = [h('qq:markdown', {}, md)]
+export function markdownElements(md: string, rows: KeyboardRow[], quote?: string): h[] {
+  // 引用一条消息时前面加 quote 元素（适配器转成 message_reference）
+  const elements: h[] = quote ? [h.quote(quote), h('qq:markdown', {}, md)] : [h('qq:markdown', {}, md)]
   rows.slice(0, MAX_KEYBOARD_ROWS).forEach((row, i) => {
     const buttons = row.slice(0, BUTTONS_PER_ROW).map(buttonElement)
     if (!buttons.length) return
@@ -125,8 +127,8 @@ async function deliver(session: Session, elements: h[], sentOnError: (error: unk
 export class QQSender implements Sender {
   readonly rich = true
 
-  markdown(session: Session, md: string, rows: KeyboardRow[]): Promise<SendResult> {
-    return deliver(session, markdownElements(md, rows))
+  markdown(session: Session, md: string, rows: KeyboardRow[], quote?: string): Promise<SendResult> {
+    return deliver(session, markdownElements(md, rows, quote))
   }
 
   text(session: Session, text: string, quote?: string): Promise<SendResult> {
@@ -145,8 +147,8 @@ export class QQSender implements Sender {
 export class SessionSender implements Sender {
   readonly rich = false
 
-  markdown(session: Session, md: string): Promise<SendResult> {
-    return this.text(session, md)
+  markdown(session: Session, md: string, _rows: KeyboardRow[], quote?: string): Promise<SendResult> {
+    return this.text(session, md, quote)
   }
 
   async text(session: Session, text: string, quote?: string): Promise<SendResult> {

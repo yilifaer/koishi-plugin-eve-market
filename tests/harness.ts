@@ -48,8 +48,12 @@ export interface Sent {
   /** 回复的是哪条消息（经 session.send 或 bot.sendMessage(…, { session }) 发的才有） */
   session?: Session
   elements: h[]
-  /** qq:markdown 元素里的原始 Markdown；不是 Markdown 消息时 undefined */
+  /** qq:markdown 元素里的原始 Markdown（开头的 @ 提醒已经去掉，见 mention）；不是 Markdown 消息时 undefined */
   markdown?: string
+  /** 引用的消息 ID（开头的 quote 元素） */
+  quote?: string
+  /** 开头 <qqbot-at-user> 提醒的 ID */
+  mention?: string
   /** 纯文字元素（markdown 以外的） */
   text: string
   /** 和适配器一样排行：连续的裸按钮每 5 个一行，每个 button-group 一行 */
@@ -85,14 +89,22 @@ function rowsOf(elements: h[]): SentButton[][] {
   return rows.filter((row) => row.length)
 }
 
+/** 回复第一张 Markdown 卡片开头的 @ 提醒 */
+const MENTION_PREFIX = /^<qqbot-at-user id="([^"]*)" \/> /
+
 export function describeSent(platform: string, channelId: string, elements: h[], session?: Session): Sent {
   const markdown = elements.find((el) => el.type === 'qq:markdown')
+  const quote = elements.find((el) => el.type === 'quote')
+  const raw = markdown ? textOf(markdown.children) : undefined
+  const at = raw === undefined ? null : MENTION_PREFIX.exec(raw)
   return {
     platform,
     channelId,
     session,
     elements,
-    markdown: markdown ? textOf(markdown.children) : undefined,
+    markdown: at ? raw!.slice(at[0].length) : raw,
+    quote: quote ? String(quote.attrs.id) : undefined,
+    mention: at?.[1],
     text: textOf(elements.filter((el) => el.type === 'text')),
     rows: rowsOf(elements),
     images: elements.filter((el) => el.type === 'img' || el.type === 'image').map((el) => ({ src: String(el.attrs.src ?? el.attrs.url ?? '') })),

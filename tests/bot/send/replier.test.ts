@@ -18,6 +18,8 @@ interface Call {
   quote?: string
 }
 
+const MENTION = '<qqbot-at-user id="U1" /> '
+
 class FakeSender implements Sender {
   calls: Call[] = []
   results: SendResult[] = []
@@ -28,8 +30,8 @@ class FakeSender implements Sender {
     this.results.push(...results.map((r) => ({ sent: 0, message: 'error', ...r })))
   }
 
-  async markdown(_: Session, content: string, rows: KeyboardRow[]) {
-    this.calls.push({ kind: 'markdown', content, rows })
+  async markdown(_: Session, content: string, rows: KeyboardRow[], quote?: string) {
+    this.calls.push({ kind: 'markdown', content, rows, ...quote ? { quote } : {} })
     return this.next()
   }
 
@@ -64,9 +66,9 @@ interface Setup {
   clock: { now: number }
 }
 
-function setup(options: Partial<ReplierOptions> & { ageSec?: number; rich?: boolean; state?: SendState; clock?: { now: number } } = {}): Setup {
+function setup(options: Partial<ReplierOptions> & { ageSec?: number; rich?: boolean; state?: SendState; clock?: { now: number }; session?: Record<string, unknown> } = {}): Setup {
   const clock = options.clock ?? { now: NOW }
-  const session = { platform: 'qq', channelId: 'G1', timestamp: clock.now - (options.ageSec ?? 1) * 1000 } as unknown as Session
+  const session = { platform: 'qq', channelId: 'G1', timestamp: clock.now - (options.ageSec ?? 1) * 1000, ...options.session } as unknown as Session
   const sender = new FakeSender(options.rich ?? true)
   const state = options.state ?? createSendState()
   const logs = new Logs()
@@ -107,6 +109,144 @@ describe('recoveryFor', () => {
     expect(recoveryFor({ ok: false, sent: 0, status: 500, code: 22009, message: 'busy' }, md)).toBe('stop')
     expect(recoveryFor({ ok: false, sent: 0, message: 'fetch failed' }, md)).toBe('stop')
     expect(recoveryFor(rejected, { markdown: false, buttons: false })).toBe('stop')
+  })
+})
+
+/** 有收到的消息 ID 和提问的人：第一条消息引用，群里第一张 Markdown 卡片 @ 提问的人 */
+const asked = { messageId: 'M1', userId: 'U1', isDirect: false }
+const clientError = { ok: false as const, sent: 0, status: 400, code: 40054099, message: '参数不对' }
+
+describe('Replier quote and mention', () => {
+  it('quotes only the first text or markdown message, and mentions only on the first markdown card', async () => {
+    const { replier, sender } = setup({ session: asked })
+    await replier.card(priceCard())
+    await replier.card(priceCard())
+    await replier.text('后面')
+    const md = toQQMarkdown(priceCard(), renderOptions()).md
+    expect(sender.calls).toEqual([
+      { kind: 'markdown', content: MENTION + md, rows: expect.any(Array), quote: 'M1' },
+      { kind: 'markdown', content: md, rows: expect.any(Array) },
+      { kind: 'text', content: '后面' },
+    ])
+  })
+
+  it('once a message carried a quote (explicit or automatic), later messages get none', async () => {
+    const { replier, sender } = setup({ session: asked, mode: 'text' })
+    await replier.text('甲', { quote: 'M1' })
+    await replier.text('乙')
+    await replier.card(priceCard())
+    expect(sender.calls.map((c) => c.quote)).toEqual(['M1', undefined, undefined])
+  })
+
+  it('attach none: that card carries nothing and leaves quote and @ for the next one', async () => {
+    const { replier, sender } = setup({ session: asked })
+    await replier.card(priceCard(), { attach: 'none' })
+    await replier.card(priceCard())
+    await replier.card(priceCard())
+    expect(sender.calls.map((c) => [c.quote, c.content.startsWith(MENTION)])).toEqual([[undefined, false], ['M1', true], [undefined, false]])
+  })
+
+  it('attach always: quote and @ ignore the platform-refused record, and a success clears it', async () => {
+    const { replier, sender, state } = setup({ session: asked })
+    for (const key of ['markdown:quote', 'markdown:mention', 'text:quote']) state.rejected.add(key)
+    await replier.card(priceCard(), { attach: 'always' })
+    const md = toQQMarkdown(priceCard(), renderOptions()).md
+    expect(sender.calls).toEqual([{ kind: 'markdown', content: MENTION + md, rows: expect.any(Array), quote: 'M1' }])
+    expect([...state.rejected]).toEqual(['text:quote'])
+  })
+
+  it('attach always after an explicit quote still quotes again, and a refusal keeps the record', async () => {
+    const { replier, sender, state } = setup({ session: asked })
+    await replier.text('引用', { quote: 'M1' })
+    sender.failNext(clientError)
+    await replier.card(priceCard(), { attach: 'always' })
+    expect(sender.calls.map((c) => c.quote)).toEqual(['M1', 'M1', undefined])
+    expect([...state.rejected].sort()).toEqual(['markdown:mention', 'markdown:quote'])
+  })
+
+  it('never quotes an image; the first text after it carries the quote', async () => {
+    const { replier, sender } = setup({ session: asked })
+    await replier.image(Buffer.from([1]), 'image/png', '图')
+    await replier.text('说明')
+    expect(sender.calls.map((c) => c.quote)).toEqual([undefined, 'M1'])
+  })
+
+  it('the slow hint carries the quote when it goes first, and the card then does not', async () => {
+    const { replier, sender } = setup({ session: asked })
+    await replier.hint('⏳ 慢')
+    await replier.card(priceCard())
+    expect(sender.calls.map((c) => [c.kind, c.quote, c.content.startsWith(MENTION)])).toEqual([['text', 'M1', false], ['markdown', undefined, true]])
+  })
+
+  it('mentions only in groups on QQ: not in a direct chat, not on the sandbox, not as plain text', async () => {
+    const direct = setup({ session: { ...asked, isDirect: true } })
+    await direct.replier.card(priceCard())
+    expect(direct.sender.calls[0].content.startsWith(MENTION)).toBe(false)
+    expect(direct.sender.calls[0].quote).toBe('M1')
+    const sandbox = setup({ rich: false, session: asked })
+    await sandbox.replier.card(priceCard())
+    expect(sandbox.sender.calls).toEqual([{ kind: 'text', content: toText(priceCard(), renderOptions()), quote: 'M1' }])
+    const text = setup({ mode: 'text', session: asked })
+    await text.replier.card(priceCard())
+    await text.replier.card(priceCard())
+    expect(text.sender.calls.map((c) => c.quote)).toEqual(['M1', undefined])
+    expect(text.sender.calls.some((c) => c.content.includes('qqbot-at-user'))).toBe(false)
+  })
+
+  it('records the text without the mention for self-echo detection', async () => {
+    const { replier, state } = setup({ session: asked })
+    await replier.card(priceCard())
+    expect(state.echo.seen('qq:G1', toQQMarkdown(priceCard(), renderOptions()).md, NOW + 1000)).toBe(true)
+  })
+
+  it('resends once without quote and mention when the platform refuses them, and remembers it', async () => {
+    const { replier, sender, state, logs } = setup({ session: asked })
+    sender.failNext(clientError)
+    expect(await replier.card(priceCard())).toBe(true)
+    const md = toQQMarkdown(priceCard(), renderOptions()).md
+    expect(sender.calls.map((c) => [c.content, c.quote])).toEqual([[MENTION + md, 'M1'], [md, undefined]])
+    expect([...state.rejected].sort()).toEqual(['markdown:mention', 'markdown:quote'])
+    expect(state.breaker.status(NOW).recentFailures).toBe(0)
+    expect(replier.remaining()).toBe(3)
+    expect(logs.lines).toHaveLength(1)
+    // 之后的回复不再带
+    const next = setup({ state, session: asked })
+    await next.replier.card(priceCard())
+    expect(next.sender.calls).toEqual([{ kind: 'markdown', content: md, rows: expect.any(Array) }])
+    // 纯文字消息没有被拒绝过，照样引用
+    const plain = setup({ state, session: asked })
+    await plain.replier.text('x')
+    expect(plain.sender.calls[0].quote).toBe('M1')
+  })
+
+  it('remembers a refused quote on plain text per kind', async () => {
+    const { replier, sender, state } = setup({ session: asked, mode: 'text' })
+    sender.failNext(clientError)
+    expect(await replier.text('你好')).toBe(true)
+    expect(sender.calls.map((c) => c.quote)).toEqual(['M1', undefined])
+    expect([...state.rejected]).toEqual(['text:quote'])
+  })
+
+  it.each([
+    ['reply limit', { ...clientError, code: QQ_ERROR.REPLY_LIMIT }],
+    ['markdown too long', { ...clientError, code: QQ_ERROR.MARKDOWN_TOO_LONG }],
+    ['server error', { ...clientError, status: 500 }],
+    ['network error', { ok: false as const, sent: 0, message: 'fetch failed' }],
+  ])('does not retry without them on %s', async (_, failure) => {
+    const { replier, sender, state } = setup({ session: asked, mode: 'text' })
+    sender.failNext(failure)
+    expect(await replier.text('你好')).toBe(false)
+    expect(sender.calls).toHaveLength(1)
+    expect(state.rejected.size).toBe(0)
+  })
+
+  it('a card that fails even without them still takes the normal degrade chain, counted once for the breaker', async () => {
+    const { replier, sender, state } = setup({ session: asked })
+    sender.failNext(rejected, rejected)
+    expect(await replier.card(priceCard())).toBe(true)
+    expect(sender.calls.map((c) => [c.kind, c.quote])).toEqual([['markdown', 'M1'], ['markdown', undefined], ['text', 'M1']])
+    expect(state.breaker.status(NOW).recentFailures).toBe(1)
+    expect(state.rejected.size).toBe(0)
   })
 })
 

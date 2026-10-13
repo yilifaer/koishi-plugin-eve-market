@@ -11,7 +11,7 @@ import { toText } from '../../../src/bot/view/text'
 import { QQ_ERROR } from '../../../src/constants'
 import type { QQMessageBody } from '../../fakes/fake-qq-openapi'
 import { candidateCard, longCard, priceCard, renderOptions } from '../view/cards'
-import { GROUP_OPENID, USER_OPENID, startQQ } from './qq-harness'
+import { GROUP_OPENID, MEMBER_OPENID, USER_OPENID, startQQ } from './qq-harness'
 import type { QQHarness } from './qq-harness'
 
 const silent = { debug() {}, info() {}, warn() {}, error() {} }
@@ -62,7 +62,9 @@ describe('QQ adapter (high fidelity)', () => {
     expect(body.content).toBeUndefined()
     expect(body.msg_id).toBe(session.messageId)
     expect(body.msg_seq).toBe(1)
-    expect(body.markdown!.content).toBe(toQQMarkdown(card, renderOptions()).md)
+    // 群里的第一张 Markdown 卡片：引用用户的消息，开头 @ 提问的人
+    expect(body.markdown!.content).toBe(`<qqbot-at-user id="${MEMBER_OPENID}" /> ${toQQMarkdown(card, renderOptions()).md}`)
+    expect((body as { message_reference?: unknown }).message_reference).toEqual({ message_id: session.messageId })
     expect(rowsOf(body)).toEqual([['1', '2', '3', '4', '5'], ['6', '7', '8'], ['月', '季'], ['年'], ['周']])
     const buttons = body.keyboard!.content.rows.flatMap((r) => r.buttons)
     for (const button of buttons) {
@@ -132,18 +134,20 @@ describe('QQ adapter (high fidelity)', () => {
   })
 
   it('falls back to plain text when the platform rejects the markdown', async () => {
-    qq.api.fault(/\/messages$/, { status: 400, code: 40054099, message: 'markdown 格式不对' }, { when: (req) => req.json?.msg_type === 2 })
+    // 去掉引用和提醒重发一次也被拒绝：Markdown 本身有问题，才降级
+    qq.api.fault(/\/messages$/, { status: 400, code: 40054099, message: 'markdown 格式不对' }, { times: 2, when: (req) => req.json?.msg_type === 2 })
     const session = await qq.group('查价 乌鸦级')
     const state = createSendState()
     expect(await replierFor(session, { state }).card(priceCard())).toBe(true)
-    expect(qq.api.sends.map((r) => [r.json?.msg_type, r.json?.msg_seq])).toEqual([[2, 1], [0, 2]])
+    expect(qq.api.sends.map((r) => [r.json?.msg_type, r.json?.msg_seq])).toEqual([[2, 1], [2, 2], [0, 3]])
+    expect(state.rejected.size).toBe(0)
     expect(qq.api.messages).toHaveLength(1)
     expect(qq.api.messages[0].body.content).toBe(toText(priceCard(), renderOptions()))
     expect(state.breaker.status(Date.now()).recentFailures).toBe(1)
   })
 
   it('drops the keyboard when the platform rejects the buttons', async () => {
-    qq.api.fault(/\/messages$/, { status: 400, code: 40054098, message: 'keyboard 不合法' }, { when: (req) => !!req.json?.keyboard })
+    qq.api.fault(/\/messages$/, { status: 400, code: 40054098, message: 'keyboard 不合法' }, { times: 2, when: (req) => !!req.json?.keyboard })
     const session = await qq.group('查价 乌鸦级')
     expect(await replierFor(session).card(priceCard())).toBe(true)
     const [message] = qq.api.messages
@@ -253,9 +257,10 @@ describe('sandbox path', () => {
     expect(await replier.text('第三条')).toBe(true)
     expect(await replier.text('超出预算')).toBe(false)
     expect(bot.sent).toHaveLength(3)
-    expect(bot.sent[0]).toHaveLength(1)
-    expect(bot.sent[0][0].type).toBe('text')
-    expect(bot.sent[0][0].attrs.content).toBe(toText(priceCard(), renderOptions()))
+    // 沙盒上 Markdown 退回纯文字，没有 @ 提醒；第一条引用收到的消息
+    expect(bot.sent[0].map((e) => e.type)).toEqual(['quote', 'text'])
+    expect(bot.sent[0][0].attrs.id).toBe('m1')
+    expect(bot.sent[0][1].attrs.content).toBe(toText(priceCard(), renderOptions()))
     expect(bot.sent[1].map((e) => e.type)).toEqual(['img', 'text'])
     expect(bot.sent[1][0].attrs.src).toBe(`data:image/png;base64,${Buffer.from([1, 2, 3]).toString('base64')}`)
     bot.ctx.scope.dispose()

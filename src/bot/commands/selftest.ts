@@ -1,9 +1,9 @@
 // 样式自检（§2.17，管理员，上线前在测试群里用一次）：「样式自检 1」「样式自检 2」，每页最多 4 条测试消息。
 // 每条测试消息开头都写清楚「正常」是什么样子；所有者照着回报，开发者据此改常量、发补丁版本。
 // 第 1 页：Markdown 格式（行内代码、粗体、列表、引用、分割线、单个换行、零宽空格空行）、4 行按钮、<qqbot-cmd-input> 两种写法、回报格式。
-// 第 2 页：长图下面接一行说明（合成一条）、引用回复、<qqbot-at-user> 提醒、3,900 字的长消息（最后写回报格式）。
+// 第 2 页：长图下面接一行说明（合成一条）、引用回复、Markdown 卡片上的引用和 <qqbot-at-user> 提醒、3,900 字的长消息（最后写回报格式）。
 // 长图发不出去正是 2-4 要查的事：在引用回复那条里说一句，后面几项照样发。
-// 单聊的额度少 1 条：第 1 页的回报格式并进第 3 条，第 2 页不发 @ 提醒（单聊里没有意义），回报格式里也不写 2-3。
+// 单聊的额度少 1 条：第 1 页的回报格式并进第 3 条，第 2 页不发 2-3 的卡片（单聊里没有 @ 提醒），回报格式里也不写 2-3。
 // 只对管理员存在（在哪个群都行：测试群一般不是授权群，这里也不显示任何联盟信息）。
 
 import type { Session } from 'koishi'
@@ -45,8 +45,10 @@ const name = (inv: Pick<Invocation, 'commands'>, id: CommandId) => inv.commands.
 
 async function pageOne(inv: Invocation): Promise<void> {
   const short = inv.reply.remaining() < 4
-  for (const card of [markdownCard(), buttonsCard(inv), cmdInputCard(inv, short)]) {
-    if (!(await inv.reply.card(card))) return
+  const first = markdownCard()
+  for (const card of [first, buttonsCard(inv), cmdInputCard(inv, short)]) {
+    // 1-1 是看格式的，不带自动的引用 / @（留给后面的消息）
+    if (!(await inv.reply.card(card, card === first ? { attach: 'none' } : {}))) return
   }
   if (!short) await inv.reply.text(reportText(inv).join('\n'))
 }
@@ -147,7 +149,7 @@ async function pageTwo(inv: Invocation): Promise<void> {
   const quote = shown ? quoteText(inv) : `${imageRefusedText()}\n${quoteText(inv)}`
   if (!(await inv.reply.text(quote, inv.session.messageId ? { quote: inv.session.messageId } : {}))) return
   const mention = !inv.session.isDirect && inv.reply.remaining() > 1
-  if (mention && !(await inv.reply.card(mentionCard(inv.session.userId ?? '')))) return
+  if (mention && !(await inv.reply.card(mentionCard(), { attach: 'always' }))) return
   await inv.reply.card(longCard(inv, mention), { maxChars: SELFTEST_LONG_CHARS })
 }
 
@@ -167,14 +169,15 @@ export function quoteText(inv: Pick<Invocation, 'commands'>): string {
   return `样式自检 2-2：这条消息应该引用了你刚才发的「${name(inv, 'selfTest')} 2」（上面有一个小框显示那条消息）；没有引用就不正常`
 }
 
-/** 2-3：<qqbot-at-user> 提醒 */
-export function mentionCard(userId: string): Card {
-  const card = emptyCard('**样式自检 2-3：@ 提醒**')
+/** 2-3：Markdown 卡片上的引用和 @ 提醒（发送时要求一定带，不看之前是否被平台拒绝过；这里只写正常的样子） */
+export function mentionCard(): Card {
+  const card = emptyCard('**样式自检 2-3：卡片上的引用和 @ 提醒**')
   card.sections.push({
     style: 'plain',
     lines: [
-      { text: `<qqbot-at-user id="${escapeAttr(userId)}" /> 这一行开头应该是 @你的名字，你也应该收到一条 @ 提醒` },
-      { text: '看到 < 符号、或者没有收到提醒，就不正常' },
+      { text: '正常：这张卡片引用了你刚发的那条消息，开头是 @你的名字，你也收到一条 @ 提醒' },
+      { text: '看到 < 符号、没有引用、或者没有收到提醒，就不正常' },
+      { text: '这张卡片每次都会尝试带引用和 @，即使之前的回复已经不带了；所以它不带，说明平台现在不接受' },
     ],
   })
   return card
