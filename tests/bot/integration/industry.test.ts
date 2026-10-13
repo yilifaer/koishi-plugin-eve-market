@@ -298,6 +298,15 @@ describe('制造: advanced steps', () => {
     expect(card(await e.h.group('乌鸦级 你好'))).toBe('没看懂「乌鸦级 你好」。你是想查价吗？')
   })
 
+  it('拆到原料, 明细 and layer words without the command name suggest 制造 too', async () => {
+    const e = await start()
+    for (const text of ['乌鸦级 XX-1 拆到原料', '乌鸦级 明细', '乌鸦级 组件：买', '乌鸦级 低级反应=炼金', '乌鸦级 其他:造']) {
+      const sent = await e.h.group(text)
+      expect(card(sent)).toBe(`没看懂「${text}」。是不是想用「制造 ${text}」？`)
+      expect(buttons(sent).map((b) => b.split('=>')[1])).toEqual([`制造 ${text}`, '帮助'])
+    }
+  })
+
   it('a location with one structure skips the structure step; one visible location skips the location step', async () => {
     const e = await start({ industry: { locations: [LOCATIONS[1]], structures: [STRUCTURES[3]] } })
     const step = await e.h.group('制造 乌鸦级 高级', { channelId: GROUP2 })

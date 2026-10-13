@@ -29,8 +29,8 @@ async function isExactItem(commands: CommandContext, session: Session, content: 
   return res.kind === 'set' || (res.kind === 'unique' && EXACT_TIERS.has(res.tier))
 }
 
-/** 带着制造、反应才有的参数词（高级、材料、ME7、10流程、建筑:…）*/
-const INDUSTRY_WORDS = /高级|材料|\b[mt]e\s*[=:]?\s*\d|\d+\s*流程|(?:建筑|改装|税)[:：]/i
+/** 带着制造、反应才有的参数词（高级、材料、拆到原料、明细、反应:买、ME7、10流程、建筑:…）*/
+const INDUSTRY_WORDS = /高级|材料|拆到原料|明细|(?:低级反应|高级反应|反应|组件|其他)[:：=]|\b[mt]e\s*[=:]?\s*\d|\d+\s*流程|(?:建筑|改装|税)[:：]/i
 
 /** 缺了命令名的制造、反应：认得出物品时给出该用的命令（反应产物用「反应」） */
 function missingIndustry(inv: Invocation, content: string): { id: 'manufacture' | 'reaction'; command: string } | null {
