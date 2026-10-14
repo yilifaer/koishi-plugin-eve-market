@@ -71,6 +71,7 @@ function universeLines(env: HelpEnv): Line[] {
   const simple = (['incursion', 'influenceMap', 'coalitionMap', 'serverStatus'] as const).filter((id) => has(env, id))
   const lines: Line[] = simple.length ? [{ text: simple.map((id) => nameOf(env, id)).join(' · ') }] : []
   if (has(env, 'br')) lines.push({ text: `${nameOf(env, 'br')} + BR 链接（直接 @我 发链接也行）` })
+  if (has(env, 'kill')) lines.push({ text: `${nameOf(env, 'kill')} + zKill 击杀链接或编号：击杀卡片，可以接着生成战报（直接 @我 发击杀链接也行）` })
   if (has(env, 'shot')) lines.push({ text: `${nameOf(env, 'shot')} + 网址：${siteNamesOf(env)}` })
   return lines
 }
@@ -313,6 +314,7 @@ function brTopic(env: HelpEnv): Card {
     lines: [
       { text: `${name} 加上战报链接（BR 工具、Warbeacon）：把战报页面截图发出来` },
       { text: '也可以直接 @我 发战报链接，不用写命令' },
+      { text: `${name} 击杀 ${escapeMarkdown('<编号>')}：按击杀的星系和时间截战报（后面加 warbeacon 用 Warbeacon，不写用 BR 工具）` },
       { text: '一般要 10–30 秒；长战报分成两张图；同一个链接 10 分钟内再发很快' },
     ],
   })

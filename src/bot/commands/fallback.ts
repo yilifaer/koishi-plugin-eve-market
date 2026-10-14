@@ -1,11 +1,12 @@
 // 后置中间件（§2.18、§3.7.5）：命令没匹配到、消息 @ 了机器人时才轮到。
-// 带截图名单里网站的链接（该网站「自动截图」开着）→ 改成「战报 <链接>」（战报类网站）或「截图 <链接>」再走一遍命令；只 @ 没内容 → 简短帮助；内容精确命中一个物品 → 改成「查价 …」再走一遍命令；短的 → 「没看懂…你是想查价吗？」；
+// 带截图名单里网站的链接（该网站「自动截图」开着）→ 改成「战报 <链接>」（战报类网站）或「截图 <链接>」再走一遍命令；其次是 zKill / 欧服击杀链接（控制台「截图」里的开关开着）→ 「击杀 <编号>」；只 @ 没内容 → 简短帮助；内容精确命中一个物品 → 改成「查价 …」再走一遍命令；短的 → 「没看懂…你是想查价吗？」；
 // 长的（闲聊）→ 一句「发「帮助」看我能做什么」。回复了就不再调用 next()（否则 Koishi 的「您要找的是不是」还会再发一条）。
 // 没有待办时的「取消」、只有图片没有文字的消息不回复，交给后面的处理者；别人发的管理命令（对他来说不存在）也不回复。
 
 import { h } from 'koishi'
 import type { Context, Next, Session } from 'koishi'
 import { BARE_ITEM_QUERY, CANCEL_WORD, FALLBACK_SHORT_CHARS } from '../../constants'
+import { findKillLink } from '../../core/killmail'
 import { isFailure } from '../../core/types'
 import { buildAccess, isAddressed } from '../scope'
 import type { Action } from '../view/card'
@@ -13,6 +14,7 @@ import { hasUrl, safeEcho } from '../view/escape'
 import { emptyCard, invoke, sendCard } from './context'
 import type { CommandContext, Invocation } from './context'
 import { shortCard } from './help'
+import { killCommandArg } from './kill'
 import { sitesOf } from './shot-send'
 import { SAY } from './text'
 
@@ -99,6 +101,13 @@ async function runFallback(commands: CommandContext, session: Session, next: Nex
       await session.execute({ command, args: [site.url], options: {} })
       return
     }
+  }
+  // 击杀链接：排在名单里网站的链接后面、物品名前面；每条消息只处理一次
+  const kill = commands.settings.screenshot.killAuto ? findKillLink(content) : null
+  const killCommand = kill ? commands.registry.get('kill') : undefined
+  if (kill && killCommand) {
+    await session.execute({ command: killCommand, args: [killCommandArg(commands, kill)], options: {} })
+    return
   }
   const price = commands.registry.get('price')
   if (BARE_ITEM_QUERY && price && await isExactItem(commands, session, content)) {

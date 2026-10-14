@@ -130,6 +130,7 @@ export interface Config {
   sso: { clientId: string; clientSecret: string; callbackUrl: string; adminKey: string }
   render: { influenceMapUrl: string; coalitionMapUrl: string; brAuto: boolean }
   screenshot: {
+    killAuto: boolean
     br: ShotSiteConfig
     warbeacon: ShotSiteConfig
     janice: ShotSiteConfig
@@ -423,6 +424,8 @@ export const Config: Schema<Config> = Schema.intersect([
 
   Schema.object({
     screenshot: Schema.object({
+      killAuto: bool(true)
+        .description('@机器人 的消息里带 zKill 击杀链接时，自动回复击杀卡片（战报网站用下面的 BR 工具和 Warbeacon 设置）'),
       br: shotSite(2).description('BR 工具战报（br.evetools.org）'),
       warbeacon: shotSite(2).description('Warbeacon 战报（warbeacon.net）'),
       janice: shotSite(2).description('Janice 估价结果（janice.e-351.com/a/…）'),

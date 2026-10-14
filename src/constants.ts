@@ -44,7 +44,7 @@ export const REPLY_BUDGET_DIRECT = 3
 export type CommandId =
   | 'price' | 'batch' | 'trend' | 'search' | 'incursion' | 'influenceMap' | 'coalitionMap' | 'br' | 'shot' | 'shotProbe'
   | 'serverStatus' | 'translate' | 'help' | 'groupId' | 'marketStatus' | 'marketAuth' | 'selfTest'
-  | 'manufacture' | 'manufactureCompare' | 'reaction'
+  | 'manufacture' | 'manufactureCompare' | 'reaction' | 'kill'
 
 /** 命令的默认名字（注册时用；按钮、提示里的名字在渲染时从已注册的 Command 取） */
 export const COMMAND_NAMES: Record<CommandId, string> = {
@@ -68,6 +68,7 @@ export const COMMAND_NAMES: Record<CommandId, string> = {
   manufacture: '制造',
   manufactureCompare: '制造比价',
   reaction: '反应',
+  kill: '击杀',
 }
 
 /** 「翻译」的别名 */
@@ -100,6 +101,8 @@ export const COMMAND_BUDGET: Record<CommandId, { normal: number; max: number }> 
   manufacture: { normal: 1, max: 2 },
   manufactureCompare: { normal: 1, max: 2 },
   reaction: { normal: 1, max: 2 },
+  // 卡片 1 条，慢提示再占 1 条
+  kill: { normal: 1, max: 2 },
 }
 /** 「制造 … 材料」：卡片 + 可复制的清单，大型旗舰拆分时最多 4 条（单聊 3） */
 export const MATERIALS_BUDGET = { normal: 2, max: 4 }

@@ -157,3 +157,27 @@ export const SHOT = {
   notBattleReport: (shot: string) => `这不是战报链接。截别的网站请发「${shot} 网址」。`,
   brOff: '战报截图没有开启（控制台「截图」里关掉了）。',
 } as const
+
+/** 击杀（zKill 击杀转战报）；人名、军团名由调用方先过 safeEcho，回复里从不写网址 */
+export const KILL = {
+  usageTitle: '**击杀用法**',
+  hint: '⏳ 正在查询击杀…',
+  reportHint: '⏳ 正在查询击杀并截取战报，一般要 10–30 秒…',
+  badArg: '击杀编号不对：请写 zKill 击杀链接，或者纯数字的击杀编号。',
+  unknown: '未知',
+  flags: { npc: 'NPC', solo: '单杀', awox: '内鬼' },
+  notFound: 'zKill 上没有这个击杀（编号不对，或者刚发生还没收录，过几分钟再试）。',
+  notFoundEsi: '欧服接口里没有这个击杀（链接不对，或者击杀还没收录）。',
+  zkillDown: 'zKill 暂时连不上，请稍后再试。',
+  throttled: (minutes: number) => `zKill 让我们慢一点，请 ${minutes} 分钟后再试。`,
+  esiDown: '欧服接口暂时取不到击杀详情，请稍后再试。',
+  deadline: '查询击杀超时了，请稍后再试。',
+  abyssal: '这个击杀在深渊里，没有对应的战报。',
+  noReport: '这个击杀所在星系的数据不全，没有对应的战报。',
+  abyssalNote: '深渊里的击杀没有对应的战报',
+  noReportNote: '这个击杀所在星系的数据不全，没有对应的战报',
+  bothOff: '两个战报网站都在控制台关掉了',
+  siteOff: '这个战报网站在控制台关掉了',
+  brButton: 'BR 战报',
+  warbeaconButton: 'Warbeacon 战报',
+} as const

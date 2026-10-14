@@ -12,6 +12,7 @@ import { PRESET_MARKETS } from '../../../src/config/presets'
 import { createModuleStore } from '../../../src/core/ports'
 import type { Clock, Logger, ModuleStore, Scheduler } from '../../../src/core/ports'
 import { FakeEsi, rawOrder } from '../../fakes/fake-esi'
+import type { FakeZkill } from '../../fakes/fake-zkill'
 import type { RawOrder } from '../../fakes/fake-esi'
 import { bundledDir, cleanupDirs, makeVersion } from '../../core/data/helpers'
 import type { Json } from '../../core/data/helpers'
@@ -95,6 +96,8 @@ export interface EnvOptions extends Pick<HarnessOptions, 'help' | 'onebot'> {
   watchdogScheduler?: Scheduler
   /** 加载 Koishi 的 server 插件，监听 127.0.0.1 的这个端口（先用 freePort() 取一个） */
   serverPort?: number
+  /** 本机的假 zKill（击杀转战报）；已经 start() 过。不写 = 不指向任何假服务 */
+  zkill?: FakeZkill
   /** 提供一个 puppeteer 服务（假浏览器或真的 Chromium）；不写 = 没有 puppeteer */
   puppeteer?: PuppeteerLike
 }
@@ -157,6 +160,7 @@ export function addOrders(fake: FakeEsi, region: number, orders: RawOrder[]) {
 
 interface InstallSetup {
   data?: EnvOptions['data']
+  zkill?: FakeZkill
   fake: FakeEsi
   store: ModuleStore
   logger: RecordingLogger
@@ -171,7 +175,7 @@ interface InstallSetup {
 
 function pluginInstaller(setup: InstallSetup, config: Record<string, unknown>) {
   const data = bundledDir(makeVersion({ edit: setup.data }))
-  const { fake, store, logger, clock, scheduler, watchdogScheduler, onStop } = setup
+  const { fake, store, logger, clock, scheduler, watchdogScheduler, onStop, zkill } = setup
   return (app: Context) => {
     const fork = app.plugin({
       name: 'eve-market',
@@ -181,7 +185,7 @@ function pluginInstaller(setup: InstallSetup, config: Record<string, unknown>) {
       apply: (ctx: Context, cfg: Config) => installPlugin(ctx, cfg, {
         store,
         bundledDataDir: data,
-        overrides: { esiBase: fake.base, ssoBase: fake.base, random: () => 0.5 },
+        overrides: { esiBase: fake.base, ssoBase: fake.base, random: () => 0.5, ...zkill ? { zkillBase: zkill.base } : {} },
         logger,
         clock,
         ...scheduler ? { scheduler } : {},
@@ -212,7 +216,7 @@ export async function startPlugin(options: EnvOptions = {}): Promise<PluginEnv> 
   // 删临时目录以前等本插件停完（Koishi 不等异步的停用，建筑市场的缓存可能还在写）
   const stopping: Array<Promise<void>> = []
   const install = pluginInstaller({
-    fake, store, logger, clock, scheduler: options.scheduler, watchdogScheduler: options.watchdogScheduler, data: options.data,
+    fake, store, logger, clock, scheduler: options.scheduler, watchdogScheduler: options.watchdogScheduler, data: options.data, zkill: options.zkill,
     onStop: (done) => stopping.push(done), installed: (fork) => { plugin = fork },
   }, options.config ?? {})
   let server: ForkScope | undefined

@@ -651,6 +651,17 @@ describe('normalizeConfig: screenshot', () => {
     expect(ids({ screenshot: { br: { enabled: false } } })).toEqual(['warbeacon', 'janice', 'dotlan'])
   })
 
+  it('killAuto defaults to on, follows the switch, and a non-boolean falls back to on', () => {
+    expect(run({}).settings.screenshot.killAuto).toBe(true)
+    expect(run(Config({} as any)).settings.screenshot.killAuto).toBe(true)
+    expect(run({ screenshot: { killAuto: false } }).settings.screenshot.killAuto).toBe(false)
+    expect(run({ screenshot: { killAuto: 'x' } }).settings.screenshot.killAuto).toBe(true)
+    // 和各网站的开关互不影响
+    const { settings } = run({ screenshot: { killAuto: false, br: { enabled: false } } })
+    expect(settings.screenshot.killAuto).toBe(false)
+    expect(settings.screenshot.sites.map((x) => x.id)).toEqual(['warbeacon', 'janice', 'dotlan'])
+  })
+
   it('disabled sites drop out; auto is kept per site', () => {
     const { settings } = run({ screenshot: { janice: { enabled: false }, dotlan: { auto: false } } })
     expect(settings.screenshot.sites.map((x) => [x.id, x.auto])).toEqual([['br', true], ['warbeacon', true], ['dotlan', false]])

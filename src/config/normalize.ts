@@ -792,7 +792,7 @@ function normalizeScreenshot(raw: Raw, issues: IssueList): ScreenshotSettings {
       row,
     })
   })
-  return { sites }
+  return { sites, killAuto: bool(o.killAuto, true) }
 }
 
 /** 旧开关和 BR 的新开关都开着，BR 才自动截图 */

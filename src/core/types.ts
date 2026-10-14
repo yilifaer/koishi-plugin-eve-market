@@ -352,6 +352,8 @@ export interface ShotSiteSetting {
 
 export interface ScreenshotSettings {
   sites: ShotSiteSetting[]
+  /** @机器人 的消息里带 zKill 击杀链接时自动回复击杀卡片 */
+  killAuto: boolean
 }
 
 export interface AdvancedSettings {

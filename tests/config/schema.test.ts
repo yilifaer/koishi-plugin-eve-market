@@ -31,6 +31,13 @@ describe('Config schema', () => {
     expect(normalizeConfig(c).issues).toEqual([])
   })
 
+  it('the screenshot group has the killAuto switch (default on, described in Chinese)', () => {
+    expect(Config({} as any).screenshot.killAuto).toBe(true)
+    const shot = (Config as any).list[12].dict.screenshot
+    expect(Object.keys(shot.dict)[0]).toBe('killAuto')
+    expect(shot.dict.killAuto.meta.description).toContain('zKill 击杀链接')
+  })
+
   it('has the groups in console order with Chinese titles; industry since 0.2.0', () => {
     const titles = (Config as any).list.map((g: any) => g.meta.description)
     expect(titles).toEqual(['基本', '显示', '权限', '市场', '物品别名', '查价', '批量查价', '运费', '查价告示', '工业', 'EVE 授权', '图片与截图', '截图', '高级'])
