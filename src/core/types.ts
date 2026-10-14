@@ -1145,7 +1145,11 @@ export interface ChainResult {
   nodes: ChainNode[]
   layers: Array<{ layer: ChainLayer | 'product'; mode: LayerMode; used: boolean; build: number | null; buy: number | null; timeSeconds: number; where?: string }>
   leaves: ChainLeaf[]; surplusByproducts: Array<{ item: ItemInfo; quantity: number }>
-  totals: { leaves: number; jobs: number; reprocessTax: number; total: number; missingPrices: number }
+  totals: {
+    leaves: number; jobs: number; reprocessTax: number; total: number; missingPrices: number
+    /** 每种各开一条线、一层做完再做下一层的最快时间：各层（含成品）里最长的一个节点相加（未计技能） */
+    fastestSeconds: number
+  }
   productValue?: IndustryResult['productValue']; profit?: IndustryResult['profit']
   warnings: string[]; pricesAt?: number | null; indicesAt?: number | null; formulaRevision: string
 }

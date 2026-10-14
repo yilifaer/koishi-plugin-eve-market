@@ -57,6 +57,7 @@ export const CH = {
   noPrice: '缺价格',
   timeLine: (parts: string[]) => `时间（未计技能，每层一条线）：${parts.join(' · ')}`,
   timeNote: '按每层 1 条生产线算，多开可以更快',
+  timeFastest: (time: string) => `每种各开一条线同时做（一层做完再做下一层），最快约 ${time}`,
   timeTotal: (time: string) => `合计 ${time}`,
   profitIncomplete: '价格不全，利润不计算',
   inventionNote: 'T2 发明成本不计入',

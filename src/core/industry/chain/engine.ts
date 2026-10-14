@@ -179,7 +179,7 @@ export async function runChain(
   const result: ChainResult = {
     product: top.item, runs: top.runs, outputQuantity, options, nodes, inventionExcluded: top.t2,
     layers: layerRows(nodes, options), leaves, surplusByproducts,
-    totals: { leaves: leavesTotal, jobs: jobsTotal, reprocessTax, total, missingPrices },
+    totals: { leaves: leavesTotal, jobs: jobsTotal, reprocessTax, total, missingPrices, fastestSeconds: fastestSeconds(nodes) },
     warnings: [], indicesAt: costs.indices?.dataTime ?? null, formulaRevision: FORMULA_REVISION,
   }
   if (top.location) {
@@ -196,6 +196,13 @@ export async function runChain(
   result.pricesAt = oldest([...leaves.map((l) => prices.material.units.get(l.item.typeId)), prices.product.units.get(top.item.typeId)])
   result.warnings = warningsOf(ctx, options, top, nodes, result)
   return result
+}
+
+/** 每种各开一条线、一层做完再做下一层的最快时间：每层最长的那个节点，各层相加 */
+export function fastestSeconds(nodes: Array<Pick<ChainNode, 'layer' | 'timeSeconds'>>): number {
+  const longest = new Map<ChainNode['layer'], number>()
+  for (const n of nodes) longest.set(n.layer, Math.max(longest.get(n.layer) ?? 0, n.timeSeconds))
+  return [...longest.values()].reduce((sum, t) => sum + t, 0)
 }
 
 /** 每层的合计；这一层一个节点都没有（没造、或者上面的层直接买了）used 是 false */

@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest'
 import { CHAIN_QUERY_DEADLINE_MS } from '../../../../src/constants'
 import { roundIsk } from '../../../../src/core/industry'
+import { fastestSeconds } from '../../../../src/core/industry/chain/engine'
 import type { ChainResult } from '../../../../src/core/types'
 import { loadFixtureData } from '../../../fixtures/data/load'
 import { JITA_KEY } from '../service-fakes'
@@ -77,6 +78,29 @@ describe('chain: whole batches and surplus', () => {
     // 建造成本 = 本节点的材料（市场价）+ 安装费
     const alloy = node(r, FERNITE_ALLOY)!
     expect(alloy.buildCost).toBe(10 * 10 + 200 * 3 + 200 * 4 + alloy.jobCost!.total)
+  })
+})
+
+describe('chain: fastest time', () => {
+  const H = 3600
+  it('is the longest node of each layer added up, product included', () => {
+    const nodes = [
+      { layer: 'product' as const, timeSeconds: 2 * H },
+      { layer: 'component' as const, timeSeconds: 10 * H },
+      { layer: 'component' as const, timeSeconds: 3 * H },
+    ]
+    expect(fastestSeconds(nodes)).toBe(12 * H)
+    expect(fastestSeconds([])).toBe(0)
+  })
+
+  it('never exceeds the serial sum and equals the sum of the longest node per layer in a real chain', async () => {
+    const r = chainResult(await setup().run(HOUND, { on: true }))
+    const serial = r.layers.reduce((s, l) => s + l.timeSeconds, 0)
+    const longest = ['product', 'component', 'other', 'reaction2', 'reaction1']
+      .reduce((s, name) => s + Math.max(0, ...r.nodes.filter((n) => n.layer === name).map((n) => n.timeSeconds)), 0)
+    expect(r.totals.fastestSeconds).toBe(longest)
+    expect(r.totals.fastestSeconds).toBeGreaterThan(0)
+    expect(r.totals.fastestSeconds).toBeLessThan(serial)
   })
 })
 

@@ -158,16 +158,25 @@ function result(over: Partial<ChainResult> = {}): ChainResult {
     ],
     leaves: [{ item: TRIT, quantity: 500, offset: 0, unit: 4, total: 2000, kind: 'raw' }],
     surplusByproducts: [],
-    totals: { leaves: 2000, jobs: 0, reprocessTax: 0, total: 3000, missingPrices: 0 },
+    totals: { leaves: 2000, jobs: 0, reprocessTax: 0, total: 3000, missingPrices: 0, fastestSeconds: 10800 },
     warnings: [], pricesAt: Date.UTC(2026, 9, 7, 6, 20), indicesAt: null, formulaRevision: '2',
     ...over,
   }
 }
 
 describe('编出来的结果', () => {
+  it('the fastest-time line appears only when parallel lines beat the serial total', () => {
+    const same = md(overviewCard(env0, result(), [], false))
+    expect(same).toContain('按每层 1 条生产线算，多开可以更快')
+    expect(same).not.toContain('最快约')
+    const faster = md(overviewCard(env0, result({ totals: { ...result().totals, fastestSeconds: 7200 + 1800 } }), [], false))
+    expect(faster).toContain('按每层 1 条生产线算，多开可以更快\n每种各开一条线同时做（一层做完再做下一层），最快约 2 小时 30 分')
+  })
+
+
   it('a missing price is written as 缺价格, never 0, and the total says it is incomplete', () => {
     const leaf: ChainLeaf = { item: TRIT, quantity: 500, offset: 0, unit: null, total: null, kind: 'raw' }
-    const r = result({ leaves: [leaf], totals: { leaves: 0, jobs: 0, reprocessTax: 0, total: 0, missingPrices: 1 } })
+    const r = result({ leaves: [leaf], totals: { leaves: 0, jobs: 0, reprocessTax: 0, total: 0, missingPrices: 1, fastestSeconds: 0 } })
     const overview = md(overviewCard(env0, r, [], false))
     expect(overview).toContain('**预计总成本 — （不完整，缺 1 种材料价格）**')
     expect(overview).not.toContain(' 0 ISK')
@@ -183,7 +192,7 @@ describe('编出来的结果', () => {
     })
     expect(md(overviewCard(env0, complete, [], false))).toContain('预计利润')
     const r = result({
-      leaves: [leaf], totals: { leaves: 0, jobs: 0, reprocessTax: 0, total: 0, missingPrices: 1 },
+      leaves: [leaf], totals: { leaves: 0, jobs: 0, reprocessTax: 0, total: 0, missingPrices: 1, fastestSeconds: 0 },
       productValue: { marketKey: 'jita', side: 'sell', unit: 9000, total: 9000 }, profit: { value: 500, marginPct: 5.5 },
     })
     const out = md(overviewCard(env0, r, [], false))

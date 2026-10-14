@@ -208,7 +208,11 @@ function timeLines(env: IndustryEnv, r: ChainResult): Line[] {
   if (!rows.length) return []
   const parts = rows.map((l) => `${LAYER_NAME[l.layer]} ${duration(env, l.timeSeconds)}`)
   if (rows.length > 1) parts.push(CH.timeTotal(duration(env, rows.reduce((sum, l) => sum + l.timeSeconds, 0))))
-  return [{ text: CH.timeLine(parts) }, { text: CH.timeNote }]
+  const lines: Line[] = [{ text: CH.timeLine(parts) }, { text: CH.timeNote }]
+  // 每层只有一个节点时最快和串行一样，不重复写
+  const serial = rows.reduce((sum, l) => sum + l.timeSeconds, 0)
+  if (r.totals.fastestSeconds > 0 && r.totals.fastestSeconds < serial) lines.push({ text: CH.timeFastest(duration(env, r.totals.fastestSeconds)) })
+  return lines
 }
 
 /** ⚠ T2 发明成本不计入 · 炼金按废料 55% 规则计算 */
