@@ -33,10 +33,12 @@ describe('分层明细（走完整个插件）', () => {
     const sent = await e.h.group(`制造 ${HOUND} XX-1 拆到原料 明细`)
     expect(sent).toHaveLength(1)
     const out = card(sent)
-    expect(out.startsWith('**猎犬级 Hound · 分层明细**\nXX-1 · 1 流程（1 艘） · 大厂\n\n**组件 · XX-1 小厂 · ME10 TE20**\n\n1. 核反应堆机组 需 6 · 6 流程 · 7.01K\n')).toBe(true)
-    expect(out).toContain('**高级反应 · XX-1 反应塔**\n\n1. 费米子冷凝物 需 11 · 1 批 · 多出 189 · 44.58K\n')
+    expect(out.startsWith('**猎犬级 Hound · 分层明细**\nXX-1 · 1 流程（1 艘） · 大厂\n\n**组件 · XX-1 小厂 · ME10 TE20**\n1） 核反应堆机组 需 6 · 6 流程 · 7.01K\n')).toBe(true)
+    expect(out).toContain('**高级反应 · XX-1 反应塔**\n1） 费米子冷凝物 需 11 · 1 批 · 多出 189 · 44.58K\n')
     expect(out).toContain('**低级反应 · XX-1 反应塔**')
-    expect(out).toContain('9. 铁磁流体 需 100 · 正常 1 批 · 多出 100 · 22.65K（炼金贵 13.13K）')
+    expect(out).toMatch(/\n\d+） 铁磁流体 需 100 · 正常 1 批 · 多出 100 · 22\.65K（炼金贵 13\.13K）/)
+    expect([...out.matchAll(/\n1） /g)]).toHaveLength(3)
+    expect(out).not.toMatch(/\n\d+\. /)
     expect(out).toContain('都是整批生产，多出的不抵成本。')
     expect(buttonRows(sent)).toEqual([[
       `返回总览=>制造 ${HOUND} XX-1 建筑:大厂 拆到原料`,
@@ -48,7 +50,7 @@ describe('分层明细（走完整个插件）', () => {
   it('反应:炼金: the alchemy node says how many batches and how it compares, indented under its line', async () => {
     const e = await start()
     const out = card(await e.h.group(`制造 ${HOUND} XX-1 反应:炼金 明细`))
-    expect(out).toContain('9. 铁磁流体 需 100 · 炼金 3 批 · 多出 20 · 35.78K\n    - 比正常贵 13.13K，多 11 小时 42 分\n10. 超氟化物')
+    expect(out).toMatch(/\n\d+） 铁磁流体 需 100 · 炼金 3 批 · 多出 20 · 35\.78K\n· 比正常贵 13\.13K，多 11 小时 42 分\n\d+） 超氟化物/)
   })
 
   it('其他:造 adds the 其他 layer between the components and the reactions', async () => {

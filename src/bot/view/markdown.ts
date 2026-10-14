@@ -53,19 +53,22 @@ export function lineMarkdown(line: Line, style: NumberStyle): string {
   return head && !head.endsWith('）') ? `${head} ${line.extra}` : `${head}${line.extra}`
 }
 
-function sectionItems({ section, groups }: OutlineSection, style: NumberStyle): string[] {
-  const kind = section.style ?? 'bullet'
+// QQ 会把前后几个有序列表连成一个（编号接着上一个往下数），所以一张卡片里有不止一个有序列表时，
+// 有序的段落改成「1） 」开头的普通行（单个 \n 换行，和 plain 一样），每段都从 1 开始
+function sectionItems({ section, groups }: OutlineSection, style: NumberStyle, textual: boolean): string[] {
+  const kind = section.style === 'ordered' && textual ? 'numbered' : section.style ?? 'bullet'
   const numbers = numbering(groups)
   const items = groups.map((group, g) => group.map((line, i) => {
     const text = lineMarkdown(line, style)
-    if (i > 0 || line.indent === 1) return kind === 'plain' ? `· ${text}` : `${NESTED}${text}`
+    if (i > 0 || line.indent === 1) return kind === 'plain' || kind === 'numbered' ? `· ${text}` : `${NESTED}${text}`
     if (kind === 'plain') return text
+    if (kind === 'numbered') return `${numbers[g]}） ${text}`
     return kind === 'ordered' ? `${numbers[g]}. ${text}` : `- ${text}`
   }).join('\n'))
   if (!section.heading?.trim()) return items
   const heading = `**${unbold(section.heading)}**${section.badge ? ` · ${section.badge}` : ''}`
   if (!items.length) return [heading]
-  items[0] = `${heading}${kind === 'plain' ? '\n' : '\n\n'}${items[0]}`
+  items[0] = `${heading}${kind === 'plain' || kind === 'numbered' ? '\n' : '\n\n'}${items[0]}`
   return items
 }
 
@@ -97,7 +100,8 @@ export function markdownLayout(card: Card, opts: CardRenderOptions): Layout {
   const o = outline(card)
   const blocks: Block[] = []
   if (o.head.length) blocks.push({ items: [o.head.join('\n')], counted: false })
-  for (const s of o.sections) blocks.push({ items: sectionItems(s, opts.numberStyle), counted: true })
+  const lists = o.sections.filter((s) => s.section.style === 'ordered' && s.groups.length).length + (o.choices.length ? 1 : 0)
+  for (const s of o.sections) blocks.push({ items: sectionItems(s, opts.numberStyle, lists > 1), counted: true })
   if (o.choices.length) blocks.push({ items: choiceItems(card, o.choices, opts), counted: false })
   if (o.warnings.length) blocks.push({ items: o.warnings.map((w) => `⚠ ${w}`), counted: false })
   for (const block of blocks) block.items = block.items.map(fixLines)

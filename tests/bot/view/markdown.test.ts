@@ -47,6 +47,24 @@ describe('toQQMarkdown', () => {
     }))])
   })
 
+  it('several ordered sections become numbered text lines that restart at 1 (QQ would continue the numbers of a real list)', () => {
+    const card = bare({ sections: [
+      { heading: '组件', style: 'ordered', lines: [{ text: '甲' }, { text: '嵌套', indent: 1 }, { text: '乙' }] },
+      { heading: '反应', style: 'ordered', lines: [{ text: '丙' }, { text: '丁' }] },
+    ] })
+    expect(toQQMarkdown(card, renderOptions()).md).toBe('**组件**\n1） 甲\n· 嵌套\n2） 乙\n\n**反应**\n1） 丙\n2） 丁')
+  })
+
+  it('a single ordered section stays a real list; with choices after it, the section becomes text so the choices own the list', () => {
+    const one = bare({ sections: [{ style: 'ordered', lines: [{ text: '甲' }, { text: '乙' }] }] })
+    expect(toQQMarkdown(one, renderOptions()).md).toBe('1. 甲\n2. 乙')
+    const withChoices = candidateCard(2)
+    withChoices.sections = [{ style: 'ordered', lines: [{ text: '甲' }, { text: '乙' }] }]
+    const { md } = toQQMarkdown(withChoices, renderOptions())
+    expect(md).toContain('1） 甲\n2） 乙')
+    expect(md).toContain('\n\n1. ')
+  })
+
   it('numberStyle decides how full prices look', () => {
     const p = price('258,400,000 ISK', '258.40M')
     expect(priceMarkdown(p, 'code')).toBe('`258,400,000 ISK`（258.40M）')
