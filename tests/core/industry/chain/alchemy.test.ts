@@ -60,6 +60,9 @@ describe('alchemy: golden vector G1', () => {
     expect(portionsFor(73, y5, 402, 'batch')).toBe(11)
     expect(portionsFor(73, y5, 1000, 'batch')).toBe(25)
     expect(portionsFor(73, scrapYield(0), 1000, 'batch')).toBe(28)
+    // 不需要时一份也不做
+    expect(portionsFor(73, y5, 0, 'batch')).toBe(0)
+    expect(portionsFor(73, y5, 0, 'per-unit')).toBe(0)
     expect(reprocessOut(73, 28, scrapYield(0), 'batch')).toBe(1022)
     expect(reprocessOut(73, 27, scrapYield(0), 'batch')).toBe(985)
     // 逐个取整：每份 40 个，1,000 个要 25 份；0 级每份 36 个，要 28 份

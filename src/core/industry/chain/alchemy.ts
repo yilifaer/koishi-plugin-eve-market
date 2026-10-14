@@ -63,6 +63,7 @@ function worth(ctx: JobCtx, list: ReadonlyArray<{ typeId: TypeId; quantity: numb
 export function portionsFor(qtyMain: number, y: number, demand: number, mode: ReprocessRounding): number | null {
   const each = qtyMain * y
   if (each <= 0 || (mode === 'per-unit' && reprocessOut(qtyMain, 1, y, mode) < 1)) return null
+  if (demand <= 0) return 0
   // 先估个下限，再一份一份往上加到够为止（整批取整不能从向下取整后的单份推）
   let u = Math.max(1, Math.floor(demand / each) - 1)
   while (reprocessOut(qtyMain, u, y, mode) < demand) u++
