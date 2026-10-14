@@ -20,7 +20,7 @@ function tableOf(schema: any) {
 describe('Config schema', () => {
   it('fills every group from an empty config', () => {
     const c = Config({} as any)
-    expect(Object.keys(c)).toEqual(['general', 'display', 'access', 'markets', 'aliases', 'price', 'appraisal', 'freight', 'notices', 'industry', 'sso', 'render', 'advanced'])
+    expect(Object.keys(c)).toEqual(['general', 'display', 'access', 'markets', 'aliases', 'price', 'appraisal', 'freight', 'notices', 'industry', 'sso', 'render', 'screenshot', 'advanced'])
     expect(c.general).toEqual({ requireAt: true, allowSandbox: false, qqWatchdog: true })
     expect(c.display).toMatchObject({ output: 'markdown', numberStyle: 'code', priceDisplayMode: 'full_and_compact', listPriceDisplayMode: 'compact_only', compactDecimals: 2, clickable: 'buttons' })
     expect(c.markets.map((m) => m.name)).toEqual(['Jita 4-4', 'Amarr', 'Dodixie', 'Rens', 'Hek'])
@@ -33,9 +33,9 @@ describe('Config schema', () => {
 
   it('has the groups in console order with Chinese titles; industry since 0.2.0', () => {
     const titles = (Config as any).list.map((g: any) => g.meta.description)
-    expect(titles).toEqual(['基本', '显示', '权限', '市场', '物品别名', '查价', '批量查价', '运费', '查价告示', '工业', 'EVE 授权', '图片与截图', '高级'])
+    expect(titles).toEqual(['基本', '显示', '权限', '市场', '物品别名', '查价', '批量查价', '运费', '查价告示', '工业', 'EVE 授权', '图片与截图', '截图', '高级'])
     expect(group(9).key).toBe('industry')
-    expect(group(12).schema.meta.collapse).toBe(true)
+    expect(group(13).schema.meta.collapse).toBe(true)
   })
 
   it('keeps every table an object schema so the console table works', () => {

@@ -40,6 +40,7 @@ const SECTION_LABELS: Record<ConfigSection, string> = {
   industry: '工业',
   sso: 'EVE 授权',
   render: '图片与截图',
+  screenshot: '截图',
   advanced: '高级',
 }
 

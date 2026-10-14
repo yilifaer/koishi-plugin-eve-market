@@ -104,6 +104,9 @@ export interface IndustryConfig {
   structures: IndustryStructureRow[]
 }
 
+export interface ShotSiteConfig { enabled: boolean; auto: boolean; maxImages: number }
+export interface ShotCustomRow { name: string; host: string; pathPrefix: string; auto: boolean; maxImages: number }
+
 export interface Config {
   general: { requireAt: boolean; allowSandbox: boolean; qqWatchdog: boolean }
   display: {
@@ -126,6 +129,13 @@ export interface Config {
   industry: IndustryConfig
   sso: { clientId: string; clientSecret: string; callbackUrl: string; adminKey: string }
   render: { influenceMapUrl: string; coalitionMapUrl: string; brAuto: boolean }
+  screenshot: {
+    br: ShotSiteConfig
+    warbeacon: ShotSiteConfig
+    janice: ShotSiteConfig
+    dotlan: ShotSiteConfig
+    custom: ShotCustomRow[]
+  }
   advanced: { manifestUrl: string; glossaryUrl: string; esiContact: string }
 }
 
@@ -145,6 +155,12 @@ const INVALID_ROW = { [INVALID_ROW_KEY]: true }
 function table<T>(row: Schema<any, T>, fallback: T[] = []) {
   return Schema.array(row.default(INVALID_ROW as T).loose()).role('table').default(fallback).loose()
 }
+
+const shotSite = (max: number) => Schema.object({
+  enabled: bool(true).description('启用'),
+  auto: bool(true).description('自动截图'),
+  maxImages: num(max).description('最多几张（1–3）'),
+}).default({} as ShotSiteConfig).loose()
 
 const priceSide = () => choice<PriceSide>([['sell', '出售价'], ['mid', '中间价'], ['buy', '收购价']])
 
@@ -401,9 +417,30 @@ export const Config: Schema<Config> = Schema.intersect([
       coalitionMapUrl: str(DEFAULT_COALITION_MAP_URL)
         .description('「联盟势力图」的图片地址。'),
       brAuto: bool(true)
-        .description('@机器人 的消息里带战报链接时自动截图。'),
+        .description('旧设置：关掉时 BR 工具战报一律不自动截图。新的开关在「截图」分组里，这个以后会删掉。'),
     }).default({} as Config['render']).loose(),
   }).description('图片与截图'),
+
+  Schema.object({
+    screenshot: Schema.object({
+      br: shotSite(2).description('BR 工具战报（br.evetools.org）'),
+      warbeacon: shotSite(2).description('Warbeacon 战报（warbeacon.net）'),
+      janice: shotSite(2).description('Janice 估价结果（janice.e-351.com/a/…）'),
+      dotlan: shotSite(1).description('DOTLAN 星图（evemaps.dotlan.net 的星域、星系、联盟、军团页和星图）'),
+      custom: table(Schema.object({
+        name: str().description('名称'),
+        host: str().description('域名'),
+        pathPrefix: str().description('网址开头'),
+        auto: strictBool(true).description('自动截图'),
+        maxImages: num(1).description('最多几张'),
+      }))
+        .description([
+          '**自定义网站**：一行一个，最多 10 行。**名称**是回复里显示的名字，不能写成网址的样子；**域名**只写域名，例如 kb.example.com，它下面的子域名也算，粘贴整个网址会自动只取域名。',
+          '**网址开头**可选：只截这个开头的页面，例如 /kill/，留空 = 这个域名下的所有页面。**自动截图**关掉 = 要写「截图 网址」才截。**最多几张**1–3，每张最多 4000 像素高。',
+          'IP 地址、localhost、内网域名、带端口或用户名的域名、内置网站已有的域名和 zKillboard 会被跳过，并在「市场状态」里写明。',
+        ].join('\n')),
+    }).default({} as Config['screenshot']).loose(),
+  }).description('截图'),
 
   Schema.object({
     advanced: Schema.object({

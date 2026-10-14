@@ -601,3 +601,128 @@ describe('helpers', () => {
     expect(parseMeTeChoices('10/21, 1/2/3').bad).toEqual(['10/21', '1/2/3'])
   })
 })
+
+describe('normalizeConfig: screenshot', () => {
+  const ids = (raw: unknown) => run(raw).settings.screenshot.sites.map((x) => x.id)
+  const custom = (...rows: unknown[]) => ({ screenshot: { custom: rows } })
+  const row = (extra: Record<string, unknown> = {}) => ({ name: '示例站', host: 'kb.example.com', ...extra })
+
+  it('defaults: four built-in sites on, auto on, 2/2/2/1 images, no issues', () => {
+    for (const raw of [{}, Config({} as any)]) {
+      const { settings, issues } = run(raw)
+      expect(issues).toEqual([])
+      expect(settings.screenshot.sites.map((x) => [x.id, x.host, x.builtin, x.auto, x.maxImages])).toEqual([
+        ['br', 'br.evetools.org', true, true, 2],
+        ['warbeacon', 'warbeacon.net', true, true, 2],
+        ['janice', 'janice.e-351.com', true, true, 2],
+        ['dotlan', 'evemaps.dotlan.net', true, true, 1],
+      ])
+      expect(settings.render.brAuto).toBe(true)
+    }
+  })
+
+  it('a missing screenshot group (old config) is quiet', () => {
+    const { settings, issues } = run({ render: { brAuto: true } })
+    expect(issues).toEqual([])
+    expect(settings.screenshot.sites).toHaveLength(4)
+  })
+
+  it('legacy render.brAuto=false without a screenshot group stays quiet', () => {
+    const { settings, issues } = run({ render: { brAuto: false } })
+    expect(settings.render.brAuto).toBe(false)
+    expect(issues).toEqual([])
+  })
+
+  it('legacy render.brAuto=false stops BR auto and reports once', () => {
+    const { settings, lines } = run({ render: { brAuto: false }, screenshot: {} })
+    expect(settings.render.brAuto).toBe(false)
+    expect(settings.screenshot.sites.find((x) => x.id === 'br')?.auto).toBe(true)
+    expect(lines).toHaveLength(1)
+    expect(lines[0]).toContain('图片与截图')
+    expect(lines[0]).toContain('旧设置')
+  })
+
+  it('screenshot.br.auto=false stops BR auto without a problem; a disabled BR too', () => {
+    const a = run({ screenshot: { br: { auto: false } } })
+    expect(a.settings.render.brAuto).toBe(false)
+    expect(a.issues).toEqual([])
+    const b = run({ screenshot: { br: { enabled: false } } })
+    expect(b.settings.render.brAuto).toBe(false)
+    expect(ids({ screenshot: { br: { enabled: false } } })).toEqual(['warbeacon', 'janice', 'dotlan'])
+  })
+
+  it('disabled sites drop out; auto is kept per site', () => {
+    const { settings } = run({ screenshot: { janice: { enabled: false }, dotlan: { auto: false } } })
+    expect(settings.screenshot.sites.map((x) => [x.id, x.auto])).toEqual([['br', true], ['warbeacon', true], ['dotlan', false]])
+  })
+
+  it('maxImages is clamped to 1-3 and reported', () => {
+    const { settings, lines } = run({ screenshot: { br: { maxImages: 9 }, janice: { maxImages: 0 }, dotlan: { maxImages: 2.4 }, warbeacon: { maxImages: 'x' } } })
+    const by = (id: string) => settings.screenshot.sites.find((x) => x.id === id)?.maxImages
+    expect([by('br'), by('janice'), by('dotlan'), by('warbeacon')]).toEqual([3, 1, 2, 2])
+    expect(lines.filter((l) => l.startsWith('截图'))).toHaveLength(3)
+  })
+
+  it('custom rows: valid row, host cleaned, prefix gets a leading slash', () => {
+    const { settings, lines } = run(custom(
+      row({ host: 'HTTPS://KB.Example.com/kill/1?x=1', pathPrefix: ' kill/ ', auto: false, maxImages: 3 }),
+      row({ name: '另一个', host: 'other.example.org' }),
+    ))
+    const sites = settings.screenshot.sites.filter((x) => !x.builtin)
+    expect(sites).toEqual([
+      { id: 'custom-1', name: '示例站', builtin: false, host: 'kb.example.com', pathPrefix: '/kill/', auto: false, maxImages: 3, row: 1 },
+      { id: 'custom-2', name: '另一个', builtin: false, host: 'other.example.org', pathPrefix: '', auto: true, maxImages: 1, row: 2 },
+    ])
+    expect(lines).toHaveLength(1)
+    expect(lines[0]).toContain('已只取域名')
+  })
+
+  it('custom rows: bad rows are skipped with a row number', () => {
+    const bad: Array<[unknown, string]> = [
+      [{ [INVALID_ROW_KEY]: true }, '有写错的字段'],
+      [row({ name: '' }), '「名称」为空'],
+      [row({ name: 'kb.example.com' }), '网址'],
+      [row({ name: 'https://x' }), '网址'],
+      [row({ host: '' }), '「域名」'],
+      [row({ host: '127.0.0.1' }), 'IP'],
+      [row({ host: 'localhost' }), '本机'],
+      [row({ host: 'intranet' }), '「域名」'],
+      [row({ host: 'x.local' }), '内网'],
+      [row({ host: 'b.com:8443' }), '端口'],
+      [row({ host: 'a@b.com' }), '用户名'],
+      [row({ host: 'zkillboard.com' }), 'zKillboard'],
+      [row({ host: 'br.evetools.org' }), '内置'],
+      [row({ host: 'sub.warbeacon.net' }), '内置'],
+      [row({ pathPrefix: '/a b' }), '「网址开头」'],
+      [row({ pathPrefix: '/a?x=1' }), '「网址开头」'],
+      [row({ pathPrefix: '/a#x' }), '「网址开头」'],
+      [row({ pathPrefix: '/a/../b' }), '「网址开头」'],
+      [row({ pathPrefix: `/${'a'.repeat(100)}` }), '「网址开头」'],
+    ]
+    for (const [r, word] of bad) {
+      const { settings, lines } = run(custom(r))
+      expect(settings.screenshot.sites.filter((x) => !x.builtin), JSON.stringify(r)).toEqual([])
+      expect(lines.filter((l) => l.startsWith('自定义网站第 1 行')), JSON.stringify(r)).toHaveLength(1)
+      expect(lines.join('\n')).toContain(word)
+    }
+  })
+
+  it('custom rows: duplicates, over 10 rows, a table that is not an array', () => {
+    const dup = run(custom(row(), row({ name: '又一个', host: 'KB.example.com' }), row({ pathPrefix: '/kill' })))
+    expect(dup.settings.screenshot.sites.filter((x) => !x.builtin).map((x) => x.row)).toEqual([1, 3])
+    expect(dup.lines).toHaveLength(1)
+    expect(dup.lines[0]).toContain('自定义网站第 2 行')
+    const many = Array.from({ length: 12 }, (_, i) => row({ name: `站${i}`, host: `s${i}.example.com` }))
+    const over = run(custom(...many))
+    expect(over.settings.screenshot.sites.filter((x) => !x.builtin)).toHaveLength(10)
+    expect(over.lines).toHaveLength(2)
+    expect(over.lines[0]).toContain('第 11 行')
+    const notArray = run({ screenshot: { custom: 'x' } })
+    expect(notArray.settings.screenshot.sites).toHaveLength(4)
+    expect(notArray.lines).toHaveLength(1)
+  })
+
+  it('built-in sites come before custom rows, in a fixed order', () => {
+    expect(ids(custom(row()))).toEqual(['br', 'warbeacon', 'janice', 'dotlan', 'custom-1'])
+  })
+})

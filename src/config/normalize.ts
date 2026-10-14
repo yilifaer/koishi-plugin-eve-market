@@ -4,11 +4,12 @@
 
 import { DEFAULT_SCRAPMETAL_LEVEL, MAX_ME, MAX_QUANTITY, MAX_TE, NOTICE_MAX_CHARS, PRICE_TYPE_WORDS, SSO_CALLBACK_PATH } from '../constants'
 import { FORMULA_DEFAULTS } from '../core/industry'
+import { BUILTIN_SITES, checkConfigHost, hostMatches } from '../core/sites'
 import type {
   AccessSettings, AdvancedSettings, AppraisalSettings, ConfigIssue, ConfigSection, DefaultQuantitySetting, DisplaySettings,
   FreightRoute, IndustryActivity, IndustryLocationSetting, IndustrySettings, IndustryStructureSetting, ItemAliasSetting,
-  MarketRefField, MarketRefSetting, MarketSetting, MarketType, NoticeSetting, PriceSide, RenderSettings, Settings, SsoSettings,
-  StructurePurpose, Visibility,
+  MarketRefField, MarketRefSetting, MarketSetting, MarketType, NoticeSetting, PriceSide, RenderSettings, ScreenshotSettings, Settings, ShotSiteSetting,
+  SsoSettings, StructurePurpose, Visibility,
 } from '../core/types'
 import {
   DEFAULT_BASE_MARKET, DEFAULT_CALLBACK_URL, DEFAULT_COALITION_MAP_URL, DEFAULT_EXTRA_FEE_LABEL, DEFAULT_GLOSSARY_URL,
@@ -37,6 +38,7 @@ const SECTION_LABELS: Record<ConfigSection, string> = {
   industry: '工业',
   sso: 'EVE 授权',
   render: '图片与截图',
+  screenshot: '截图',
   advanced: '高级',
 }
 
@@ -733,6 +735,79 @@ function normalizeRender(raw: Raw, issues: IssueList): RenderSettings {
   }
 }
 
+// 截图：内置网站的开关和自定义网站表（规则见 DECISIONS 的截图一条）
+const SHOT_CUSTOM_MAX = 10
+const SHOT_MAX_IMAGES = 3
+const SHOT_PREFIX_MAX = 100
+const SHOT_TABLE = '自定义网站'
+const SHOT_BUILTIN_MAX_IMAGES: Record<string, number> = { br: 2, warbeacon: 2, janice: 2, dotlan: 1 }
+
+function normalizeShotPrefix(value: string): string | null {
+  const prefix = value.trim()
+  if (!prefix) return ''
+  if (/\s|[?#]|\.\./.test(prefix) || prefix.length > SHOT_PREFIX_MAX) return null
+  return prefix.startsWith('/') ? prefix : `/${prefix}`
+}
+
+function normalizeScreenshot(raw: Raw, issues: IssueList): ScreenshotSettings {
+  const o = obj(raw.screenshot)
+  const s: ConfigSection = 'screenshot'
+  const sites: ShotSiteSetting[] = []
+  for (const b of BUILTIN_SITES) {
+    const r = obj(o[b.id])
+    if (!bool(r.enabled, true)) continue
+    sites.push({
+      id: b.id, name: b.name, builtin: true, host: b.host, pathPrefix: '',
+      auto: bool(r.auto, true),
+      maxImages: clampNumber(issues, s, `${b.name}的「最多几张」`, r.maxImages, SHOT_BUILTIN_MAX_IMAGES[b.id] ?? 1, 1, SHOT_MAX_IMAGES, { integer: true, field: `${b.id}.maxImages` }),
+    })
+  }
+  const rows = tableRows(issues, s, o.custom, [], SHOT_TABLE)
+  const seen = new Map<string, number>()
+  let accepted = 0
+  rows.forEach((rawRow, index) => {
+    const row = index + 1
+    if (isInvalidRow(rawRow)) return invalidRow(issues, s, row, SHOT_TABLE)
+    const r = rawRow as Raw
+    const at = { table: SHOT_TABLE, row }
+    const name = line(r.name)
+    if (!name) return issues.add(s, '「名称」为空，已跳过', { ...at, field: 'name' })
+    if (containsUrl(name)) return issues.add(s, '「名称」不能写成网址的样子，已跳过', { ...at, field: 'name' })
+    const hostCheck = checkConfigHost(text(r.host))
+    if (!hostCheck.ok) return issues.add(s, `「域名」${hostCheck.reason}，已跳过`, { ...at, field: 'host' })
+    const host = hostCheck.host
+    if (hostCheck.note) issues.add(s, `「域名」${hostCheck.note}：${host}`, { ...at, field: 'host' })
+    const pathPrefix = normalizeShotPrefix(text(r.pathPrefix))
+    if (pathPrefix === null) return issues.add(s, `「网址开头」不能有空格、? # ..，也不能超过 ${SHOT_PREFIX_MAX} 个字，已跳过`, { ...at, field: 'pathPrefix' })
+    const builtin = BUILTIN_SITES.find((b) => hostMatches(host, b.host))
+    if (builtin) return issues.add(s, `${host} 属于内置的${builtin.name}，请用上面的开关，已跳过`, { ...at, field: 'host' })
+    const key = `${host}${pathPrefix}`
+    const first = seen.get(key)
+    if (first !== undefined) return issues.add(s, `「域名」和「网址开头」跟第 ${first} 行重复，已跳过`, { ...at, field: 'host' })
+    seen.set(key, row)
+    if (accepted >= SHOT_CUSTOM_MAX) return issues.add(s, `自定义网站最多 ${SHOT_CUSTOM_MAX} 行，已跳过`, at)
+    accepted += 1
+    sites.push({
+      id: `custom-${row}`, name, builtin: false, host, pathPrefix,
+      auto: bool(r.auto, true),
+      maxImages: clampNumber(issues, s, '最多几张', r.maxImages, 1, 1, SHOT_MAX_IMAGES, { ...at, integer: true, field: 'maxImages' }),
+      row,
+    })
+  })
+  return { sites }
+}
+
+/** 旧开关和 BR 的新开关都开着，BR 才自动截图 */
+function brAutoOf(raw: Raw, screenshot: ScreenshotSettings, issues: IssueList): boolean {
+  const legacy = bool(obj(raw.render).brAuto, true)
+  // 没有 screenshot 键 = 没经过 Schema 的原始对象，不提示
+  if (!legacy && !isMissing(raw.screenshot)) {
+    issues.add('render', '旧设置「战报链接自动截图」是关着的：BR 工具战报不会自动截图。要打开，把它和「截图」里 BR 工具战报的「自动截图」都打开', { field: 'brAuto' })
+  }
+  const br = screenshot.sites.find((x) => x.id === 'br')
+  return legacy && !!br && br.auto
+}
+
 /** `a || b`：逐个检查，写错的丢掉并报告；空 = [] */
 function urlList(issues: IssueList, field: string, label: string, value: unknown, fallback: string): string[] {
   const source = isMissing(value) ? fallback : text(value)
@@ -812,6 +887,7 @@ export function normalizeConfig(input: unknown): NormalizedConfig {
   }
 
   const sso = normalizeSso(raw, issues)
+  const screenshot = normalizeScreenshot(raw, issues)
   if (!sso.clientId) {
     for (const m of markets) {
       if (m.type === 'structure' && m.authProfile) {
@@ -833,7 +909,8 @@ export function normalizeConfig(input: unknown): NormalizedConfig {
     notices: { list: normalizeNotices(raw, issues) },
     industry: normalizeIndustry(raw, issues),
     sso,
-    render: normalizeRender(raw, issues),
+    render: { ...normalizeRender(raw, issues), brAuto: brAutoOf(raw, screenshot, issues) },
+    screenshot,
     advanced: normalizeAdvanced(raw, issues),
     issues: issues.list,
   }

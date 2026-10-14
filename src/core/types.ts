@@ -104,7 +104,7 @@ export function isFailure(value: unknown): value is CoreFailure {
 
 export type ConfigSection =
   | 'general' | 'display' | 'access' | 'markets' | 'aliases' | 'price' | 'appraisal'
-  | 'freight' | 'notices' | 'industry' | 'sso' | 'render' | 'advanced'
+  | 'freight' | 'notices' | 'industry' | 'sso' | 'render' | 'screenshot' | 'advanced'
 
 /** 配置问题：日志每次加载只写一次，「市场状态」里全部列出 */
 export interface ConfigIssue {
@@ -321,7 +321,25 @@ export interface SsoSettings {
 export interface RenderSettings {
   influenceMapUrl: string
   coalitionMapUrl: string
+  /** BR 工具战报实际是否自动截图（旧开关、新开关、BR 启用三者都满足） */
   brAuto: boolean
+}
+
+/** 截图名单里的一个网站（只含启用、有效的） */
+export interface ShotSiteSetting {
+  id: string
+  name: string
+  builtin: boolean
+  host: string
+  pathPrefix: string
+  auto: boolean
+  maxImages: number
+  /** 自定义网站在表格里的行号 */
+  row?: number
+}
+
+export interface ScreenshotSettings {
+  sites: ShotSiteSetting[]
 }
 
 export interface AdvancedSettings {
@@ -347,6 +365,7 @@ export interface Settings {
   industry: IndustrySettings
   sso: SsoSettings
   render: RenderSettings
+  screenshot: ScreenshotSettings
   advanced: AdvancedSettings
   /** 本地检查发现的问题；需要数据的检查由 core 在数据加载后补充 */
   issues: ConfigIssue[]
