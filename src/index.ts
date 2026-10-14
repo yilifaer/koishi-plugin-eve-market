@@ -5,7 +5,7 @@ import { Config } from './config/schema'
 export const name = 'eve-market'
 
 // database：授权档案和 Koishi 的权限等级；http：ESI、SSO、数据下载。
-// puppeteer（走势图、战报截图）和 server（EVE 授权页面）没有时相应的功能不可用，其他照常
+// puppeteer（走势图、网站截图）和 server（EVE 授权页面）没有时相应的功能不可用，其他照常
 export const inject = { required: ['database', 'http'], optional: ['puppeteer', 'server'] }
 
 export { Config }
@@ -18,7 +18,8 @@ EVE Online 欧服市场助手（测试版），**只在 QQ 官方机器人上回
 - 先看一眼下面的「市场」表格：预置了 Jita 和另外四个 NPC 交易中心，可以改、删、加。
 - 联盟建筑市场：先在下面的「EVE 授权」里填好 EVE 开发者网站上应用的 Client ID 和 Secret Key，再点上面的「打开 EVE 授权页面」用服务角色授权。
 - 授权群和管理员的 ID：在群里或私聊里 @机器人 发「本群ID」查看。管理员可以发「市场状态」「市场授权」查看各市场和授权的情况。
-- 走势图和战报截图要用 Koishi 的 **puppeteer** 插件（可以以后再装，装好就能用）：没有它时「走势」只发文字卡片，「战报」回复截图服务没有启动。
+- 走势图和网站截图要用 Koishi 的 **puppeteer** 插件（可以以后再装，装好就能用）：没有它时「走势」只发文字卡片，「战报」「截图」回复截图服务没有启动。
+- 「截图 网址」能截 BR 工具战报、Warbeacon 战报、Janice 估价结果、DOTLAN 星图和你在下面「截图」里加的自定义网站；每个网站可以单独关掉或只关自动截图。
 - 上线前，管理员在测试群里 @机器人 发「样式自检 1」「样式自检 2」，照每条消息里写的检查 QQ 上的显示。
 - 配置写错的行会被跳过，Koishi 日志和「市场状态」里会写明是哪一行、哪里不对。
 
