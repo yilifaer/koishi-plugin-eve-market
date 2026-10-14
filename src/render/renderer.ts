@@ -73,10 +73,16 @@ export function puppeteerPages(get: () => unknown): () => PageFactory | undefine
     const service = get() as { page?: unknown; browser?: unknown } | null | undefined
     if (!service || typeof service.page !== 'function') return undefined
     const open = service.page as (this: unknown) => Promise<RenderPage>
+    // puppeteer 的页面没有 onPopup，补上：转成 page.on('popup')，网络守卫靠它关弹窗
+    const withPopup = (page: RenderPage): RenderPage => {
+      const events = page as unknown as { on(event: 'popup', handler: (popup: { close(): Promise<void> } | null) => void): unknown }
+      page.onPopup ??= (handler) => events.on('popup', handler)
+      return page
+    }
     return async () => {
       // 每个页面一个独立上下文：关页面时整个上下文一起关，弹窗、Cookie、Service Worker 都不会留下
       const browser = service.browser as { createBrowserContext?: () => Promise<{ newPage(): Promise<RenderPage>; close(): Promise<void> }> } | undefined
-      if (typeof browser?.createBrowserContext !== 'function') return open.call(service)
+      if (typeof browser?.createBrowserContext !== 'function') return withPopup(await open.call(service))
       const context = await browser.createBrowserContext()
       try {
         const page = await context.newPage()
@@ -88,7 +94,7 @@ export function puppeteerPages(get: () => unknown): () => PageFactory | undefine
             await context.close()
           }
         }
-        return page
+        return withPopup(page)
       } catch (error) {
         await context.close().catch(() => undefined)
         throw error

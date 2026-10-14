@@ -9,8 +9,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { Browser, Page } from 'puppeteer-core'
 import type { Logger } from '../../src/core/ports'
 import type { ShotProfile } from '../../src/core/sites'
-import { createRenderer } from '../../src/render/renderer'
-import type { PageFactory, RenderPage } from '../../src/render/renderer'
+import { createRenderer, puppeteerPages } from '../../src/render/renderer'
+import type { PageFactory } from '../../src/render/renderer'
 import { SiteScreenshotter } from '../../src/render/site-shot'
 import type { ShotTarget } from '../../src/render/site-shot'
 
@@ -39,23 +39,28 @@ describe.skipIf(!HAS_CHROME)('SiteScreenshotter net guard with Chromium and loca
   /** 本机服务收到的路径 */
   const hits: string[] = []
 
+  // 走生产的 puppeteerPages（含 onPopup 适配），只把 goto 的地址换成本机
   const source: PageFactory = async () => {
-    const page = await browser.newPage()
-    opened.push(page)
-    const typed: RenderPage = page
-    return {
-      setViewport: (v) => typed.setViewport(v),
-      setJavaScriptEnabled: (enabled) => typed.setJavaScriptEnabled(enabled),
-      setRequestInterception: (enabled) => typed.setRequestInterception(enabled),
-      on: (event, handler) => typed.on(event, handler),
-      setContent: (html, options) => typed.setContent(html, options),
-      goto: (url, options) => typed.goto(url.replace(/^https:\/\/kb\.example\.com/, origin), options),
-      evaluate: (expression) => typed.evaluate(expression),
-      screenshot: (options) => typed.screenshot(options),
-      close: () => typed.close(),
-      mainFrame: () => page.mainFrame(),
-      onPopup: (handler) => page.on('popup', handler),
-    }
+    const pages = puppeteerPages(() => ({
+      browser: {
+        createBrowserContext: async () => {
+          const context = await browser.createBrowserContext()
+          return {
+            newPage: async () => {
+              const page = await context.newPage()
+              opened.push(page)
+              return page
+            },
+            close: () => context.close(),
+          }
+        },
+      },
+      page: async () => browser.newPage(),
+    }))
+    const page = await pages()!()
+    const goto = page.goto.bind(page)
+    page.goto = (url, options) => goto(url.replace(/^https:\/\/kb\.example\.com/, origin), options)
+    return page
   }
 
   const shooter = () => new SiteScreenshotter({ renderer: createRenderer({ pages: () => source }), logger: quiet, settlePollMs: 100 })

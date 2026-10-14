@@ -108,8 +108,9 @@ export class FakePage implements RenderPage {
 
   async setRequestInterception() {}
 
-  on(_event: 'request', handler: (request: PageRequest) => void) {
-    this.handler = handler
+  on(event: string, handler: (request: PageRequest) => void) {
+    // 只记请求事件；弹窗等其他事件假页面不会触发
+    if (event === 'request') this.handler = handler
     return this
   }
 
