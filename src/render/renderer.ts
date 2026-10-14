@@ -278,6 +278,8 @@ export interface HtmlShotOptions {
   type?: 'png' | 'jpeg'
   /** jpeg 的质量 */
   quality?: number
+  /** 页面比视口高时截整页（高度不固定的卡片用；视口是最小高度） */
+  fullPage?: boolean
   timeoutMs: number
   signal?: AbortSignal
 }
@@ -408,6 +410,7 @@ class PageRenderer implements Renderer {
       if (signal.aborted) throw signal.reason
       const shot: ShotOptions = { type }
       if (type === 'jpeg' && options.quality !== undefined) shot.quality = options.quality
+      if (options.fullPage) shot.fullPage = true
       const data = toImageBuffer(await page.screenshot(shot))
       const size = imageSize(data)
       if (!size) throw new RenderError('failed', '截图结果不是图片')

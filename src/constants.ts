@@ -667,3 +667,17 @@ export const KB_IMAGES_DEADLINE_MS = 6000
 export const ESI_CHARACTER_CACHE_HOURS = 1
 export const ESI_CORP_CACHE_HOURS = 24
 export const ESI_STATION_CACHE_DAYS = 7
+
+// ------------------------------------------------------------------ KB 人物卡出图（样式「新伊甸日报」）
+
+/** 卡片 720 CSS 像素宽、至少 1040 高（内容更长时截整页），1.5 倍 → 1080 像素宽 */
+export const KB_CARD_WIDTH = 720
+export const KB_CARD_MIN_HEIGHT = 1040
+export const KB_CARD_SCALE = 1.5
+/** PNG 会到 2 MB 以上，所以默认 JPEG */
+export const KB_CARD_JPEG_QUALITY = 88
+export const KB_CARD_LRU_SIZE = 50
+export const KB_CARD_RENDER_TIMEOUT_MS = 20000
+/** 标题字号的上下限（CSS 像素），按宽度算好写死 */
+export const KB_HEADLINE_FONT_MAX = 58
+export const KB_HEADLINE_FONT_MIN = 30

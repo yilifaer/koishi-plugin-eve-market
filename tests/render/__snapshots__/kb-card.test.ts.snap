@@ -1,0 +1,199 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`kbCardHtml snapshots > ghost with no records 1`] = `
+"<!doctype html>
+<html lang="zh-CN"><head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
+<title>新伊甸日报</title>
+<style>*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:720px;min-height:1040px;background:#EFE6D2}
+body{font-family:"Songti SC","STSong","Noto Serif CJK SC","Source Han Serif SC","SimSun","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC","WenQuanYi Zen Hei","WenQuanYi Micro Hei",sans-serif;color:#1B1A17;padding:24px;background:#EFE6D2 repeating-radial-gradient(circle at 30% 20%,rgba(80,60,20,.025) 0 2px,transparent 2px 5px)}
+.mast{border-top:3px solid #1B1A17;padding-top:4px;text-align:center}
+.mast:before{content:"";display:block;border-top:1px solid #1B1A17;margin-bottom:8px}
+.en{font:bold 64px/1.05 "Didot","Bodoni 72","Baskerville","Times New Roman","Liberation Serif","DejaVu Serif",serif;letter-spacing:4px}
+.zh{font-size:28px;letter-spacing:14px;margin:4px 0 8px;text-indent:14px}
+.meta{display:flex;justify-content:space-between;font-size:17px;padding:6px 0;border-top:1px solid #1B1A17;border-bottom:1px solid #1B1A17;position:relative}
+.meta:after{content:"";position:absolute;left:0;right:0;bottom:-6px;border-top:3px solid #1B1A17}
+.banner{margin-top:14px;background:#B3261E;color:#fff;font-weight:bold;font-size:24px;padding:6px 14px;display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.banner span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.banner small{font-size:19px;font-weight:normal;flex:none}
+.lead{display:flex;gap:18px;margin-top:16px}
+.photo{width:240px;flex:none}
+.pic{width:240px;height:280px;border:3px solid #1B1A17;filter:grayscale(1) sepia(.35) contrast(1.1);overflow:hidden}
+.cap{font-size:17px;font-style:italic;margin-top:6px;line-height:1.35;overflow-wrap:anywhere}
+.txt{flex:1;min-width:0}
+h1{line-height:1.1;font-weight:900;letter-spacing:-1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lede{font-size:20px;line-height:1.5;text-align:justify;margin-top:10px;overflow-wrap:anywhere}
+.org{margin-top:10px;border-top:1px solid #1B1A17;padding-top:8px;display:flex;flex-direction:column;gap:6px;font-size:19px}
+.org div{display:flex;align-items:center;gap:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.org i{width:28px;height:28px;display:block;flex:none;filter:grayscale(.6)}
+.dos{margin-top:8px;font-size:17px;line-height:1.4;color:#3d3a31}
+.dos div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sep{margin:18px 0 0;border-top:3px solid #1B1A17;border-bottom:1px solid #1B1A17;height:6px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);margin-top:12px;border-top:1px solid #1B1A17;border-left:1px solid #1B1A17}
+.st{border-right:1px solid #1B1A17;border-bottom:1px solid #1B1A17;padding:6px 10px 8px;display:flex;flex-direction:column;min-width:0}
+.st b{font:bold 38px/1.1 "Impact","Haettenschweiler","Arial Narrow","Liberation Sans Narrow","DejaVu Sans Condensed",sans-serif;font-stretch:condensed;letter-spacing:.5px;white-space:nowrap}
+.st b.red{color:#B3261E}
+.st span{font-size:19px}
+h2{font-size:22px;letter-spacing:6px;border-bottom:2px solid #1B1A17;margin:18px 0 8px;padding-bottom:2px;display:flex;justify-content:space-between;align-items:baseline}
+h2 small{font-size:17px;letter-spacing:0;font-weight:normal}
+.ship{display:flex;align-items:center;gap:12px;height:62px;border-bottom:1px dotted #1B1A17}
+.si{width:50px;height:50px;filter:grayscale(1);flex:none;overflow:hidden}
+.sn{width:170px;flex:none;min-width:0}.sn b{display:block;font-size:24px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sn em{display:block;font:italic 18px "Liberation Serif",serif;color:#5a564b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sk{flex:1;display:flex;flex-direction:column;align-items:flex-end;gap:5px}
+.sk b{font:bold 26px/1 "Liberation Sans Narrow","Liberation Sans",sans-serif;font-stretch:condensed}
+.sk u{display:block;height:12px;background:repeating-linear-gradient(45deg,#1B1A17 0 3px,transparent 3px 7px);border:1px solid #1B1A17}
+.pc{width:52px;text-align:right;font-size:20px}
+.two{display:flex;gap:20px}.two>div{flex:1;min-width:0}
+ul{list-style:none;font-size:19px}
+li{display:flex;gap:6px;align-items:baseline;padding:4px 0;border-bottom:1px dotted #1B1A17;white-space:nowrap}
+li small{font-size:16px;color:#5a564b}li span{margin-left:auto;font-weight:bold}
+li em{font-style:normal;overflow:hidden;text-overflow:ellipsis}
+.ev{font-size:19px;line-height:1.35;margin-top:8px;overflow-wrap:anywhere}.ev b{color:#B3261E}
+.hours{display:flex;gap:2px;margin-top:4px}.hours i{flex:1;height:34px;display:block;border:1px solid rgba(27,26,23,.25)}
+.ax{display:flex;justify-content:space-between;font-size:16px;margin-top:2px}
+.best{font-size:19px;margin-top:6px;line-height:1.35}
+.foot{margin-top:18px;border-top:1px solid #1B1A17;padding-top:6px;font-size:15px;color:#4a463c;display:flex;justify-content:space-between;gap:10px}</style>
+</head><body>
+<div class="mast"><div class="en">NEW EDEN NEWS</div><div class="zh">新伊甸日报</div><div class="meta"><span>YC128 年 10 月 14 日 星期三</span><span>欧服 TRANQUILITY 版</span><span>售价 1,000 ISK</span></div></div>
+<div class="banner"><span>号外 · 神秘人物</span></div>
+<div class="lead"><div class="photo"><div class="pic"><svg viewBox="0 0 200 240" width="100%" height="100%" preserveAspectRatio="xMidYMid slice"><defs><linearGradient id="kbb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6d7f93"/><stop offset="1" stop-color="#2d3948"/></linearGradient><radialGradient id="kbf" cx=".5" cy=".4" r=".6"><stop offset="0" stop-color="#f2cdb0"/><stop offset="1" stop-color="#b98062"/></radialGradient></defs><rect width="200" height="240" fill="url(#kbb)"/><path d="M20 240c4-52 36-76 80-76s76 24 80 76z" fill="#1d2630"/><path d="M82 150h36v26c-10 8-26 8-36 0z" fill="#c08c6e"/><ellipse cx="100" cy="98" rx="42" ry="52" fill="url(#kbf)"/><path d="M56 96c-8-52 24-70 50-68 34 2 48 30 38 70-6-24-14-34-30-38-20 8-44 6-58 36z" fill="#16171c"/><rect x="73" y="98" width="20" height="5" rx="2.5" fill="#2b2220"/><rect x="108" y="98" width="20" height="5" rx="2.5" fill="#2b2220"/><path d="M88 130q12 7 24 0" stroke="#7d4b3d" stroke-width="3" fill="none" stroke-linecap="round"/></svg></div><div class="cap">图：Ren Aoyagi，摄于新伊甸某处</div></div><div class="txt"><h1 style="font-size:43px">新伊甸查无此人战绩</h1><p class="lede">zKillboard 翻遍了档案，没有找到 Ren Aoyagi 的任何击杀或损失。</p><div class="dos"><div>建号：EVE 2020-05-17（北京 2020-05-18）</div></div></div></div>
+<div class="sep"></div>
+<div class="foot"><span>数据：zKillboard / 欧服官方接口 · 截至 EVE 2026-10-14 12:00</span><span>本报纯属娱乐</span></div>
+</body></html>"
+`;
+
+exports[`kbCardHtml snapshots > rookie 1`] = `
+"<!doctype html>
+<html lang="zh-CN"><head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
+<title>新伊甸日报</title>
+<style>*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:720px;min-height:1040px;background:#EFE6D2}
+body{font-family:"Songti SC","STSong","Noto Serif CJK SC","Source Han Serif SC","SimSun","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC","WenQuanYi Zen Hei","WenQuanYi Micro Hei",sans-serif;color:#1B1A17;padding:24px;background:#EFE6D2 repeating-radial-gradient(circle at 30% 20%,rgba(80,60,20,.025) 0 2px,transparent 2px 5px)}
+.mast{border-top:3px solid #1B1A17;padding-top:4px;text-align:center}
+.mast:before{content:"";display:block;border-top:1px solid #1B1A17;margin-bottom:8px}
+.en{font:bold 64px/1.05 "Didot","Bodoni 72","Baskerville","Times New Roman","Liberation Serif","DejaVu Serif",serif;letter-spacing:4px}
+.zh{font-size:28px;letter-spacing:14px;margin:4px 0 8px;text-indent:14px}
+.meta{display:flex;justify-content:space-between;font-size:17px;padding:6px 0;border-top:1px solid #1B1A17;border-bottom:1px solid #1B1A17;position:relative}
+.meta:after{content:"";position:absolute;left:0;right:0;bottom:-6px;border-top:3px solid #1B1A17}
+.banner{margin-top:14px;background:#B3261E;color:#fff;font-weight:bold;font-size:24px;padding:6px 14px;display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.banner span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.banner small{font-size:19px;font-weight:normal;flex:none}
+.lead{display:flex;gap:18px;margin-top:16px}
+.photo{width:240px;flex:none}
+.pic{width:240px;height:280px;border:3px solid #1B1A17;filter:grayscale(1) sepia(.35) contrast(1.1);overflow:hidden}
+.cap{font-size:17px;font-style:italic;margin-top:6px;line-height:1.35;overflow-wrap:anywhere}
+.txt{flex:1;min-width:0}
+h1{line-height:1.1;font-weight:900;letter-spacing:-1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lede{font-size:20px;line-height:1.5;text-align:justify;margin-top:10px;overflow-wrap:anywhere}
+.org{margin-top:10px;border-top:1px solid #1B1A17;padding-top:8px;display:flex;flex-direction:column;gap:6px;font-size:19px}
+.org div{display:flex;align-items:center;gap:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.org i{width:28px;height:28px;display:block;flex:none;filter:grayscale(.6)}
+.dos{margin-top:8px;font-size:17px;line-height:1.4;color:#3d3a31}
+.dos div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sep{margin:18px 0 0;border-top:3px solid #1B1A17;border-bottom:1px solid #1B1A17;height:6px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);margin-top:12px;border-top:1px solid #1B1A17;border-left:1px solid #1B1A17}
+.st{border-right:1px solid #1B1A17;border-bottom:1px solid #1B1A17;padding:6px 10px 8px;display:flex;flex-direction:column;min-width:0}
+.st b{font:bold 38px/1.1 "Impact","Haettenschweiler","Arial Narrow","Liberation Sans Narrow","DejaVu Sans Condensed",sans-serif;font-stretch:condensed;letter-spacing:.5px;white-space:nowrap}
+.st b.red{color:#B3261E}
+.st span{font-size:19px}
+h2{font-size:22px;letter-spacing:6px;border-bottom:2px solid #1B1A17;margin:18px 0 8px;padding-bottom:2px;display:flex;justify-content:space-between;align-items:baseline}
+h2 small{font-size:17px;letter-spacing:0;font-weight:normal}
+.ship{display:flex;align-items:center;gap:12px;height:62px;border-bottom:1px dotted #1B1A17}
+.si{width:50px;height:50px;filter:grayscale(1);flex:none;overflow:hidden}
+.sn{width:170px;flex:none;min-width:0}.sn b{display:block;font-size:24px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sn em{display:block;font:italic 18px "Liberation Serif",serif;color:#5a564b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sk{flex:1;display:flex;flex-direction:column;align-items:flex-end;gap:5px}
+.sk b{font:bold 26px/1 "Liberation Sans Narrow","Liberation Sans",sans-serif;font-stretch:condensed}
+.sk u{display:block;height:12px;background:repeating-linear-gradient(45deg,#1B1A17 0 3px,transparent 3px 7px);border:1px solid #1B1A17}
+.pc{width:52px;text-align:right;font-size:20px}
+.two{display:flex;gap:20px}.two>div{flex:1;min-width:0}
+ul{list-style:none;font-size:19px}
+li{display:flex;gap:6px;align-items:baseline;padding:4px 0;border-bottom:1px dotted #1B1A17;white-space:nowrap}
+li small{font-size:16px;color:#5a564b}li span{margin-left:auto;font-weight:bold}
+li em{font-style:normal;overflow:hidden;text-overflow:ellipsis}
+.ev{font-size:19px;line-height:1.35;margin-top:8px;overflow-wrap:anywhere}.ev b{color:#B3261E}
+.hours{display:flex;gap:2px;margin-top:4px}.hours i{flex:1;height:34px;display:block;border:1px solid rgba(27,26,23,.25)}
+.ax{display:flex;justify-content:space-between;font-size:16px;margin-top:2px}
+.best{font-size:19px;margin-top:6px;line-height:1.35}
+.foot{margin-top:18px;border-top:1px solid #1B1A17;padding-top:6px;font-size:15px;color:#4a463c;display:flex;justify-content:space-between;gap:10px}</style>
+</head><body>
+<div class="mast"><div class="en">NEW EDEN NEWS</div><div class="zh">新伊甸日报</div><div class="meta"><span>YC128 年 10 月 14 日 星期三</span><span>欧服 TRANQUILITY 版</span><span>售价 1,000 ISK</span></div></div>
+<div class="banner"><span>号外 · 初出茅庐</span></div>
+<div class="lead"><div class="photo"><div class="pic"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==" alt="Mika Tsukishiro" style="width:100%;height:100%;object-fit:cover;display:block"></div><div class="cap">图：Mika Tsukishiro，摄于 Testville III - Fictional Academy</div></div><div class="txt"><h1 style="font-size:30px">保护期刚过：Mika Tsukishiro</h1><p class="lede">Hanako Kisaragi 是一名出色的独狼猎手。累计击毁 1,284 艘舰船，其中 331 次单杀。</p><div class="org"><div><i><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==" alt="" style="width:100%;height:100%;object-fit:cover;display:block"></i>[MHL] Moonlit Harbor Logistics</div></div><div class="dos"><div>建号：EVE 2026-09-01（北京 2026-09-01）</div></div></div></div>
+<div class="sep"></div>
+<div class="grid"><div class="st"><b>3</b><span>击毁</span></div><div class="st"><b class="red">4</b><span>损失</span></div><div class="st"><b>1</b><span>单杀</span></div><div class="st"><b>37.5%</b><span>效率</span></div><div class="st"><b>12M</b><span>击毁价值</span></div><div class="st"><b class="red">20M</b><span>损失价值</span></div></div>
+<h2><span>王牌座驾</span><small>按击杀数</small></h2><div class="ship"><div class="si"><svg viewBox="0 0 64 64" width="100%" height="100%"><path d="M32 6l8 18 18 6-12 8 2 18-16-8-16 8 2-18-12-8 18-6z" fill="#8c8678" stroke="#1B1A17" stroke-width="2.5" stroke-linejoin="round"/><circle cx="32" cy="30" r="4" fill="#1B1A17"/></svg></div><div class="sn"><b>Rookie Ship</b></div><div class="sk"><b>3 杀</b><u style="width:320px"></u></div><span class="pc">100%</span></div>
+<div class="two"><div><h2><span>常出没</span></h2><ul><li><b style="color:#1f6b3a">Newbie</b> <small>0.9</small> <em>Starter</em><span>3</span></li></ul></div><div><h2><span>作息</span></h2><div class="best">主要时区：欧洲 / 美东</div><h2><span>近 12 个月</span><small>上击毁 下损失</small></h2><svg viewBox="0 0 300 124" width="100%" style="display:block"><line x1="0" x2="300" y1="61" y2="61" stroke="#1B1A17"/><rect x="277" y="18" width="19" height="42" fill="#1B1A17"/><rect x="277" y="62" width="19" height="56" fill="#B3261E"/></svg></div></div>
+<div class="foot"><span>数据：zKillboard / 欧服官方接口 · 截至 EVE 2026-10-14 12:00</span><span>本报纯属娱乐</span></div>
+</body></html>"
+`;
+
+exports[`kbCardHtml snapshots > solo hunter 1`] = `
+"<!doctype html>
+<html lang="zh-CN"><head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
+<title>新伊甸日报</title>
+<style>*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:720px;min-height:1040px;background:#EFE6D2}
+body{font-family:"Songti SC","STSong","Noto Serif CJK SC","Source Han Serif SC","SimSun","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC","WenQuanYi Zen Hei","WenQuanYi Micro Hei",sans-serif;color:#1B1A17;padding:24px;background:#EFE6D2 repeating-radial-gradient(circle at 30% 20%,rgba(80,60,20,.025) 0 2px,transparent 2px 5px)}
+.mast{border-top:3px solid #1B1A17;padding-top:4px;text-align:center}
+.mast:before{content:"";display:block;border-top:1px solid #1B1A17;margin-bottom:8px}
+.en{font:bold 64px/1.05 "Didot","Bodoni 72","Baskerville","Times New Roman","Liberation Serif","DejaVu Serif",serif;letter-spacing:4px}
+.zh{font-size:28px;letter-spacing:14px;margin:4px 0 8px;text-indent:14px}
+.meta{display:flex;justify-content:space-between;font-size:17px;padding:6px 0;border-top:1px solid #1B1A17;border-bottom:1px solid #1B1A17;position:relative}
+.meta:after{content:"";position:absolute;left:0;right:0;bottom:-6px;border-top:3px solid #1B1A17}
+.banner{margin-top:14px;background:#B3261E;color:#fff;font-weight:bold;font-size:24px;padding:6px 14px;display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.banner span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.banner small{font-size:19px;font-weight:normal;flex:none}
+.lead{display:flex;gap:18px;margin-top:16px}
+.photo{width:240px;flex:none}
+.pic{width:240px;height:280px;border:3px solid #1B1A17;filter:grayscale(1) sepia(.35) contrast(1.1);overflow:hidden}
+.cap{font-size:17px;font-style:italic;margin-top:6px;line-height:1.35;overflow-wrap:anywhere}
+.txt{flex:1;min-width:0}
+h1{line-height:1.1;font-weight:900;letter-spacing:-1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lede{font-size:20px;line-height:1.5;text-align:justify;margin-top:10px;overflow-wrap:anywhere}
+.org{margin-top:10px;border-top:1px solid #1B1A17;padding-top:8px;display:flex;flex-direction:column;gap:6px;font-size:19px}
+.org div{display:flex;align-items:center;gap:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.org i{width:28px;height:28px;display:block;flex:none;filter:grayscale(.6)}
+.dos{margin-top:8px;font-size:17px;line-height:1.4;color:#3d3a31}
+.dos div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sep{margin:18px 0 0;border-top:3px solid #1B1A17;border-bottom:1px solid #1B1A17;height:6px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);margin-top:12px;border-top:1px solid #1B1A17;border-left:1px solid #1B1A17}
+.st{border-right:1px solid #1B1A17;border-bottom:1px solid #1B1A17;padding:6px 10px 8px;display:flex;flex-direction:column;min-width:0}
+.st b{font:bold 38px/1.1 "Impact","Haettenschweiler","Arial Narrow","Liberation Sans Narrow","DejaVu Sans Condensed",sans-serif;font-stretch:condensed;letter-spacing:.5px;white-space:nowrap}
+.st b.red{color:#B3261E}
+.st span{font-size:19px}
+h2{font-size:22px;letter-spacing:6px;border-bottom:2px solid #1B1A17;margin:18px 0 8px;padding-bottom:2px;display:flex;justify-content:space-between;align-items:baseline}
+h2 small{font-size:17px;letter-spacing:0;font-weight:normal}
+.ship{display:flex;align-items:center;gap:12px;height:62px;border-bottom:1px dotted #1B1A17}
+.si{width:50px;height:50px;filter:grayscale(1);flex:none;overflow:hidden}
+.sn{width:170px;flex:none;min-width:0}.sn b{display:block;font-size:24px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sn em{display:block;font:italic 18px "Liberation Serif",serif;color:#5a564b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sk{flex:1;display:flex;flex-direction:column;align-items:flex-end;gap:5px}
+.sk b{font:bold 26px/1 "Liberation Sans Narrow","Liberation Sans",sans-serif;font-stretch:condensed}
+.sk u{display:block;height:12px;background:repeating-linear-gradient(45deg,#1B1A17 0 3px,transparent 3px 7px);border:1px solid #1B1A17}
+.pc{width:52px;text-align:right;font-size:20px}
+.two{display:flex;gap:20px}.two>div{flex:1;min-width:0}
+ul{list-style:none;font-size:19px}
+li{display:flex;gap:6px;align-items:baseline;padding:4px 0;border-bottom:1px dotted #1B1A17;white-space:nowrap}
+li small{font-size:16px;color:#5a564b}li span{margin-left:auto;font-weight:bold}
+li em{font-style:normal;overflow:hidden;text-overflow:ellipsis}
+.ev{font-size:19px;line-height:1.35;margin-top:8px;overflow-wrap:anywhere}.ev b{color:#B3261E}
+.hours{display:flex;gap:2px;margin-top:4px}.hours i{flex:1;height:34px;display:block;border:1px solid rgba(27,26,23,.25)}
+.ax{display:flex;justify-content:space-between;font-size:16px;margin-top:2px}
+.best{font-size:19px;margin-top:6px;line-height:1.35}
+.foot{margin-top:18px;border-top:1px solid #1B1A17;padding-top:6px;font-size:15px;color:#4a463c;display:flex;justify-content:space-between;gap:10px}</style>
+</head><body>
+<div class="mast"><div class="en">NEW EDEN NEWS</div><div class="zh">新伊甸日报</div><div class="meta"><span>YC128 年 10 月 14 日 星期三</span><span>欧服 TRANQUILITY 版</span><span>售价 1,000 ISK</span></div></div>
+<div class="banner"><span>号外 · 独狼猎手</span><small>本周火力全开</small></div>
+<div class="lead"><div class="photo"><div class="pic"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==" alt="Hanako Kisaragi" style="width:100%;height:100%;object-fit:cover;display:block"></div><div class="cap">图：Hanako Kisaragi，摄于 Testville III - Fictional Academy</div></div><div class="txt"><h1 style="font-size:58px">独狼出没！</h1><p class="lede">Hanako Kisaragi 是一名出色的独狼猎手。累计击毁 1,284 艘舰船，其中 331 次单杀。</p><div class="org"><div><i><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==" alt="" style="width:100%;height:100%;object-fit:cover;display:block"></i>[MHL] Moonlit Harbor Logistics</div><div><i><svg viewBox="0 0 32 32" width="100%" height="100%"><rect x="3" y="3" width="26" height="26" rx="4" fill="#555"/><circle cx="16" cy="16" r="7" fill="none" stroke="#ddd" stroke-width="3"/></svg></i>&lt;FICT&gt; Fictional Federation</div></div><div class="dos"><div>建号：EVE 2020-05-17（北京 2020-05-18）</div><div>军团头衔：Night Shift</div></div></div></div>
+<div class="sep"></div>
+<div class="grid"><div class="st"><b>1,284</b><span>击毁</span></div><div class="st"><b class="red">312</b><span>损失</span></div><div class="st"><b>331</b><span>单杀</span></div><div class="st"><b>93%</b><span>效率</span></div><div class="st"><b>845.2B</b><span>击毁价值</span></div><div class="st"><b class="red">61.8B</b><span>损失价值</span></div><div class="st"><b>78%</b><span>危险度</span></div><div class="st"><b>64%</b><span>抱团度</span></div></div>
+<h2><span>王牌座驾</span><small>按击杀数</small></h2><div class="ship"><div class="si"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==" alt="" style="width:100%;height:100%;object-fit:cover;display:block"></div><div class="sn"><b>乌鸦级</b><em>Raven</em></div><div class="sk"><b>412 杀</b><u style="width:106px"></u></div><span class="pc">33%</span></div><div class="ship"><div class="si"><svg viewBox="0 0 64 64" width="100%" height="100%"><path d="M32 6l8 18 18 6-12 8 2 18-16-8-16 8 2-18-12-8 18-6z" fill="#8c8678" stroke="#1B1A17" stroke-width="2.5" stroke-linejoin="round"/><circle cx="32" cy="30" r="4" fill="#1B1A17"/></svg></div><div class="sn"><b>毒蜥级</b><em>Gila</em></div><div class="sk"><b>301 杀</b><u style="width:74px"></u></div><span class="pc">23%</span></div><div class="ship"><div class="si"><svg viewBox="0 0 64 64" width="100%" height="100%"><path d="M32 6l8 18 18 6-12 8 2 18-16-8-16 8 2-18-12-8 18-6z" fill="#8c8678" stroke="#1B1A17" stroke-width="2.5" stroke-linejoin="round"/><circle cx="32" cy="30" r="4" fill="#1B1A17"/></svg></div><div class="sn"><b>Mystery Hull</b></div><div class="sk"><b>198 杀</b><u style="width:48px"></u></div><span class="pc">15%</span></div>
+<div class="two"><div><h2><span>常出没</span></h2><ul><li><b style="color:#b3261e">Alpha-1</b> <small>-0.4</small> <em>Nowhere</em><span>276</span></li><li><b style="color:#b3261e">Beta-2</b> <small>-0.5</small> <em>Nowhere</em><span>188</span></li><li><b style="color:#8a6a00">Gamma</b> <small>0.3</small> <em>Elsewhere</em><span>94</span></li></ul><div class="ev"><b>近期大击杀</b><br>毒蜥级 3.2B · Alpha-1 · 10-12</div><div class="ev"><b>近期大损失</b><br>Mystery Hull 410M · Beta-2 · 10-09</div></div><div><h2><span>作息</span><small>北京时间</small></h2><div class="hours"><i style="background:rgba(27,26,23,0.11)"></i><i style="background:rgba(27,26,23,0.11)"></i><i style="background:rgba(27,26,23,1.00)"></i><i style="background:rgba(27,26,23,1.00)"></i><i style="background:rgba(27,26,23,1.00)"></i><i style="background:rgba(27,26,23,1.00)"></i><i style="background:rgba(27,26,23,1.00)"></i><i style="background:rgba(27,26,23,1.00)"></i><i style="background:rgba(27,26,23,0.11)"></i><i style="background:rgba(27,26,23,0.11)"></i><i style="background:rgba(27,26,23,0.11)"></i><i style="background:rgba(27,26,23,0.11)"></i><i style="background:rgba(27,26,23,0.69)"></i><i style="background:rgba(27,26,23,0.69)"></i><i style="background:rgba(27,26,23,0.69)"></i><i style="background:rgba(27,26,23,0.69)"></i><i style="background:rgba(27,26,23,0.11)"></i><i style="background:rgba(27,26,23,0.11)"></i><i style="background:rgba(27,26,23,0.11)"></i><i style="background:rgba(27,26,23,0.11)"></i><i style="background:rgba(27,26,23,0.11)"></i><i style="background:rgba(27,26,23,0.11)"></i><i style="background:rgba(27,26,23,0.11)"></i><i style="background:rgba(27,26,23,0.11)"></i></div><div class="ax"><span>0</span><span>6</span><span>12</span><span>18</span><span>24</span></div><div class="best">最活跃：北京 02:00–05:00（EVE 18–21）</div><h2><span>近 12 个月</span><small>上击毁 下损失</small></h2><svg viewBox="0 0 300 124" width="100%" style="display:block"><line x1="0" x2="300" y1="61" y2="61" stroke="#1B1A17"/><rect x="2" y="46" width="19" height="14" fill="#1B1A17"/><rect x="2" y="62" width="19" height="2" fill="#B3261E"/><rect x="27" y="42" width="19" height="18" fill="#1B1A17"/><rect x="27" y="62" width="19" height="4" fill="#B3261E"/><rect x="52" y="38" width="19" height="22" fill="#1B1A17"/><rect x="52" y="62" width="19" height="5" fill="#B3261E"/><rect x="77" y="34" width="19" height="26" fill="#1B1A17"/><rect x="77" y="62" width="19" height="7" fill="#B3261E"/><rect x="102" y="31" width="19" height="29" fill="#1B1A17"/><rect x="102" y="62" width="19" height="2" fill="#B3261E"/><rect x="127" y="27" width="19" height="33" fill="#1B1A17"/><rect x="127" y="62" width="19" height="4" fill="#B3261E"/><rect x="152" y="23" width="19" height="37" fill="#1B1A17"/><rect x="152" y="62" width="19" height="5" fill="#B3261E"/><rect x="177" y="19" width="19" height="41" fill="#1B1A17"/><rect x="177" y="62" width="19" height="7" fill="#B3261E"/><rect x="202" y="15" width="19" height="45" fill="#1B1A17"/><rect x="202" y="62" width="19" height="2" fill="#B3261E"/><rect x="227" y="12" width="19" height="48" fill="#1B1A17"/><rect x="227" y="62" width="19" height="4" fill="#B3261E"/><rect x="252" y="8" width="19" height="52" fill="#1B1A17"/><rect x="252" y="62" width="19" height="5" fill="#B3261E"/><rect x="277" y="4" width="19" height="56" fill="#1B1A17"/><rect x="277" y="62" width="19" height="7" fill="#B3261E"/></svg></div></div>
+<div class="foot"><span>数据：zKillboard / 欧服官方接口 · 截至 EVE 2026-10-14 12:00</span><span>本报纯属娱乐</span></div>
+</body></html>"
+`;
