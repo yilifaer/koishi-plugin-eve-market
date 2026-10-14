@@ -500,11 +500,11 @@ export const REPROCESS_ROUNDING = 'batch' as const
 export const REPROCESS_TAX_MODE = 'isk' as const
 
 // ------------------------------------------------------------------ zKill 击杀转战报
-// 下面所有猜测的字段名、地址、限流值都待实测（所有者的 Mac 上用同样的 User-Agent 请求一次）；猜错只改这里和 parseZkillKill。
+// zKill 的地址和字段 2026-10-14 已用真实响应核对；限流值没有公开数字，按保守值。变了只改这里和 parseZkillKill。
 
 /** zKill 的主机（HTTP 客户端在 src/core/zkill，击杀、人物卡共用） */
 export const ZKILL_API_BASE = 'https://zkillboard.com'
-/** 击杀编号 → hash 和估值；末尾的 `/` 要带（待实测） */
+/** 击杀编号 → hash 和估值；末尾的 `/` 要带 */
 export const ZKILL_KILL_PATH = '/api/killID/{id}/'
 /** 全局两次请求之间至少隔多久（zKill 没有公开精确数字，按保守值） */
 export const ZKILL_MIN_INTERVAL_MS = 1000
@@ -516,6 +516,8 @@ export const KILL_ZKILL_MAX_BYTES = 2 * 1024 * 1024
 export const ZKILL_BLOCKED_PAUSE_MIN = 5
 /** 429 没有 Retry-After 时暂停多久 */
 export const ZKILL_THROTTLE_DEFAULT_SEC = 60
+/** 429 的暂停最长多久（Retry-After 再大也不超过） */
+export const ZKILL_MAX_PAUSE_MS = 60 * 60_000
 /** 排队等着发的请求最多几个，满了新地址直接失败（防止群里连发链接排出长队） */
 export const ZKILL_MAX_QUEUE = 10
 

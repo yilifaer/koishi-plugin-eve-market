@@ -9,6 +9,7 @@ import {
   ZKILL_API_BASE,
   ZKILL_BLOCKED_PAUSE_MIN,
   ZKILL_MAX_BYTES,
+  ZKILL_MAX_PAUSE_MS,
   ZKILL_MAX_QUEUE,
   ZKILL_MIN_INTERVAL_MS,
   ZKILL_REDIRECT_MAX,
@@ -273,7 +274,7 @@ export class ZkillClient {
     const now = clock.now()
     if (res.status === 429) {
       const retryAt = parseRetryAfter(res.header('retry-after'), now) ?? now + ZKILL_THROTTLE_DEFAULT_SEC * 1000
-      return this.pause('throttled', retryAt, 'zKill 返回 429（请求太频繁）')
+      return this.pause('throttled', Math.min(retryAt, now + ZKILL_MAX_PAUSE_MS), 'zKill 返回 429（请求太频繁）')
     }
     if (isChallenge(res.status, res.header('content-type'), res.body, res.header('cf-mitigated'), res.header('cf-ray'))) {
       return this.pause('blocked', now + ZKILL_BLOCKED_PAUSE_MIN * 60_000, `zKill 返回 ${res.status}（被拦截或验证页）`)

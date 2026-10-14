@@ -214,6 +214,26 @@ describe('截图 janice 编号', () => {
   })
 })
 
+describe('估价: Janice 不在截图名单里时按消息顺序', () => {
+  const DOTLAN = 'https://evemaps.dotlan.net/map/Delve/Jita'
+
+  it('Janice link first → 估价', async () => {
+    const browser = new FakeBrowser()
+    const e = await start({ puppeteer: browser, config: { screenshot: { janice: { enabled: false } } } })
+    const sent = await e.h.group(`${LINK} ${DOTLAN}`)
+    expect(card([sent[0]])).toContain('估价')
+    expect(browser.pages.map((p) => p.url)).not.toContain(DOTLAN)
+  })
+
+  it('listed site link first → 网站截图, not 估价', async () => {
+    const browser = new FakeBrowser()
+    const e = await start({ puppeteer: browser, config: { screenshot: { janice: { enabled: false } } } })
+    await e.h.group(`${DOTLAN} ${LINK}`)
+    expect(browser.pages.map((p) => p.url)).toEqual([DOTLAN])
+    expect(janice!.requests).toHaveLength(0)
+  })
+})
+
 describe('估价: percentage', () => {
   it('0.93 is applied to the three totals (floored) and the card says so', async () => {
     const items: FakeItem[] = [{ eid: 34, name: 'Tritanium', amount: 10, sell: 1111, buy: 999, split: 1055 }]

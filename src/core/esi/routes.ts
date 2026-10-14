@@ -510,7 +510,7 @@ export class EsiApi {
     }, rest)
   }
 
-  /** 按名字（部分）搜人物，要授权（市场授权的角色令牌，权限和搜建筑同一个，待实测）。返回人物 ID */
+  /** 按名字（部分）搜人物，要授权（市场授权的角色令牌，权限和搜建筑同一个）。返回人物 ID */
   searchCharacters(authCharacterId: number, search: string, opts: AuthedOptions): Promise<EsiResult<number[]>> {
     positiveId(authCharacterId, 'authCharacterId')
     return this.client.request({
@@ -524,7 +524,7 @@ export class EsiApi {
 
   /**
    * 击杀详情（公开，不要授权）。内容不会变，缓存 30 天；hash 不对是 HTTP 422，没有是 404。
-   * 字段名按记忆写的，待实测，改动集中在 parseKillmail。
+   * 字段解析集中在 parseKillmail。
    */
   killmail(killId: number, hash: string, opts: EsiCallOptions = {}): Promise<EsiResult<EsiKillmail>> {
     positiveId(killId, 'killId')
@@ -571,7 +571,7 @@ function killParty(r: Row): EsiKillParty {
   }
 }
 
-/** 字段名待实测（按 ESI 文档的记忆）；猜错只改这里 */
+/** 字段按 ESI 文档；变了只改这里 */
 export function parseKillmail(json: unknown): EsiKillmail {
   const r = row(json, 'killmail')
   const victim = killParty(row(r.victim, 'victim'))

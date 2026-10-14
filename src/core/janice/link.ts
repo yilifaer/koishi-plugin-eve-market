@@ -30,6 +30,12 @@ export function findJaniceLink(text: string): JaniceLink | null {
   return hit ? toLink(hit.url, hit.host) : null
 }
 
+/** 最靠前的 Janice 估价链接在原文里的起点；没有时 null（和 findJaniceLink 找的是同一个） */
+export function findJaniceLinkStart(text: string): number | null {
+  const hit = registry.find(text)
+  return hit && toLink(hit.url, hit.host) ? hit.start : null
+}
+
 /** 命令参数：整段就是一个 Janice 估价链接（前后空白可以有）。其他情况 null */
 export function parseJaniceArg(input: string): JaniceLink | null {
   const hit = registry.parse(input)

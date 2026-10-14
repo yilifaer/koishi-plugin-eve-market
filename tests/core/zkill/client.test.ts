@@ -193,6 +193,14 @@ describe('ZkillClient 429', () => {
     expect(http.calls).toHaveLength(2)
   })
 
+  it('caps the pause at one hour however large Retry-After is', async () => {
+    const client = make()
+    http.script = [{ status: 429, headers: { 'Retry-After': '99999999' } }]
+    const t0 = time.now()
+    expect(failure(await client.getJson(A))).toMatchObject({ kind: 'throttled', retryAt: t0 + 3_600_000 })
+    expect(failure(await client.getJson(B)).retryAt).toBe(t0 + 3_600_000)
+  })
+
   it('pauses 60 s when there is no Retry-After', async () => {
     const client = make()
     http.script = [{ status: 429 }]

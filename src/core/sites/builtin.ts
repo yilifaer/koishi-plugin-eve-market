@@ -1,5 +1,5 @@
 // 4 个内置网站的识别规则和页面参数。Warbeacon、Janice 的链接格式已用真实链接和网站前端路由核对；
-// DOTLAN 的路径（/map/<星域>[/<星系>|/sov…]、/region/…、/system/…[/kills]、/alliance/…、/corp/…）2026-10-14 在开发环境打开成功；
+// DOTLAN 的路径（/map/<星域>[/<星系>|/sov…]、/region/…、/system/…[/kills]、/alliance/…、/corp/…）2026-10-14 核对过能打开；
 // 页面参数（等待时间、视口）还要在生产机上用「截图测试」调。需要改时只改这个文件里对应的一行。BR 工具委托 universe/br-link。
 
 import { BR_SETTLE_MS, BR_VIEWPORT_HEIGHT, BR_VIEWPORT_WIDTH, JANICE_CODE_PATTERN, JANICE_HOST } from '../../constants'
