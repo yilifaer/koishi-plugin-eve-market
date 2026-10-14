@@ -243,7 +243,7 @@ describe('估价: no key / no permission', () => {
     const browser = new FakeBrowser()
     const e = await start({ puppeteer: browser, janiceConfig: { apiKey: '' } })
     const sent = await e.h.group(`估价 ${LINK}`)
-    expect(texts(sent)[0]).toBe('Janice 估价还没开通（管理员要在控制台填 Janice 的 API 密钥）')
+    expect(texts(sent)[0]).toBe('Janice 估价还没开通（管理员要在控制台填 Janice 的 API 密钥）。')
     expect(images(sent)).toHaveLength(1)
     expect(janice!.requests).toEqual([])
     noLinks(sent)
@@ -262,7 +262,7 @@ describe('估价: no key / no permission', () => {
   it('no key and no browser: only the one line (and the usual screenshot notice for the link)', async () => {
     const e = await start({ janiceConfig: { apiKey: '' } })
     const sent = await e.h.group(`估价 ${LINK}`)
-    expect(texts(sent)).toEqual(['Janice 估价还没开通（管理员要在控制台填 Janice 的 API 密钥）'])
+    expect(texts(sent)).toEqual(['Janice 估价还没开通（管理员要在控制台填 Janice 的 API 密钥）。'])
   })
 
   it('who = allowed: a group that is not authorised gets one line from the command and only the screenshot from a link', async () => {
@@ -302,17 +302,17 @@ describe('估价: failures', () => {
 
   it('404 and 400: not found', async () => {
     const e = await start({ seed: () => {} })
-    expect(texts(await e.h.group(`估价 ${LINK}`))).toEqual(['Janice 上没有这份估价（编号不对或已经过期）'])
+    expect(texts(await e.h.group(`估价 ${LINK}`))).toEqual(['Janice 上没有这份估价（编号不对或已经过期）。'])
     await env!.stop()
     await janice!.stop()
-    expect(texts(await failWith({ kind: 'status', status: 400 }))).toEqual(['Janice 上没有这份估价（编号不对或已经过期）'])
+    expect(texts(await failWith({ kind: 'status', status: 400 }))).toEqual(['Janice 上没有这份估价（编号不对或已经过期）。'])
   })
 
   it('401 and 403: the key problem is not explained in the group', async () => {
-    expect(texts(await failWith({ kind: 'status', status: 401 }))).toEqual(['Janice 估价暂时用不了'])
+    expect(texts(await failWith({ kind: 'status', status: 401 }))).toEqual(['Janice 估价暂时用不了。'])
     await env!.stop()
     await janice!.stop()
-    expect(texts(await failWith({ kind: 'status', status: 403 }))).toEqual(['Janice 估价暂时用不了'])
+    expect(texts(await failWith({ kind: 'status', status: 403 }))).toEqual(['Janice 估价暂时用不了。'])
   })
 
   it('429: busy with the minutes, then no new request during the cooldown', async () => {

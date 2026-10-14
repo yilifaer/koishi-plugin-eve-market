@@ -186,13 +186,13 @@ export const KILL = {
 export const JANICE = {
   usageTitle: '**估价用法**',
   hint: '⏳ 正在读取 Janice 估价…',
-  notEnabled: 'Janice 估价还没开通（管理员要在控制台填 Janice 的 API 密钥）',
+  notEnabled: 'Janice 估价还没开通（管理员要在控制台填 Janice 的 API 密钥）。',
   denied: (who: 'allowed' | 'admins') => who === 'admins'
     ? 'Janice 估价现在只有管理员能用。'
     : 'Janice 估价只对授权的群和私聊开放。',
   notLink: (batch: string) => `估价 后面写 Janice 估价链接；要估一段清单请用「${batch}」`,
-  notFound: 'Janice 上没有这份估价（编号不对或已经过期）',
-  badKey: 'Janice 估价暂时用不了',
+  notFound: 'Janice 上没有这份估价（编号不对或已经过期）。',
+  badKey: 'Janice 估价暂时用不了。',
   busy: (minutes: number) => `Janice 现在太忙，${minutes} 分钟后再试。`,
   down: (batch: string) => `Janice 暂时连不上，可以先用「${batch}」。`,
   badResponse: 'Janice 返回的内容读不懂，请稍后再试。',
