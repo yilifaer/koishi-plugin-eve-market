@@ -1737,7 +1737,7 @@ export interface PilotActivity {
   peak: { beijingStart: number; beijingEnd: number; utcStart: number; utcEnd: number } | null
   /** labels：按活跃程度从高到低的时区；killmails 时 [] */
   zones: PilotZone[]
-  /** 写好的一行，例如「北京 20:00–23:00（EVE 12–15）」或「主要时区：欧洲 / 美东」 */
+  /** 写好的一行，例如「北京 20:00–23:00（EVE 12–15）」或「主要活跃时段：欧洲时段 / 美东时段」 */
   text: string
 }
 

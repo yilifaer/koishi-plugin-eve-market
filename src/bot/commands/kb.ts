@@ -73,13 +73,15 @@ async function runKb(inv: Invocation, text: string): Promise<void> {
   if (kb.scope === 'off') return void await inv.reply.text(KB.off)
   if (!kbAllowed(kb, inv.access)) return void await inv.reply.text(KB.denied)
   if (!text.trim()) return void await sendCard(inv, usageCard(inv))
-  if (!takeSlot(inv.commands, channelOf(inv))) return void await inv.reply.text(KB.tooFast)
 
   const arg = inv.core.pilots.parse(text)
   if (arg.kind === 'error') {
     if (arg.error === 'empty') return void await sendCard(inv, usageCard(inv))
     return void await inv.reply.text(arg.error === 'cjk' ? KB.cjk : KB.badName)
   }
+
+  // 参数合法了才占名额，格式不对的输入不耗额度
+  if (!takeSlot(inv.commands, channelOf(inv))) return void await inv.reply.text(KB.tooFast)
 
   const hint = startSlowHint(inv, 1, () => KB.hint)
   let outcome: Outcome

@@ -17,6 +17,17 @@ describe('kbCardHtml snapshots', () => {
 })
 
 describe('kbCardHtml content', () => {
+  it('prints system security with the shared formatter', () => {
+    const p = rookie()
+    p.places = [
+      { systemId: 1, system: { ...p.places[0].system!, en: 'Deepnull', security: -0.38 }, kills: 2 },
+      { systemId: 2, system: { ...p.places[0].system!, en: 'Edgeville', security: 0.04 }, kills: 1 },
+    ]
+    const html = kbCardHtml(view(p))
+    expect(html).toContain('<small>-0.4</small>')
+    expect(html).toContain('<small>0.1</small>')
+  })
+
   it('writes the owner-decided texts', () => {
     const html = kbCardHtml(view())
     expect(html).toContain('YC128 年 10 月 14 日 星期三')
@@ -86,7 +97,7 @@ describe('kbCardHtml content', () => {
     const html = kbCardHtml(view(rookie()))
     expect(html).not.toContain('近期大击杀')
     expect(html).not.toContain('class="hours"')
-    expect(html).toContain('主要时区：欧洲 / 美东')
+    expect(html).toContain('主要活跃时段：欧洲时段 / 美东时段')
     expect(html).not.toContain('最活跃：')
     expect(html).not.toContain('FICT')
     expect(html).not.toContain('危险度')

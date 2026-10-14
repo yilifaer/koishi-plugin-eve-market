@@ -24,7 +24,7 @@ describe('kbCardText', () => {
     const text = kbCardText(rookie())
     expect(text).not.toContain('联盟')
     expect(text).not.toContain('近期')
-    expect(text).toContain('活跃时段：主要时区：欧洲 / 美东')
+    expect(text).toContain('活跃时段：主要活跃时段：欧洲时段 / 美东时段')
     expect(kbCardText(ghost())).toBe('Ren Aoyagi｜神秘人物\n建号：EVE 2020-05-17（北京 2020-05-18）\n暂无击杀或损失记录')
     const failed = { ...ghost(), partial: ['zkill' as const] }
     expect(kbCardText(failed)).toContain('战绩暂时取不到')

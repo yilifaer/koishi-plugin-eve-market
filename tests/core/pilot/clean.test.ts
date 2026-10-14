@@ -9,7 +9,7 @@ describe('cleanTitle', () => {
 
   it('removes links and domains', () => {
     expect(cleanTitle('Recruiter https://join.example/now')).toBe('Recruiter')
-    expect(cleanTitle('visit spam.example today')).toBe('visit today')
+    expect(cleanTitle('visit spam.net today')).toBe('visit today')
     expect(cleanTitle('<a href="http://x.example">click</a>')).toBe('click')
   })
 
@@ -17,6 +17,15 @@ describe('cleanTitle', () => {
     expect(cleanTitle('visit ｅｖｉｌ．ｃｏｍ today')).toBe('visit today')
     expect(cleanTitle('visit evil。com today')).toBe('visit today')
     expect(cleanTitle('visit evil｡com today')).toBe('visit today')
+  })
+
+  it('keeps dotted titles that are not domains, still scrubs bare domains and www', () => {
+    expect(cleanTitle('Mr.Bob')).toBe('Mr.Bob')
+    expect(cleanTitle('Dr.Strange')).toBe('Dr.Strange')
+    expect(cleanTitle('Lt.Commander')).toBe('Lt.Commander')
+    expect(cleanTitle('visit evil.com now')).toBe('visit now')
+    expect(cleanTitle('x.co')).toBeNull()
+    expect(cleanTitle('go www.fake-site.zz now')).toBe('go now')
   })
 
   it('decodes entities but never lets them form a tag', () => {

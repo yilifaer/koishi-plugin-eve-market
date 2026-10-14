@@ -157,13 +157,13 @@ export const ACTIVITY_TEXT = {
   /** 北京时间在前，EVE 时间（UTC）在括号里：北京 20:00–23:00（EVE 12–15） */
   peak: (beijingStart: string, beijingEnd: string, utcStart: number, utcEnd: number) =>
     `北京 ${beijingStart}–${beijingEnd}（EVE ${utcStart}–${utcEnd}）`,
-  zones: (names: string[]) => `主要时区：${names.join(' / ')}`,
+  zones: (names: string[]) => `主要活跃时段：${names.join(' / ')}`,
 } as const
 
 export const ZONE_NAMES: Record<PilotZone, string> = {
-  eu: '欧洲',
-  ru: '俄罗斯',
-  use: '美东',
-  usw: '美西',
-  au: '澳洲',
+  eu: '欧洲时段',
+  ru: '莫斯科时段',
+  use: '美东时段',
+  usw: '美西时段',
+  au: '澳洲时段',
 }

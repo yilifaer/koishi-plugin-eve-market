@@ -252,6 +252,18 @@ describe('KB: rate limit', () => {
     expect(pics(await e.h.group(`KB ${HANAKO}`))).toHaveLength(1)
   })
 
+  it('malformed input does not use up the minute', async () => {
+    const e = await start()
+    const before = e.fake.requests.length
+    for (let i = 0; i < KB_CHANNEL_PER_MIN + 1; i++) {
+      expect(texts(await e.h.group('KB 如月花子'))).toEqual(['欧服人物名都是英文，请写游戏里的英文名。'])
+      expect(texts(await e.h.group('KB ab'))).toEqual(['人物名不对：请写 3–37 个字的英文名，或者人物 ID。'])
+      expect(texts(await e.h.group('KB bad<>name'))).not.toEqual(['查得太快了，稍等一会'])
+    }
+    expect(e.fake.requests.length).toBe(before)
+    expect(pics(await e.h.group(`KB ${HANAKO}`))).toHaveLength(1)
+  })
+
   it('the usage card does not use up the minute', async () => {
     const e = await start()
     for (let i = 0; i < KB_CHANNEL_PER_MIN + 2; i++) await e.h.group('KB')

@@ -7,6 +7,7 @@ import {
   KB_CARD_JPEG_QUALITY, KB_CARD_LRU_SIZE, KB_CARD_MIN_HEIGHT, KB_CARD_RENDER_TIMEOUT_MS, KB_CARD_SCALE, KB_CARD_WIDTH,
   KB_CACHE_MAX, KB_CARD_CACHE_MIN, KB_HEADLINE_FONT_MAX, KB_HEADLINE_FONT_MIN,
 } from '../constants'
+import { displaySec } from '../core/format'
 import type { PilotImageSet, PilotKill, PilotProfile } from '../core/types'
 import { LruCache, SingleFlight } from '../core/util'
 import { escapeXml, textWidth } from './chart-svg'
@@ -158,7 +159,7 @@ function placesColumn(p: PilotProfile): string {
     ? `<h2><span>常出没</span></h2><ul>${places.map((pl) => {
       const sys = pl.system
       const name = sys ? sys.en : `#${pl.systemId}`
-      const sec = sys ? `<small>${sys.security.toFixed(1)}</small>` : ''
+      const sec = sys ? `<small>${displaySec(sys.security)}</small>` : ''
       const region = sys?.region ? `<em>${esc(sys.region.zh || sys.region.en)}</em>` : ''
       const color = sys ? secColor(sys.security) : '#5a564b'
       return `<li><b style="color:${color}">${esc(name)}</b> ${sec} ${region}<span>${countText(pl.kills)}</span></li>`

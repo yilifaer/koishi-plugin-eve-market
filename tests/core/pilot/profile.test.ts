@@ -252,7 +252,7 @@ describe('PilotProfiles: activity fallbacks', () => {
     const made = await make()
     made.zkill.charKills.set(HANAKO, [mail(made.env, 1, 12, 1e8), mail(made.env, 2, 13, 1e8)])
     const a = ok(await made.profiles.profile(HANAKO)).activity!
-    expect(a).toMatchObject({ source: 'labels', samples: 2, peak: null, zones: ['eu', 'use', 'au'], text: '主要时区：欧洲 / 美东 / 澳洲' })
+    expect(a).toMatchObject({ source: 'labels', samples: 2, peak: null, zones: ['eu', 'use', 'au'], text: '主要活跃时段：欧洲时段 / 美东时段 / 澳洲时段' })
   })
 
   it('recent: false makes no list requests and uses the labels', async () => {
