@@ -152,7 +152,8 @@ export const SHOT = {
   failed: '截图失败，请稍后再试。',
   sendFailed: '截图发送失败，请稍后再试。',
   notListed: (names: string) => `这个网站不在截图名单里。能截的网站：${names}。`,
-  badLink: (name: string, hint: string) => `这个${name}链接的格式不对：${hint}。`,
+  // 名字以英文字母或数字开头时，前面补一个空格（自定义名字可能是中文）
+  badLink: (name: string, hint: string) => `这个${/^[A-Za-z0-9]/.test(name) ? ' ' : ''}${name}链接的格式不对：${hint}。`,
   notBattleReport: (shot: string) => `这不是战报链接。截别的网站请发「${shot} 网址」。`,
   brOff: '战报截图没有开启（控制台「截图」里关掉了）。',
 } as const

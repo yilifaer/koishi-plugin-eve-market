@@ -1,5 +1,6 @@
-// 4 个内置网站的识别规则和页面参数。Warbeacon、Janice、DOTLAN 的路径格式和页面参数是第一版的推测，
-// 要在生产机上用「截图测试」核对；需要改时只改这个文件里对应的一行。BR 工具委托 universe/br-link。
+// 4 个内置网站的识别规则和页面参数。Warbeacon、Janice 的链接格式已用真实链接和网站前端路由核对；
+// DOTLAN 的路径（/map/<星域>[/<星系>|/sov…]、/region/…、/system/…[/kills]、/alliance/…、/corp/…）2026-10-14 在开发环境打开成功；
+// 页面参数（等待时间、视口）还要在生产机上用「截图测试」调。需要改时只改这个文件里对应的一行。BR 工具委托 universe/br-link。
 
 import { BR_SETTLE_MS, BR_VIEWPORT_HEIGHT, BR_VIEWPORT_WIDTH } from '../../constants'
 import { BR_HOST } from '../universe'
@@ -19,10 +20,11 @@ export interface BuiltinSite {
 
 const VIEWPORT = { viewportWidth: BR_VIEWPORT_WIDTH, viewportHeight: BR_VIEWPORT_HEIGHT }
 
-// Warbeacon：/br/ 后面 1–4 段（推测）
-const WARBEACON = /^\/br\/([A-Za-z0-9_-]{1,64}(?:\/[A-Za-z0-9_-]{1,64}){0,3})\/?$/
-// Janice：/a/<编号>（编号长度和字符是推测，大小写要保留）
-const JANICE = /^\/a\/([A-Za-z0-9]{4,16})\/?$/
+// Warbeacon 三种路径：关联战报（星系 8 位 + 时间 12 位）、关联战报的时间范围、单场战报（uuid）
+const WARBEACON_RELATED = /^\/br\/related\/(\d{8})\/(\d{12})(?:\/(\d{12}))?\/?$/
+const WARBEACON_REPORT = /^\/br\/report\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?$/i
+// Janice：/a/<编号>（大小写要保留），后面可以跟一段小写子页面（如 reprocess）
+const JANICE = /^\/a\/([A-Za-z0-9]{4,16})(?:\/([a-z]{1,20}))?\/?$/
 // DOTLAN：第一段是这五种之一，后面 1–3 段
 const DOTLAN = /^\/(map|region|system|alliance|corp)((?:\/[A-Za-z0-9_.'%()-]{1,80}){1,3})\/?$/i
 
@@ -40,11 +42,13 @@ export const BUILTIN_SITES: readonly BuiltinSite[] = [
     kind: 'battle-report',
     name: 'Warbeacon 战报',
     host: 'warbeacon.net',
-    badLinkHint: '只支持战报页',
+    badLinkHint: '只支持关联战报和单场战报页',
     profile: { ...VIEWPORT, waitUntil: 'networkidle2', settleMs: 3000 },
     path: (path) => {
-      const m = WARBEACON.exec(path)
-      return m ? `/br/${m[1]}` : null
+      const r = WARBEACON_RELATED.exec(path)
+      if (r) return `/br/related/${r[1]}/${r[2]}/${r[3] ? `${r[3]}/` : ''}`
+      const u = WARBEACON_REPORT.exec(path)
+      return u ? `/br/report/${u[1].toLowerCase()}` : null
     },
   },
   {
@@ -56,7 +60,7 @@ export const BUILTIN_SITES: readonly BuiltinSite[] = [
     profile: { ...VIEWPORT, waitUntil: 'networkidle2', settleMs: 2000 },
     path: (path) => {
       const m = JANICE.exec(path)
-      return m ? `/a/${m[1]}` : null
+      return m ? `/a/${m[1]}${m[2] ? `/${m[2]}` : ''}` : null
     },
   },
   {

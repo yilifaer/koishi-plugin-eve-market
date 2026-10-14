@@ -78,19 +78,30 @@ describe('BR equivalence with findBrLink / parseBrLink', () => {
 
 describe('Warbeacon', () => {
   const reg = all()
-  it('accepts /br/ paths with 1-4 segments and keeps the case', () => {
-    expect(reg.find('https://warbeacon.net/br/AbC123')).toMatchObject({ url: 'https://warbeacon.net/br/AbC123', site: { id: 'warbeacon', kind: 'battle-report' } })
-    expect(reg.find('http://WARBEACON.NET/br/a/b-c/d_e/f?x=1#y')?.url).toBe('https://warbeacon.net/br/a/b-c/d_e/f')
-    expect(reg.find('https://www.warbeacon.net/br/abc/')?.url).toBe('https://www.warbeacon.net/br/abc')
-    expect(reg.find('看 https://warbeacon.net/br/abc，好')?.url).toBe('https://warbeacon.net/br/abc')
+  const UUID = '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d'
+  it('accepts related (single time and time range) and report paths', () => {
+    expect(reg.find('https://warbeacon.net/br/related/30000142/202610061900')).toMatchObject({ url: 'https://warbeacon.net/br/related/30000142/202610061900/', site: { id: 'warbeacon', kind: 'battle-report' } })
+    expect(reg.find('http://WARBEACON.NET/br/related/30000142/202610061900/?x=1#y')?.url).toBe('https://warbeacon.net/br/related/30000142/202610061900/')
+    expect(reg.find('https://warbeacon.net/br/related/30000142/202610061900/202610062100')?.url).toBe('https://warbeacon.net/br/related/30000142/202610061900/202610062100/')
+    expect(reg.find('https://www.warbeacon.net/br/related/30000142/202610061900/202610062100/')?.url).toBe('https://www.warbeacon.net/br/related/30000142/202610061900/202610062100/')
+    expect(reg.find(`https://warbeacon.net/br/report/${UUID}`)?.url).toBe(`https://warbeacon.net/br/report/${UUID}`)
+    expect(reg.find(`看 https://warbeacon.net/br/report/${UUID.toUpperCase()}/，好`)?.url).toBe(`https://warbeacon.net/br/report/${UUID}`)
   })
   it('rejects look-alikes and other paths', () => {
+    const path = '/br/related/30000142/202610061900'
     for (const text of [
-      'https://evilwarbeacon.net/br/abc', 'https://warbeacon.net.evil.com/br/abc', 'https://warbeacon.net@evil.com/br/abc',
-      'https://warbeacon.net:444/br/abc', 'https://warbeacon.net\\@x/br/abc', 'https://warbeacon%2enet/br/abc',
-      'https://warbeacon.net./br/abc', 'https://evil.com/?u=warbeacon.net/br/abc', 'ftp://warbeacon.net/br/abc',
-      'https://warbeacon.net/', 'https://warbeacon.net/br/', 'https://warbeacon.net/br/a/b/c/d/e', 'https://warbeacon.net/brx/abc',
-      'https://warbeacon.net/br/a.b', 'https://warbeacon.net/other/abc', 'warbeacon.net/br/abc',
+      `https://evilwarbeacon.net${path}`, `https://warbeacon.net.evil.com${path}`, `https://warbeacon.net@evil.com${path}`,
+      `https://warbeacon.net:444${path}`, `https://warbeacon.net\\@x${path}`, `https://warbeacon%2enet${path}`,
+      `https://warbeacon.net.${path}`, `https://evil.com/?u=warbeacon.net${path}`, `ftp://warbeacon.net${path}`,
+      `warbeacon.net${path}`,
+      'https://warbeacon.net/', 'https://warbeacon.net/br/', 'https://warbeacon.net/br/abc', 'https://warbeacon.net/br/recent',
+      'https://warbeacon.net/br/create', 'https://warbeacon.net/other', 'https://warbeacon.net/brx/related/30000142/202610061900',
+      'https://warbeacon.net/br/related/3000014/202610061900', 'https://warbeacon.net/br/related/300001422/202610061900',
+      'https://warbeacon.net/br/related/30000142/20261006190', 'https://warbeacon.net/br/related/30000142/2026100619000',
+      'https://warbeacon.net/br/related/30000142/202610061900/20261006210', 'https://warbeacon.net/br/related/30000142/202610061900/202610062100/1',
+      'https://warbeacon.net/br/related/30000142', 'https://warbeacon.net/br/report/', 'https://warbeacon.net/br/report/0a1b2c3d-4e5f-4a6b-8c7d',
+      `https://warbeacon.net/br/report/${UUID}0`, 'https://warbeacon.net/br/report/0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4g',
+      `https://warbeacon.net/br/report/${UUID}/x`,
     ]) {
       expect(reg.find(text), text).toBeNull()
     }
@@ -104,10 +115,15 @@ describe('Janice', () => {
     expect(reg.find('http://Janice.E-351.com/a/AbCdEf/?x=1#y')?.url).toBe('https://janice.e-351.com/a/AbCdEf')
     expect(reg.find('估价 https://janice.e-351.com/a/Zz9Yx8。')?.url).toBe('https://janice.e-351.com/a/Zz9Yx8')
   })
+  it('keeps one lowercase subpage', () => {
+    expect(reg.find('https://janice.e-351.com/a/AbC123/reprocess')?.url).toBe('https://janice.e-351.com/a/AbC123/reprocess')
+    expect(reg.find('https://janice.e-351.com/a/AbC123/reprocess/?x=1')?.url).toBe('https://janice.e-351.com/a/AbC123/reprocess')
+  })
   it('rejects other pages and look-alikes', () => {
     for (const text of [
       'https://janice.e-351.com/', 'https://janice.e-351.com/a/', 'https://janice.e-351.com/a/abc', 'https://janice.e-351.com/a/' + 'a'.repeat(17),
-      'https://janice.e-351.com/a/abcdef/extra', 'https://janice.e-351.com/b/abcdef', 'https://janice.e-351.com/a/ab_cdef',
+      'https://janice.e-351.com/a/abcdef/extra/more', 'https://janice.e-351.com/a/abcdef/Extra', 'https://janice.e-351.com/a/abcdef/ex1',
+      'https://janice.e-351.com/a/abcdef/' + 'x'.repeat(21), 'https://janice.e-351.com/b/abcdef', 'https://janice.e-351.com/a/ab_cdef',
       'https://xjanice.e-351.com.evil.com/a/abcdef', 'https://janice.e-351.com.evil.com/a/abcdef', 'https://janice.e-351.com@evil.com/a/abcdef',
       'https://janice.e-351.com:8443/a/abcdef', 'https://e-351.com/a/abcdef',
     ]) {
@@ -186,7 +202,7 @@ describe('custom sites', () => {
     expect(reg.find('https://warbeacon.net/other')).toBeNull()
     expect(reg.find('https://br.evetools.org/kill/1')).toBeNull()
     const off = only(JA, custom(1, 'warbeacon.net'))
-    expect(off.find('https://warbeacon.net/br/abc')).toBeNull()
+    expect(off.find('https://warbeacon.net/br/related/30000142/202610061900')).toBeNull()
     expect(off.find('https://warbeacon.net/other')).toBeNull()
   })
 })
@@ -211,7 +227,7 @@ describe('registry', () => {
   it('only knows the enabled sites', () => {
     const reg = only(JA)
     expect(reg.find(BRURL)).toBeNull()
-    expect(reg.find('https://warbeacon.net/br/abc')).toBeNull()
+    expect(reg.find('https://warbeacon.net/br/related/30000142/202610061900')).toBeNull()
     expect(reg.find('https://janice.e-351.com/a/abcdef')?.site.id).toBe('janice')
     expect(only().find('https://janice.e-351.com/a/abcdef')).toBeNull()
     expect(only().parse('https://janice.e-351.com/a/abcdef')).toBeNull()

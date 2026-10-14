@@ -27,7 +27,7 @@ async function start(options: EnvOptions = {}): Promise<PluginEnv> {
 
 // 规范化以后的地址（截图打开的就是它）
 const BR = `https://br.evetools.org/br/${'1'.padStart(24, '0')}`
-const WAR = 'https://warbeacon.net/br/related/30000142/202610061900'
+const WAR = 'https://warbeacon.net/br/related/30000142/202610061900/'
 const JANICE = 'https://janice.e-351.com/a/AbC123'
 const DOTLAN = 'https://evemaps.dotlan.net/map/Delve'
 const CUSTOM = 'https://kb.example.com/kill/123'
@@ -58,7 +58,7 @@ const texts = (sent: Sent[]) => sent.map((s) => s.text)
 describe('截图: command', () => {
   it.each([
     ['BR 工具', BR, BR, 6000, [3000, 3000]],
-    ['Warbeacon', 'https://warbeacon.net/br/related/30000142/202610061900/', WAR, 5000, [2500, 2500]],
+    ['Warbeacon', 'https://warbeacon.net/br/related/30000142/202610061900?x=1#top', WAR, 5000, [2500, 2500]],
     ['Janice', 'https://janice.e-351.com/a/AbC123/', JANICE, 3000, [3000]],
     ['DOTLAN', 'https://evemaps.dotlan.net/Map/Delve?x=1#top', DOTLAN, 6000, [4000]],
     ['自定义网站', 'http://KB.example.com/kill/123?x=1#top', `${CUSTOM}?x=1`, 2000, [2000]],
@@ -90,9 +90,9 @@ describe('截图: command', () => {
     const browser = new FakeBrowser()
     const e = await start({ puppeteer: browser })
     const cases: Array<[string, string]> = [
-      ['https://janice.e-351.com/foo', '这个Janice 估价结果链接的格式不对：只支持估价结果页。'],
-      ['https://evemaps.dotlan.net/route/Jita:Amarr', '这个DOTLAN 星图链接的格式不对：只支持星域、星系、联盟、军团页和星图。'],
-      ['https://warbeacon.net/about', '这个Warbeacon 战报链接的格式不对：只支持战报页。'],
+      ['https://janice.e-351.com/foo', '这个 Janice 估价结果链接的格式不对：只支持估价结果页。'],
+      ['https://evemaps.dotlan.net/route/Jita:Amarr', '这个 DOTLAN 星图链接的格式不对：只支持星域、星系、联盟、军团页和星图。'],
+      ['https://warbeacon.net/about', '这个 Warbeacon 战报链接的格式不对：只支持关联战报和单场战报页。'],
     ]
     for (const [link, line] of cases) {
       const sent = await e.h.group(`截图 ${link}`)
@@ -255,7 +255,7 @@ describe('战报: Warbeacon and other sites', () => {
 
   it('「战报」with a bad Warbeacon link or a bad BR link keeps saying the format is wrong', async () => {
     const e = await start({ puppeteer: new FakeBrowser() })
-    expect(texts(await e.h.group('战报 https://warbeacon.net/about'))).toEqual(['这个Warbeacon 战报链接的格式不对：只支持战报页。'])
+    expect(texts(await e.h.group('战报 https://warbeacon.net/about'))).toEqual(['这个 Warbeacon 战报链接的格式不对：只支持关联战报和单场战报页。'])
     expect(texts(await e.h.group('战报 https://br.evetools.org/br/12345'))[0]).toContain('这个战报链接的格式不对')
   })
 

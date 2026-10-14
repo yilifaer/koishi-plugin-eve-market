@@ -2,7 +2,7 @@
 // 星系名、空间站、别名目标、改装件、对市场的引用这些要等数据加载后由 core 再检查一遍。
 // 原则：写错一行只影响那一行；坏行跳过并报告，插件照常加载。
 
-import { DEFAULT_SCRAPMETAL_LEVEL, MAX_ME, MAX_QUANTITY, MAX_TE, NOTICE_MAX_CHARS, PRICE_TYPE_WORDS, SSO_CALLBACK_PATH } from '../constants'
+import { DEFAULT_SCRAPMETAL_LEVEL, MAX_ME, MAX_QUANTITY, MAX_TE, NOTICE_MAX_CHARS, PRICE_TYPE_WORDS, SHOT_CUSTOM_MAX, SHOT_MAX_IMAGES, SSO_CALLBACK_PATH } from '../constants'
 import { FORMULA_DEFAULTS } from '../core/industry'
 import { BUILTIN_SITES, checkConfigHost, hostMatches } from '../core/sites'
 import type {
@@ -736,8 +736,6 @@ function normalizeRender(raw: Raw, issues: IssueList): RenderSettings {
 }
 
 // 截图：内置网站的开关和自定义网站表（规则见 DECISIONS 的截图一条）
-const SHOT_CUSTOM_MAX = 10
-const SHOT_MAX_IMAGES = 3
 const SHOT_PREFIX_MAX = 100
 const SHOT_TABLE = '自定义网站'
 const SHOT_BUILTIN_MAX_IMAGES: Record<string, number> = { br: 2, warbeacon: 2, janice: 2, dotlan: 1 }
