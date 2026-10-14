@@ -5,6 +5,7 @@
 
 import { MAX_SKILL_MANUFACTURING_MULT, MAX_SKILL_REACTION_MULT, SERVER_LABEL, TOP_MATERIALS } from '../../constants'
 import { listPriceMode } from '../../core/format'
+import { costIncomplete } from '../../core/industry'
 import type {
   DisplaySettings, EveCore, FormattedPrice, IndustryActivity, IndustryResult, IndustryRigState, IndustrySettings, IndustryStep,
   ItemInfo, LocationComparison, PriceSide,
@@ -226,8 +227,9 @@ function productLine(env: IndustryEnv, r: IndustryResult): Line | undefined {
 /** **预计利润 90.68M · 利润率 35.1%**（未计销售税和经纪费） */
 function profitLine(env: IndustryEnv, r: IndustryResult): Line | undefined {
   if (!r.profit) return undefined
+  if (r.missingPrices) return { text: IND.profitSkipped }
   const fees = env.industry.sellFeesPct > 0 ? IND.profitFees(pctTrim(env.industry.sellFeesPct)) : IND.profitNoFees
-  const incomplete = r.missingPrices || !jobOf(r) ? IND.profitIncomplete : ''
+  const incomplete = jobOf(r) ? '' : IND.profitIncomplete
   return { text: `${IND.profit(amount(env, r.profit.value), marginText(r.profit.marginPct))}${fees}${incomplete}` }
 }
 
@@ -460,8 +462,11 @@ export function compareCard(env: IndustryEnv, c: LocationComparison, actions: Ac
     lines.push({ text: `**${esc(row.location)}** · ${where}${rigNote}${marks ? ` ${marks}` : ''}` })
     const total = costPrice(env, r, r.materialCost + (jobOf(r)?.total ?? 0), true)
     const parts = [duration(env, r.timeSeconds)]
-    if (r.profit) parts.push(IND.compareProfit(amount(env, r.profit.value), marginText(r.profit.marginPct)))
-    const note = r.missingPrices || !jobOf(r) ? IND.compareIncomplete : ''
+    // 成本不完整的地点不写利润
+    const incomplete = costIncomplete(r)
+    if (incomplete) parts.push(IND.profitSkipped)
+    else if (r.profit) parts.push(IND.compareProfit(amount(env, r.profit.value), marginText(r.profit.marginPct)))
+    const note = incomplete ? IND.compareIncomplete : ''
     lines.push({ label: IND.compareCost, price: total, extra: `${note}· ${parts.join(' · ')}`, indent: 1 })
   }
   card.sections.push({ style: 'ordered', lines })

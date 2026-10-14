@@ -2,6 +2,7 @@
 // 和 industry-text.ts 分开放，那边不动。
 
 import { CHAIN_MAX_TYPES } from '../../constants'
+import { IND } from './industry-text'
 import type { AlchemyMode, ChainNode, LayerMode } from '../../core/types'
 
 /** 层的叫法 */
@@ -59,7 +60,7 @@ export const CH = {
   timeNote: '按每层 1 条生产线算，多开可以更快',
   timeFastest: (time: string) => `每种各开一条线同时做（一层做完再做下一层），最快约 ${time}`,
   timeTotal: (time: string) => `合计 ${time}`,
-  profitIncomplete: '价格不全，利润不计算',
+  profitIncomplete: IND.profitSkipped,
   inventionNote: 'T2 发明成本不计入',
   scrapNote: (pct: string) => `炼金按废料 ${pct}% 规则计算`,
 

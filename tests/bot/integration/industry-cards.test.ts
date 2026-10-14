@@ -243,6 +243,26 @@ describe('compare card (§2.7)', () => {
     expect(md(compareCard(env(), { ...c, rigsOff: true, facilityTaxPct: 3 }, []))).toContain('ME 10 / TE 20 · 1 流程 · 不用改装件 · 设施税 3.00% · 材料按 Jita 4-4 出售价')
   })
 
+  it('a row with an incomplete cost shows no profit, keeps the 不完整 mark and never gets 最低', () => {
+    const c = comparison()
+    c.rows = [
+      { location: 'XX-2', structure: '阿兹贝尔', noRigs: false, result: example({ materialCost: 152_429_544 }), cheapest: true, fastest: false },
+      { location: 'XX-1', structure: '索迪约', noRigs: false, result: example({ timeSeconds: 4000, missingPrices: 1 }), cheapest: false, fastest: true },
+    ]
+    const out = md(compareCard(env(), c, []))
+    expect(out).toContain('    - 成本 `165.02M` · 1 小时 23 分 · 利润 90.68M（35.1%）')
+    expect(out).toContain('    - 成本 `167.72M` （不完整）· 1 小时 7 分 · 价格不全，利润不计算')
+    expect(out.split('\n').filter((l) => l.includes('XX-1'))[0]).not.toContain('最低')
+  })
+
+  it('the result card says the profit is not calculated when a material has no price', () => {
+    const r = example({ missingPrices: 1 })
+    const out = md(resultCard(env(), r, 'manufacturing', []))
+    expect(out).toContain('价格不全，利润不计算')
+    expect(out).not.toContain('预计利润')
+    expect(out).not.toContain('利润率')
+  })
+
   it('every row follows listPriceDisplayMode', () => {
     expect(md(compareCard(env(), comparison(), []))).toContain([
       '1. **XX-2 · 阿兹贝尔 💰最低**',

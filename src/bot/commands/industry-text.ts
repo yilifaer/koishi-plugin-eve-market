@@ -99,6 +99,8 @@ export const IND = {
   profitNoFees: '（未计销售税和经纪费）',
   profitFees: (pct: string) => `（已扣销售税和经纪费 ${pct}）`,
   profitIncomplete: '（成本不完整）',
+  /** 材料缺价格时不写利润数字（拆到原料的总览卡也用这句） */
+  profitSkipped: '价格不全，利润不计算',
   missingPrices: (list: string, total: number, listed: number) =>
     `以下材料没有价格：${list}${total > listed ? ` 等 ${total} 种` : ''}，总成本不完整`,
   fallbackMark: '†',

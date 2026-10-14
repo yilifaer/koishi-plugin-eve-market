@@ -197,7 +197,10 @@ describe('制造: result with a location', () => {
     expect(out).toContain('蓝图 ME 2 / TE 4（T2 常见值） · 25 流程（25 个）')
     expect(out).toContain('- 材料成本 `5,235,100 ISK`（5.24M）（不完整，缺 1 种材料价格）')
     expect(out).toContain('- **预计总成本** `5,235,100 ISK`（5.24M）（不完整，缺 1 种材料价格）（未计安装费用）')
-    expect(out).toContain('（未计销售税和经纪费）（成本不完整）')
+    // 材料缺价格：不写利润数字
+    expect(out).toContain('价格不全，利润不计算')
+    expect(out).not.toContain('预计利润')
+    expect(out).not.toContain('利润率')
     expect(out).toContain('⚠ 单张蓝图最多 10 流程，按 3 个工作计算')
     expect(out).toContain('⚠ 以下材料没有价格：莫尔石，总成本不完整')
     expect(out).not.toMatch(/`0(\.00)? ISK`/)

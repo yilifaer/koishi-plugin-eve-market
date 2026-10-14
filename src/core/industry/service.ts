@@ -24,6 +24,7 @@ import type {
 import { isFailure } from '../types'
 import { describeError, withDeadline } from '../util'
 import { canBuild, locationCanBuild, needLabel } from './capabilities'
+import { rankRows } from './compare'
 import { runChain } from './chain/engine'
 import type { ChainHost } from './chain/expand'
 import { resolveTop } from './chain/top'
@@ -232,11 +233,7 @@ class Service implements IndustryService {
         if (auto) Object.assign(row, { autoPicked: true, among: candidates.length })
         return row
       })
-      const cost = (r: IndustryResult) => r.materialCost + (r.jobCost?.total ?? 0)
-      rows.sort((a, b) => cost(a.result) - cost(b.result))
-      rows[0].cheapest = true
-      const fastest = rows.reduce((best, r) => (r.result.timeSeconds < best.result.timeSeconds ? r : best), rows[0])
-      fastest.fastest = true
+      rankRows(rows)
       const out: LocationComparison = {
         product: job.product, runs: job.runs, me, te, rows,
         materialMarketKey: book.material.market?.key ?? '', materialSide: book.material.side,

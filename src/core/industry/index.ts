@@ -1,5 +1,6 @@
 // core/industry 对外的接口（§6.7）：公式、修正、工业地点和建筑、星系成本指数和调整价、制造和反应的计算、多买清单。
 
+export * from './compare'
 export * from './formulas'
 export * from './modifiers'
 export {
