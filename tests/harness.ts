@@ -90,7 +90,7 @@ function rowsOf(elements: h[]): SentButton[][] {
 }
 
 /** 回复第一张 Markdown 卡片开头的 @ 提醒 */
-const MENTION_PREFIX = /^<qqbot-at-user id="([^"]*)" \/> /
+const MENTION_PREFIX = /^<qqbot-at-user id="([^"]*)" \/>\n/
 
 export function describeSent(platform: string, channelId: string, elements: h[], session?: Session): Sent {
   const markdown = elements.find((el) => el.type === 'qq:markdown')

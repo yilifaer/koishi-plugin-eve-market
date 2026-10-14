@@ -36,7 +36,7 @@ describe('the whole plugin on the real QQ adapter', () => {
     expect(msg.body.content).toBeUndefined()
     // 群里第一张 Markdown 卡片：引用收到的消息，开头 @ 提问的人
     expect((msg.body as { message_reference?: unknown }).message_reference).toEqual({ message_id: 'REAL-PRICE-1' })
-    expect(msg.body.markdown?.content).toMatch(new RegExp(`^<qqbot-at-user id="${REAL_MEMBER}" /> \\*\\*乌鸦级`))
+    expect(msg.body.markdown?.content).toMatch(new RegExp(`^<qqbot-at-user id="${REAL_MEMBER}" />\\n\\*\\*乌鸦级`))
     expect(msg.body.markdown?.content).toMatch(/\*\*乌鸦级 Raven · 战列舰\*\*\n\n\*\*Jita 4-4\*\*\n\n- 出售 `258,400,000 ISK`（258\.40M）/)
     const row = msg.body.keyboard!.content.rows[0].buttons
     expect(row.map((b) => b.render_data.label)).toEqual(['月度走势', '季度走势', '相关物品', '制造成本'])

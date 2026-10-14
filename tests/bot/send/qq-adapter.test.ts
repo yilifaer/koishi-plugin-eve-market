@@ -63,7 +63,7 @@ describe('QQ adapter (high fidelity)', () => {
     expect(body.msg_id).toBe(session.messageId)
     expect(body.msg_seq).toBe(1)
     // 群里的第一张 Markdown 卡片：引用用户的消息，开头 @ 提问的人
-    expect(body.markdown!.content).toBe(`<qqbot-at-user id="${MEMBER_OPENID}" /> ${toQQMarkdown(card, renderOptions()).md}`)
+    expect(body.markdown!.content).toBe(`<qqbot-at-user id="${MEMBER_OPENID}" />\n${toQQMarkdown(card, renderOptions()).md}`)
     expect((body as { message_reference?: unknown }).message_reference).toEqual({ message_id: session.messageId })
     expect(rowsOf(body)).toEqual([['1', '2', '3', '4', '5'], ['6', '7', '8'], ['月', '季'], ['年'], ['周']])
     const buttons = body.keyboard!.content.rows.flatMap((r) => r.buttons)

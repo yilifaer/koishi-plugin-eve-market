@@ -215,7 +215,7 @@ describe('样式自检 2 on the real QQ adapter', () => {
     expect(imageSize(upload.data)).toEqual({ width: 1440, height: 8000 })
     expect((sent[1].body as { message_reference?: { message_id: string } }).message_reference).toEqual({ message_id: 'REAL-SELFTEST-2' })
     expect(sent[2].body.msg_type).toBe(2)
-    expect(sent[2].body.markdown?.content.startsWith(`<qqbot-at-user id="${REAL_MEMBER}" /> `)).toBe(true)
+    expect(sent[2].body.markdown?.content.startsWith(`<qqbot-at-user id="${REAL_MEMBER}" />\n`)).toBe(true)
     expect((sent[2].body as { message_reference?: unknown }).message_reference).toEqual({ message_id: 'REAL-SELFTEST-2' })
     expect(sent[3].body.markdown?.content).toHaveLength(SELFTEST_LONG_CHARS)
   })

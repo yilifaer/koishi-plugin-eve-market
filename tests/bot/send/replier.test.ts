@@ -18,7 +18,7 @@ interface Call {
   quote?: string
 }
 
-const MENTION = '<qqbot-at-user id="U1" /> '
+const MENTION = '<qqbot-at-user id="U1" />\n'
 
 class FakeSender implements Sender {
   calls: Call[] = []

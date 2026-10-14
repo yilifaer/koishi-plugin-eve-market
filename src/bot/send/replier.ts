@@ -292,7 +292,7 @@ export class Replier {
 
   private deliver(kind: 'markdown' | 'text', body: string, rows: KeyboardRow[], quote?: string, mention = false): Promise<SendResult> {
     if (kind === 'markdown') {
-      const md = mention ? `<qqbot-at-user id="${escapeAttr(this.session.userId!)}" /> ${body}` : body
+      const md = mention ? `<qqbot-at-user id="${escapeAttr(this.session.userId!)}" />\n${body}` : body
       return quote ? this.sender.markdown(this.session, md, rows, quote) : this.sender.markdown(this.session, md, rows)
     }
     return quote ? this.sender.text(this.session, body, quote) : this.sender.text(this.session, body)
