@@ -8,7 +8,7 @@ import { NetworkError, createModuleStore } from '../../../src/core/ports'
 import type { HttpClient, HttpRequest } from '../../../src/core/ports'
 import { isFailure } from '../../../src/core/types'
 import type { EveCore } from '../../../src/core/types'
-import { redact, safeError } from '../../../src/core/util'
+import { redact, registerSecret, safeError } from '../../../src/core/util'
 import { FakeJanice } from '../../fakes/fake-janice'
 import { FakeTime } from '../../fakes/fake-time'
 import { NodeHttpClient } from '../../fakes/node-http-client'
@@ -158,6 +158,17 @@ describe('safe-error masking', () => {
     expect(redact(`{"X-ApiKey":"${KEY}"}`)).toBe('{"X-ApiKey":"***"}')
     expect(redact(`{"apikey": "${KEY}", "a": 1}`)).toBe('{"apikey":"***", "a": 1}')
     expect(redact(`https://x.test/p?apikey=${KEY}&a=1`)).toBe('https://x.test/p?apikey=***&a=1')
+  })
+
+  it('masks the inspect and Headers forms of the header', () => {
+    expect(redact(`{ 'X-ApiKey': '${KEY}', Accept: 'x' }`)).not.toContain(KEY)
+    expect(redact(`Headers { 'x-apikey': '${KEY}' }`)).not.toContain(KEY)
+    expect(redact(`{ "x-apikey": "${KEY}" }`)).not.toContain(KEY)
+  })
+
+  it('masks a registered secret without passing it explicitly', () => {
+    registerSecret('registered-fake-key-1')
+    expect(redact('boom registered-fake-key-1 boom')).toBe('boom *** boom')
   })
 
   it('masks a known secret anywhere, and safeError keeps no request config', () => {

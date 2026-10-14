@@ -18,8 +18,16 @@ const PATTERNS: Array<[RegExp, string]> = [
   // JSON 字段
   [/"(refresh_token|access_token|id_token|client_secret|token|password|secret|authorization|apikey|x-apikey)"\s*:\s*"[^"]*"/gi, '"$1":"***"'],
   // Janice 的请求头 X-ApiKey: …（错误文字里带出请求头时）
-  [/\b(x-apikey)(\s*[:=]\s*)[^\s"',;}]+/gi, '$1$2***'],
+  // 名字和值两边的引号可有可无（util.inspect、Headers 的写法）
+  [/(['"]?)(x-apikey)\1(\s*[:=]\s*)(['"]?)[^\s"',;}]+\4/gi, '$1$2$1$3$4***$4'],
 ]
+
+const known = new Set<string>()
+
+/** 登记一个全局都要遮住的密钥（如 Janice 的 API 密钥），之后所有 redact / safeError 都会去掉它 */
+export function registerSecret(secret: string) {
+  if (secret.length >= 6) known.add(secret)
+}
 
 /**
  * 去掉文字里像令牌、口令的部分。secrets：调用方知道的具体值（例如当前的 refresh token、Client Secret），
@@ -27,7 +35,7 @@ const PATTERNS: Array<[RegExp, string]> = [
  */
 export function redact(value: string, secrets: readonly string[] = []): string {
   let out = value
-  for (const secret of secrets) {
+  for (const secret of [...known, ...secrets]) {
     if (secret && secret.length >= 6) out = out.split(secret).join('***')
   }
   for (const [pattern, replacement] of PATTERNS) out = out.replace(pattern, replacement)

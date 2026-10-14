@@ -10,6 +10,7 @@ import {
   JANICE_CODE_RE,
   JANICE_KEY_HEADER,
   JANICE_MAX_BYTES,
+  JANICE_MAX_PAUSE_MS,
   JANICE_MAX_QUEUE,
   JANICE_MIN_INTERVAL_MS,
   JANICE_THROTTLE_DEFAULT_SEC,
@@ -19,7 +20,7 @@ import { parseRetryAfter } from '../esi'
 import { NetworkError } from '../ports'
 import type { CorePorts } from '../ports'
 import type { CoreFailure, FailureCode } from '../types'
-import { describeError, sleep } from '../util'
+import { describeError, registerSecret, sleep } from '../util'
 
 export type JanicePorts = Pick<CorePorts, 'http' | 'clock' | 'scheduler' | 'logger' | 'store'>
 
@@ -63,6 +64,7 @@ export class JaniceClient {
   constructor(private readonly ports: JanicePorts, private readonly options: JaniceClientOptions) {
     this.base = (options.base ?? JANICE_API_BASE).replace(/\/+$/, '')
     this.minIntervalMs = options.minIntervalMs ?? JANICE_MIN_INTERVAL_MS
+    registerSecret(options.apiKey)
     // 状态按地址分，不带密钥
     this.state = ports.store.get<JaniceState>(`${STATE_KEY}:${this.base}`, () => ({
       pausedUntil: 0,
@@ -146,6 +148,8 @@ export class JaniceClient {
         timeoutMs: JANICE_TIMEOUT_MS,
         maxBytes: JANICE_MAX_BYTES,
         signal: this.life.signal,
+        // 不跟随重定向，免得 X-ApiKey 被带到别的主机或明文 http
+        redirect: 'manual',
       })
     } catch (e) {
       if (e instanceof NetworkError && e.kind === 'aborted') return failure('JANICE_DOWN', '请求被中止')
@@ -153,12 +157,15 @@ export class JaniceClient {
       return this.down(describeError(e, undefined, [apiKey]))
     }
     const { status } = res
+    if (status >= 300 && status < 400) return this.down('HTTP 3xx')
     if (status === 429) {
       const now = clock.now()
       const retryAt = parseRetryAfter(res.header('retry-after'), now) ?? now + JANICE_THROTTLE_DEFAULT_SEC * 1000
-      this.state.pausedUntil = retryAt
-      this.warnOnce(`Janice 返回 429（请求太频繁），暂停约 ${Math.max(1, Math.round((retryAt - now) / 60_000))} 分钟`)
-      return failure('JANICE_BUSY', 'Janice 返回 429', retryAt)
+      // 上限 1 小时，免得异常的 Retry-After 让估价一直停到重启
+      const until = Math.min(retryAt, now + JANICE_MAX_PAUSE_MS)
+      this.state.pausedUntil = until
+      this.warnOnce(`Janice 返回 429（请求太频繁），暂停约 ${Math.max(1, Math.round((until - now) / 60_000))} 分钟`)
+      return failure('JANICE_BUSY', 'Janice 返回 429', until)
     }
     if (status === 401 || status === 403) {
       this.warnBadKey(status)

@@ -11,6 +11,8 @@ export interface HttpRequest {
   /** 响应体超过这个字节数时中止并抛 NetworkError('too-large') */
   maxBytes?: number
   signal?: AbortSignal
+  /** 重定向：默认跟随；带密钥的请求用 manual，3xx 当作失败 */
+  redirect?: 'follow' | 'manual' | 'error'
 }
 
 export interface HttpResponse {

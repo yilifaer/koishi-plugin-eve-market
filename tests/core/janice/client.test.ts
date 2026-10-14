@@ -206,6 +206,24 @@ describe('JaniceClient 429', () => {
   })
 })
 
+describe('JaniceClient redirects', () => {
+  it('requests with redirect manual and treats 3xx as down without following', async () => {
+    http.script = [{ status: 302, headers: { Location: 'http://other.test/x' } }]
+    const res = await make().fetchAppraisal('AbC123')
+    expect(failure(res)).toMatchObject({ code: 'JANICE_DOWN', message: 'HTTP 3xx' })
+    expect(http.calls).toHaveLength(1)
+    expect(http.calls[0].req.redirect).toBe('manual')
+  })
+})
+
+describe('JaniceClient 429 cap', () => {
+  it('clamps a huge Retry-After to one hour', async () => {
+    http.script = [{ status: 429, headers: { 'Retry-After': '99999999' } }]
+    const t0 = time.now()
+    expect(failure(await make().fetchAppraisal('AbC123')).retryAt).toBe(t0 + 3_600_000)
+  })
+})
+
 describe('JaniceClient logging', () => {
   it('warns about a rejected key at most once per 10 minutes, with the status only', async () => {
     const client = make({ minIntervalMs: 0 })

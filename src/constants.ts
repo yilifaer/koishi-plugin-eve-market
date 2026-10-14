@@ -559,6 +559,8 @@ export const JANICE_NEGATIVE_CACHE_MIN = 10
 export const JANICE_MIN_INTERVAL_MS = 1000
 /** 429 没有 Retry-After 时暂停多久 */
 export const JANICE_THROTTLE_DEFAULT_SEC = 60
+/** 429 暂停的上限（毫秒） */
+export const JANICE_MAX_PAUSE_MS = 60 * 60_000
 /** 密钥被拒绝时，日志告警最多多久一次 */
 export const JANICE_BAD_KEY_WARN_MIN = 10
 /** 排队等着发的请求最多几个，满了直接按忙处理 */

@@ -46,6 +46,7 @@ export class KoishiHttpClient implements HttpClient {
         data: req.body,
         signal: controller.signal,
         validateStatus: () => true,
+        ...req.redirect ? { redirect: req.redirect } : {},
         responseType: (raw: Response) => readBody(raw, req.maxBytes),
         // 自己计时（连同读响应体），关掉 http 插件的全局超时
         ...req.timeoutMs ? { timeout: 0 } : {},
