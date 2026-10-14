@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BR_HOST, findBrLink, mentionsBrHost, parseBrLink } from '../../../src/core/universe/br-link'
+import { BR_HOST, findBrLink, mentionsBrHost, parseBrLink, relatedBrUrl } from '../../../src/core/universe/br-link'
 
 // 编造的战报编号
 const ID = '64f0a1b2c3d4e5f60718293a'
@@ -114,5 +114,52 @@ describe('mentionsBrHost', () => {
   it('tells whether the site is mentioned at all', () => {
     expect(mentionsBrHost('https://BR.evetools.org/br/123')).toBe(true)
     expect(mentionsBrHost('https://example.com/')).toBe(false)
+  })
+})
+
+describe('relatedBrUrl', () => {
+  const at = (iso: string) => Date.parse(iso)
+
+  it('builds the related address from the UTC hour, floored', () => {
+    expect(relatedBrUrl(30000142, at('2026-10-14T12:34:56Z'), 'floor')).toBe('https://br.evetools.org/related/30000142/202610141200')
+    expect(relatedBrUrl(30000142, at('2026-10-14T12:00:00Z'), 'floor')).toBe('https://br.evetools.org/related/30000142/202610141200')
+    expect(relatedBrUrl(30000142, at('2026-10-14T23:59:59.999Z'), 'floor')).toBe('https://br.evetools.org/related/30000142/202610142300')
+  })
+
+  it('works in UTC across days, months and years', () => {
+    expect(relatedBrUrl(30000142, at('2026-10-14T00:00:01Z'), 'floor')).toBe('https://br.evetools.org/related/30000142/202610140000')
+    expect(relatedBrUrl(30000142, at('2026-12-31T23:59:00Z'), 'nearest')).toBe('https://br.evetools.org/related/30000142/202701010000')
+    expect(relatedBrUrl(30000142, at('2026-02-28T23:40:00Z'), 'nearest')).toBe('https://br.evetools.org/related/30000142/202603010000')
+    // 本机时区不影响结果：带时区偏移的时间照 UTC 算
+    expect(relatedBrUrl(30000142, at('2026-10-14T20:34:00+08:00'), 'floor')).toBe('https://br.evetools.org/related/30000142/202610141200')
+  })
+
+  it('rounds to the nearest hour in nearest mode', () => {
+    expect(relatedBrUrl(30000142, at('2026-10-14T12:29:59Z'), 'nearest')).toBe('https://br.evetools.org/related/30000142/202610141200')
+    expect(relatedBrUrl(30000142, at('2026-10-14T12:30:00Z'), 'nearest')).toBe('https://br.evetools.org/related/30000142/202610141300')
+    expect(relatedBrUrl(30000142, at('2026-10-14T12:40:00Z'), 'nearest')).toBe('https://br.evetools.org/related/30000142/202610141300')
+  })
+
+  it('uses the configured rounding by default (floor)', () => {
+    expect(relatedBrUrl(30000142, at('2026-10-14T12:40:00Z'))).toBe('https://br.evetools.org/related/30000142/202610141200')
+  })
+
+  it('returns null unless the system id has exactly 8 digits', () => {
+    const t = at('2026-10-14T12:00:00Z')
+    for (const id of [0, -30000142, 3000014, 300001420, 30000142.5, NaN, Infinity]) {
+      expect(relatedBrUrl(id, t, 'floor'), String(id)).toBeNull()
+    }
+    expect(relatedBrUrl(31000005, t, 'floor')).toBe('https://br.evetools.org/related/31000005/202610141200')
+  })
+
+  it('returns null for times that cannot be formatted as 4-digit years', () => {
+    for (const t of [NaN, Infinity, Date.UTC(10000, 0, 1), Date.UTC(999, 0, 1)]) {
+      expect(relatedBrUrl(30000142, t, 'floor'), String(t)).toBeNull()
+    }
+  })
+
+  it('always produces an address that parseBrLink accepts unchanged', () => {
+    const url = relatedBrUrl(30000142, at('2026-10-14T12:34:56Z'), 'floor')!
+    expect(parseBrLink(url)).toEqual({ kind: 'related', url, host: BR_HOST, id: '30000142/202610141200' })
   })
 })

@@ -486,3 +486,39 @@ export const DEFAULT_SCRAPMETAL_LEVEL = 5
 export const REPROCESS_ROUNDING = 'batch' as const
 /** 提炼税的算法：按 ISK 收（2026-10-14 已在游戏里核对；废料处理 5 级的产出率是 55%） */
 export const REPROCESS_TAX_MODE = 'isk' as const
+
+// ------------------------------------------------------------------ zKill 击杀转战报
+// 下面所有猜测的字段名、地址、限流值都待实测（所有者的 Mac 上用同样的 User-Agent 请求一次）；猜错只改这里和 parseZkillKill。
+
+/** zKill 的主机（HTTP 客户端在 src/core/zkill，击杀、人物卡共用） */
+export const ZKILL_API_BASE = 'https://zkillboard.com'
+/** 击杀编号 → hash 和估值；末尾的 `/` 要带（待实测） */
+export const ZKILL_KILL_PATH = '/api/killID/{id}/'
+/** 全局两次请求之间至少隔多久（zKill 没有公开精确数字，按保守值） */
+export const ZKILL_MIN_INTERVAL_MS = 1000
+export const ZKILL_TIMEOUT_MS = 5000
+export const ZKILL_MAX_BYTES = 64 * 1024
+/** 收到 403 或 Cloudflare 验证页后暂停多久 */
+export const ZKILL_BLOCKED_PAUSE_MIN = 5
+/** 429 没有 Retry-After 时暂停多久 */
+export const ZKILL_THROTTLE_DEFAULT_SEC = 60
+
+/** 击杀编号最多几位 */
+export const KILL_ID_MAX_DIGITS = 12
+/** 击杀摘要的内存缓存：条数和时长（击杀不会变，估值可能小幅变） */
+export const KILL_CACHE_MAX = 200
+export const KILL_CACHE_HOURS = 24
+/** zKill 返回 `[]`（没收录）的负缓存 */
+export const KILL_NEGATIVE_CACHE_MIN = 5
+/** ESI 击杀详情的缓存（击杀内容不会变） */
+export const ESI_KILLMAIL_CACHE_DAYS = 30
+/** 查人物、军团、联盟名字最多等多久，超时写「未知」 */
+export const KILL_NAMES_WAIT_MS = 1500
+/** 战报时间怎么取整到整点：先按击杀所在的整点，实测 BR 页面覆盖范围后再定 */
+export const KILL_BR_ROUNDING = 'floor' as 'floor' | 'nearest'
+/** 深渊星系的编号前缀；深渊里没有对应的战报 */
+export const ABYSS_SYSTEM_PREFIX = '32'
+/** 「按星系和时间的相关战报」的来源；以后加别的网站就加一行（用第一行） */
+export const RELATED_BR_SOURCES = [
+  { id: 'evetools', template: 'https://br.evetools.org/related/{system}/{time}' },
+] as const
