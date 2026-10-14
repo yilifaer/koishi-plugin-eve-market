@@ -40,6 +40,16 @@ export type FailureCode =
   | 'APPRAISAL_EXPIRED'
   /** 需要的配置没填（例如 EVE 授权的 Client ID） */
   | 'NOT_CONFIGURED'
+  /** 击杀转战报：zKill 上没有这个击杀（编号不对，或者刚发生还没收录） */
+  | 'KILL_NOT_FOUND'
+  /** zKill 连不上、超时、响应不是预期的 JSON */
+  | 'ZKILL_UNAVAILABLE'
+  /** zKill 限流或拦截：retryAt 之前不再请求 */
+  | 'ZKILL_THROTTLED'
+  /** 欧服接口取不到击杀详情 */
+  | 'ESI_UNAVAILABLE'
+  /** 调用方给的时限到了 */
+  | 'DEADLINE'
 
 /** BAD_ARGUMENT 的具体原因，bot 按它选提示语 */
 export type FailureReason =
@@ -94,6 +104,8 @@ export interface CoreFailure {
   marketKey?: string
   /** MARKET_UNAVAILABLE 时：为什么不可用（卡片按它选说法，例如「同步异常」） */
   quoteReason?: QuoteReason
+  /** ZKILL_THROTTLED 时：什么时候可以再试（毫秒） */
+  retryAt?: number
 }
 
 export function isFailure(value: unknown): value is CoreFailure {
@@ -1461,6 +1473,8 @@ export interface EveCore {
   format: PriceFormatter
   /** 势力图、联盟势力图 */
   maps: InfluenceMapService
+  /** 击杀转战报：zKill + 欧服击杀详情 */
+  kills: KillService
   /** 查价告示：启用、没过期、本群能看的前 MAX_NOTICES 条 */
   notices(access: Access): string[]
   status(): CoreStatus
@@ -1472,8 +1486,56 @@ export interface EveCore {
 export interface CoreOverrides {
   esiBase?: string
   ssoBase?: string
+  /** zKill 的地址（击杀转战报、KB 人物卡共用） */
+  zkillBase?: string
   compatibilityDate?: string
   random?: () => number
 }
 
 export type CreateEveCore = (ports: CorePorts, settings: Settings, overrides?: CoreOverrides) => EveCore
+
+// ------------------------------------------------------------------ 击杀转战报
+
+/** 受害者或最后一击；名字查不到（或没有）时是 null，没有驾驶员的（结构、无人机）character 是 null */
+export interface KillParty {
+  character: string | null
+  corporation: string | null
+  alliance: string | null
+  shipTypeId: number | null
+  ship: ItemInfo | null
+}
+
+export interface KillSummary {
+  killId: number
+  /** 毫秒，UTC */
+  time: number
+  /** 数据里没有这个星系时 null，编号在 systemId */
+  system: SystemView | null
+  systemId: number
+  victim: KillParty
+  /** 参与击杀的人数（攻击者条数） */
+  attackers: number
+  finalBlow: KillParty | null
+  /** zKill 的 totalValue；zKill 没给，或直接用欧服击杀链接时 null */
+  value: number | null
+  flags: { npc: boolean; solo: boolean; awox: boolean }
+  /** 星系编号是深渊（32 开头）：没有对应的战报 */
+  abyssal: boolean
+}
+
+export interface KillOptions {
+  /** 这一次最多等多久（毫秒），默认 QUERY_DEADLINE_MS；到时间返回 DEADLINE，取数据在后台继续并写进缓存 */
+  deadlineMs?: number
+  /** 欧服击杀链接里带的 hash：给了就不问 zKill（也就没有估值和标记） */
+  hash?: string
+}
+
+export interface KillService {
+  /**
+   * 失败码：KILL_NOT_FOUND、ZKILL_UNAVAILABLE、ZKILL_THROTTLED（带 retryAt）、ESI_UNAVAILABLE、DEADLINE。
+   * 击杀不会变：成功的结果在内存里放 24 小时
+   */
+  summary(killId: number, opts?: KillOptions): Promise<KillSummary | CoreFailure>
+  /** 这个击杀所在星系、所在整点的 BR 相关战报地址；深渊、数据里查不到星域时 null */
+  relatedBrUrl(summary: KillSummary): string | null
+}

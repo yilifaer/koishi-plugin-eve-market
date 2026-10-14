@@ -3,6 +3,7 @@
 
 import {
   ADJUSTED_PRICES_CACHE_MIN,
+  ESI_KILLMAIL_CACHE_DAYS,
   HISTORY_CACHE_HOURS,
   HISTORY_STALE_HOURS,
   INCURSIONS_CACHE_MIN,
@@ -448,5 +449,66 @@ export class EsiApi {
       parse: parseServerStatus,
     }, withStale(opts, STATUS_STALE_MIN * MINUTE * 1000))
   }
+
+  /**
+   * 击杀详情（公开，不要授权）。内容不会变，缓存 30 天；hash 不对是 HTTP 422，没有是 404。
+   * 字段名按记忆写的，待实测，改动集中在 parseKillmail。
+   */
+  killmail(killId: number, hash: string, opts: EsiCallOptions = {}): Promise<EsiResult<EsiKillmail>> {
+    positiveId(killId, 'killId')
+    if (!/^[0-9a-f]{40}$/.test(hash)) throw new RangeError('hash 应该是 40 位小写十六进制')
+    return this.client.request({
+      route: 'GET /killmails/{killmail_id}/{killmail_hash}',
+      path: `/killmails/${killId}/${hash}`,
+      ttlSec: ESI_KILLMAIL_CACHE_DAYS * DAY,
+      parse: parseKillmail,
+    }, opts)
+  }
 }
 
+// ------------------------------------------------------------------ 击杀详情
+
+/** 受害者或攻击者：没有驾驶员的（结构、无人机、NPC）没有 characterId */
+export interface EsiKillParty {
+  characterId: number | null
+  corporationId: number | null
+  allianceId: number | null
+  factionId: number | null
+  shipTypeId: number | null
+}
+
+export interface EsiKillAttacker extends EsiKillParty {
+  finalBlow: boolean
+}
+
+export interface EsiKillmail {
+  killId: number
+  time: number
+  systemId: number
+  victim: EsiKillParty
+  attackers: EsiKillAttacker[]
+}
+
+function killParty(r: Row): EsiKillParty {
+  return {
+    characterId: optInt(r, 'character_id'),
+    corporationId: optInt(r, 'corporation_id'),
+    allianceId: optInt(r, 'alliance_id'),
+    factionId: optInt(r, 'faction_id'),
+    shipTypeId: optInt(r, 'ship_type_id'),
+  }
+}
+
+/** 字段名待实测（按 ESI 文档的记忆）；猜错只改这里 */
+export function parseKillmail(json: unknown): EsiKillmail {
+  const r = row(json, 'killmail')
+  const victim = killParty(row(r.victim, 'victim'))
+  if (victim.shipTypeId === null) throw new ShapeError('victim 缺 ship_type_id')
+  return {
+    killId: int(r, 'killmail_id'),
+    time: time(r, 'killmail_time'),
+    systemId: int(r, 'solar_system_id'),
+    victim,
+    attackers: rows(r.attackers, 'attackers', (a) => ({ ...killParty(a), finalBlow: bool(a, 'final_blow', false) })),
+  }
+}

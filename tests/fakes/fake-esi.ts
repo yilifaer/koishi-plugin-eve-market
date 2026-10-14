@@ -103,6 +103,39 @@ export interface RawServerStatus {
   vip?: boolean
 }
 
+// ------------------------------------------------------------------ 击杀详情（ESI 的字段名，编造的 ID）
+
+export interface RawKillParty {
+  character_id?: number
+  corporation_id?: number
+  alliance_id?: number
+  faction_id?: number
+  ship_type_id?: number
+}
+
+export interface RawKillmail {
+  killmail_id: number
+  killmail_time: string
+  solar_system_id: number
+  victim: RawKillParty & { damage_taken: number; ship_type_id: number }
+  attackers: Array<RawKillParty & { final_blow: boolean; damage_done: number; security_status: number; weapon_type_id?: number }>
+}
+
+/** 默认：乌鸦级在 Jita 被两个人击毁，第二个打了最后一击 */
+export function rawKillmail(o: Partial<RawKillmail> = {}): RawKillmail {
+  return {
+    killmail_id: 131234567,
+    killmail_time: '2026-10-14T12:34:56Z',
+    solar_system_id: 30000142,
+    victim: { character_id: 2112000101, corporation_id: 98000101, alliance_id: 99000101, ship_type_id: 638, damage_taken: 51234 },
+    attackers: [
+      { character_id: 2112000201, corporation_id: 98000201, ship_type_id: 17738, weapon_type_id: 2977, final_blow: false, damage_done: 20000, security_status: -1.2 },
+      { character_id: 2112000202, corporation_id: 98000201, alliance_id: 99000201, ship_type_id: 11978, weapon_type_id: 2977, final_blow: true, damage_done: 31234, security_status: 0.5 },
+    ],
+    ...o,
+  }
+}
+
 // ------------------------------------------------------------------ 请求记录和故障
 
 export interface EsiLogEntry {
@@ -191,6 +224,8 @@ export class FakeEsi {
   /** 访问这些建筑回 403 */
   forbiddenStructures = new Set<number>()
   searchResults = new Map<string, number[]>()
+  /** 击杀详情：击杀编号 → hash 和内容（hash 对不上回 422，没有回 404） */
+  killmails = new Map<number, { hash: string; mail: RawKillmail }>()
 
   /** 限流组（按 2026-08-18 的规范） */
   buckets: Record<string, Bucket> = {
@@ -361,6 +396,12 @@ export class FakeEsi {
     if (method === 'GET' && path === '/industry/systems') return this.json(entry, res, 'systems', this.industrySystems, 'systems', 'industry')
     if (method === 'GET' && path === '/incursions') return this.json(entry, res, 'incursions', this.incursions, 'incursions', 'incursion')
     if (method === 'GET' && path === '/status') return this.json(entry, res, 'status', this.serverStatus, 'status', 'status')
+    if (method === 'GET' && (m = /^\/killmails\/(\d+)\/([0-9a-f]{40})$/.exec(path))) {
+      const hit = this.killmails.get(Number(m[1]))
+      if (!hit) return this.error(res, entry, 404, 'Not found')
+      if (hit.hash !== m[2]) return this.error(res, entry, 422, 'Invalid killmail_id and/or killmail_hash')
+      return this.json(entry, res, `killmail:${m[1]}`, hit.mail, 'killmail')
+    }
     if (method === 'GET' && (m = /^\/universe\/types\/(\d+)$/.exec(path))) {
       const type = this.types.get(Number(m[1]))
       return type ? this.json(entry, res, `type:${m[1]}`, type, 'universe') : this.error(res, entry, 404, 'Type not found')

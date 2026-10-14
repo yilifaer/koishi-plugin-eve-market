@@ -12,6 +12,7 @@ import { createEsi } from './esi'
 import { createPriceFormatter } from './format'
 import { createIndustryIndices, createIndustryLocations, createIndustryService } from './industry'
 import type { IndustryLocations } from './industry'
+import { createKillService } from './killmail'
 import { createItemResolver } from './items'
 import type { ManagedItemResolver } from './items'
 import { createHistoryService, createMarketRegistry, createMarketService, createStructureMarkets } from './market'
@@ -23,6 +24,7 @@ import type {
   Access, AuthService, ConfigIssue, ConfigSection, CoreOverrides, CoreStatus, DataService, DataSet, EveCore, ItemIndexStats, Settings,
 } from './types'
 import { createIncursions, createInfluenceMaps, createServerStatus, createUniverseService } from './universe'
+import { ZkillClient } from './zkill'
 
 const EMPTY_STATS: ItemIndexStats = { items: 0, marketItems: 0, adminAliases: 0, glossaryAliases: 0, sets: 0 }
 
@@ -170,6 +172,12 @@ export function createEveCore(ports: CorePorts, settings: Settings, overrides: C
     version: ports.version,
     random: overrides.random,
   })
+  const universe = createUniverseService({
+    data, items, store, clock, esi, logger,
+    incursions: createIncursions({ esi, data, clock, logger }),
+    status: createServerStatus({ esi, clock, logger }),
+  })
+  const zkill = new ZkillClient(ports, { base: overrides.zkillBase, userAgent: esi.client.userAgent })
   const unsubscribe = data.onUpdate(() => checks.recheck())
   let started: Promise<void> | undefined
   // ready 等数据和授权档案都读好：刚启动时还没读到的档案不会被当成「需要授权」
@@ -186,14 +194,11 @@ export function createEveCore(ports: CorePorts, settings: Settings, overrides: C
     history: createHistoryService({ esi, clock }),
     appraisal: createAppraisalService({ items, markets, prices, settings, store, clock, scheduler, logger, random: overrides.random }),
     industry,
-    universe: createUniverseService({
-      data, items, store, clock, esi, logger,
-      incursions: createIncursions({ esi, data, clock, logger }),
-      status: createServerStatus({ esi, clock, logger }),
-    }),
+    universe,
     auth,
     format: createPriceFormatter(settings.display, clock),
     maps,
+    kills: createKillService({ zkill, esi, items, universe, clock, scheduler, logger }),
 
     notices(access: Access): string[] {
       const now = clock.now()
@@ -231,6 +236,7 @@ export function createEveCore(ports: CorePorts, settings: Settings, overrides: C
     async stop(): Promise<void> {
       unsubscribe()
       maps.stop()
+      zkill.stop()
       indices.stop()
       structures.stop()
       auth.stop()
