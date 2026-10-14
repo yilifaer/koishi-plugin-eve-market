@@ -162,7 +162,7 @@ export const ACTIVITY_TEXT = {
 
 export const ZONE_NAMES: Record<PilotZone, string> = {
   eu: '欧洲',
-  ru: '俄服',
+  ru: '俄罗斯',
   use: '美东',
   usw: '美西',
   au: '澳洲',
