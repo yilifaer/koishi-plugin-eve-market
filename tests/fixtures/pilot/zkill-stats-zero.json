@@ -1,0 +1,20 @@
+{
+ "shipsDestroyed": 0,
+ "shipsLost": 0,
+ "iskDestroyed": 0,
+ "iskLost": 0,
+ "soloKills": 0,
+ "dangerRatio": 0,
+ "gangRatio": 0,
+ "months": {},
+ "groups": {},
+ "topAllTime": [],
+ "topShips": [],
+ "topLists": [],
+ "activepvp": {},
+ "labels": {},
+ "info": {
+  "id": 2119876543,
+  "name": "Hanako Kisaragi"
+ }
+}

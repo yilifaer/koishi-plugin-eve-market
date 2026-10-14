@@ -1,0 +1,23 @@
+// 军团头衔（ESI 人物信息的 title）的清理：可能带 HTML / 颜色标签、网址、控制字符。
+
+import { KB_TITLE_MAX_CHARS } from '../../constants'
+
+const ENTITIES: Record<string, string> = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&apos;': "'", '&nbsp;': ' ' }
+
+/** 控制字符、零宽字符、双向控制字符 */
+const INVISIBLE = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/g
+const SCHEME_URL = /[a-z][a-z0-9+.-]*:\/\/\S*/gi
+const DOMAIN_LIKE = /[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}(?![\w-])/gi
+
+/** 去标签、还原常见转义、去掉网址和不可见字符、合成一行、截到 max 个字；清理完是空的返回 null */
+export function cleanTitle(raw: string | null | undefined, max = KB_TITLE_MAX_CHARS): string | null {
+  if (typeof raw !== 'string') return null
+  let text = raw.replace(/<[^>]*>/g, '')
+  text = text.replace(/&(?:amp|lt|gt|quot|#39|apos|nbsp);/g, (e) => ENTITIES[e] ?? e)
+  // 还原出来的 < > 不能再组成标签
+  text = text.replace(/[<>]/g, '').replace(INVISIBLE, ' ').replace(SCHEME_URL, '').replace(DOMAIN_LIKE, '')
+  text = text.replace(/\s+/g, ' ').trim()
+  if (!text) return null
+  const chars = Array.from(text)
+  return chars.length > max ? `${chars.slice(0, Math.max(0, max - 1)).join('')}…` : text
+}

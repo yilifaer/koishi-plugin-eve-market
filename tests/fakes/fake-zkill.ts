@@ -59,10 +59,21 @@ export class FakeZkill {
   server!: http.Server
   base = ''
   readonly requests: ZkillLogEntry[] = []
+  /** requests 里每个请求到达的时间（Date.now()） */
+  readonly times: number[] = []
   /** 击杀编号 → 返回的内容；没有的回 `[]` */
   kills = new Map<number, RawZkillKill>()
-  /** 其他固定路径（例如以后的人物统计）→ 返回的 JSON */
+  /** 其他固定路径 → 返回的 JSON */
   routes = new Map<string, unknown>()
+  /** KB 人物卡：人物统计（没有的回 `{}`）。真实服务器对 /api/stats/characterID/<id>/ 回 302，统计在 `.../kills/` */
+  stats = new Map<number, unknown>()
+  /** 为 false 时统计直接在 /api/stats/characterID/<id>/ 返回，不跳转 */
+  redirectStats = true
+  /** 人物的击杀、损失列表（完整击杀 + zkb；没有的回 `[]`；测试也可以放读不懂的内容） */
+  charKills = new Map<number, RawZkillKill[] | unknown>()
+  charLosses = new Map<number, RawZkillKill[] | unknown>()
+  /** 路径匹配这个的请求一直不回应（连接保持到 stop） */
+  hang: RegExp | null = null
   /** 下 N 个请求依次出的故障（用完恢复正常） */
   faults: ZkillFault[] = []
   private held: http.ServerResponse[] = []
@@ -86,11 +97,24 @@ export class FakeZkill {
 
   private handle(req: http.IncomingMessage, res: http.ServerResponse) {
     const path = req.url ?? ''
+    this.times.push(Date.now())
     this.requests.push({ path, userAgent: req.headers['user-agent'], accept: req.headers.accept })
     const fault = this.faults.shift()
     if (fault) return this.fault(fault, res)
+    if (this.hang?.test(path)) return void this.held.push(res)
     const m = /^\/api\/killID\/(\d+)\/$/.exec(path)
     if (m) return this.json(res, this.kills.has(Number(m[1])) ? [this.kills.get(Number(m[1]))] : [])
+    const stats = /^\/api\/stats\/characterID\/(\d+)\/(kills\/)?$/.exec(path)
+    if (stats) {
+      if (this.redirectStats && !stats[2]) {
+        res.statusCode = 302
+        res.setHeader('Location', `/api/stats/characterID/${stats[1]}/kills/`)
+        return void res.end()
+      }
+      return this.json(res, this.stats.get(Number(stats[1])) ?? {})
+    }
+    const list = /^\/api\/(kills|losses)\/characterID\/(\d+)\/$/.exec(path)
+    if (list) return this.json(res, (list[1] === 'kills' ? this.charKills : this.charLosses).get(Number(list[2])) ?? [])
     if (this.routes.has(path)) return this.json(res, this.routes.get(path))
     res.statusCode = 404
     res.end('Not found')

@@ -3,7 +3,10 @@
 
 import {
   ADJUSTED_PRICES_CACHE_MIN,
+  ESI_CHARACTER_CACHE_HOURS,
+  ESI_CORP_CACHE_HOURS,
   ESI_KILLMAIL_CACHE_DAYS,
+  ESI_STATION_CACHE_DAYS,
   HISTORY_CACHE_HOURS,
   HISTORY_STALE_HOURS,
   INCURSIONS_CACHE_MIN,
@@ -450,6 +453,75 @@ export class EsiApi {
     }, withStale(opts, STATUS_STALE_MIN * MINUTE * 1000))
   }
 
+  // ---------------------------------------------------------------- 人物、军团、联盟、空间站（KB 人物卡，全部公开，搜索除外）
+
+  /** 人物公开信息（404 = 不是人物）。缓存 ESI_CHARACTER_CACHE_HOURS */
+  character(characterId: number, opts: EsiCallOptions = {}): Promise<EsiResult<EsiCharacter>> {
+    positiveId(characterId, 'characterId')
+    return this.client.request({
+      route: 'GET /characters/{character_id}',
+      path: `/characters/${characterId}`,
+      ttlSec: ESI_CHARACTER_CACHE_HOURS * HOUR,
+      parse: parseCharacter,
+    }, opts)
+  }
+
+  /** 军团史：record_id 最小的是出生时的新手军团 */
+  corporationHistory(characterId: number, opts: EsiCallOptions = {}): Promise<EsiResult<EsiCorpHistoryRecord[]>> {
+    positiveId(characterId, 'characterId')
+    return this.client.request({
+      route: 'GET /characters/{character_id}/corporationhistory',
+      path: `/characters/${characterId}/corporationhistory`,
+      ttlSec: ESI_CORP_CACHE_HOURS * HOUR,
+      parse: parseCorpHistory,
+    }, opts)
+  }
+
+  corporation(corporationId: number, opts: EsiCallOptions = {}): Promise<EsiResult<EsiCorporation>> {
+    positiveId(corporationId, 'corporationId')
+    return this.client.request({
+      route: 'GET /corporations/{corporation_id}',
+      path: `/corporations/${corporationId}`,
+      ttlSec: ESI_CORP_CACHE_HOURS * HOUR,
+      parse: parseCorporation,
+    }, opts)
+  }
+
+  alliance(allianceId: number, opts: EsiCallOptions = {}): Promise<EsiResult<EsiAlliance>> {
+    positiveId(allianceId, 'allianceId')
+    return this.client.request({
+      route: 'GET /alliances/{alliance_id}',
+      path: `/alliances/${allianceId}`,
+      ttlSec: ESI_CORP_CACHE_HOURS * HOUR,
+      parse: parseAlliance,
+    }, opts)
+  }
+
+  /** 空间站名和星系；language 不写 = 英文（和 type() 一样用 Accept-Language） */
+  station(stationId: number, opts: EsiCallOptions & { language?: EsiLanguage } = {}): Promise<EsiResult<EsiStation>> {
+    positiveId(stationId, 'stationId')
+    const { language, ...rest } = opts
+    return this.client.request({
+      route: 'GET /universe/stations/{station_id}',
+      path: `/universe/stations/${stationId}`,
+      ttlSec: ESI_STATION_CACHE_DAYS * DAY,
+      ...(language ? { language } : {}),
+      parse: parseStation,
+    }, rest)
+  }
+
+  /** 按名字（部分）搜人物，要授权（市场授权的角色令牌，权限和搜建筑同一个，待实测）。返回人物 ID */
+  searchCharacters(authCharacterId: number, search: string, opts: AuthedOptions): Promise<EsiResult<number[]>> {
+    positiveId(authCharacterId, 'authCharacterId')
+    return this.client.request({
+      route: 'GET /characters/{character_id}/search',
+      path: `/characters/${authCharacterId}/search`,
+      query: { categories: 'character', search, strict: 'false' },
+      ttlSec: 0,
+      parse: parseCharacterSearch,
+    }, opts)
+  }
+
   /**
    * 击杀详情（公开，不要授权）。内容不会变，缓存 30 天；hash 不对是 HTTP 422，没有是 404。
    * 字段名按记忆写的，待实测，改动集中在 parseKillmail。
@@ -511,4 +583,88 @@ export function parseKillmail(json: unknown): EsiKillmail {
     victim,
     attackers: rows(r.attackers, 'attackers', (a) => ({ ...killParty(a), finalBlow: bool(a, 'final_blow', false) })),
   }
+}
+
+// ------------------------------------------------------------------ 人物、军团、联盟、空间站（KB 人物卡）
+
+export interface EsiCharacter {
+  name: string
+  corporationId: number
+  allianceId: number | null
+  /** 毫秒 */
+  birthday: number
+  securityStatus: number | null
+  /** 军团头衔，可能带 HTML / 颜色标签（原样，显示前要清理）；没有时 null */
+  title: string | null
+}
+
+export interface EsiCorpHistoryRecord {
+  corporationId: number
+  recordId: number
+  /** 毫秒 */
+  startDate: number
+  isDeleted: boolean
+}
+
+export interface EsiCorporation {
+  name: string
+  ticker: string
+  homeStationId: number | null
+  allianceId: number | null
+}
+
+export interface EsiAlliance {
+  name: string
+  ticker: string
+}
+
+export interface EsiStation {
+  name: string
+  systemId: number
+}
+
+function optStr(r: Row, key: string): string | null {
+  return r[key] === undefined || r[key] === null ? null : str(r, key)
+}
+
+export function parseCharacter(json: unknown): EsiCharacter {
+  const r = row(json, 'character')
+  return {
+    name: str(r, 'name'),
+    corporationId: int(r, 'corporation_id'),
+    allianceId: optInt(r, 'alliance_id'),
+    birthday: time(r, 'birthday'),
+    securityStatus: optNum(r, 'security_status'),
+    title: optStr(r, 'title'),
+  }
+}
+
+export function parseCorpHistory(json: unknown): EsiCorpHistoryRecord[] {
+  return rows(json, 'corporationhistory', (r) => ({
+    corporationId: int(r, 'corporation_id'),
+    recordId: int(r, 'record_id'),
+    startDate: time(r, 'start_date'),
+    isDeleted: bool(r, 'is_deleted', false),
+  }))
+}
+
+export function parseCorporation(json: unknown): EsiCorporation {
+  const r = row(json, 'corporation')
+  return { name: str(r, 'name'), ticker: str(r, 'ticker'), homeStationId: optInt(r, 'home_station_id'), allianceId: optInt(r, 'alliance_id') }
+}
+
+export function parseAlliance(json: unknown): EsiAlliance {
+  const r = row(json, 'alliance')
+  return { name: str(r, 'name'), ticker: str(r, 'ticker') }
+}
+
+export function parseStation(json: unknown): EsiStation {
+  const r = row(json, 'station')
+  return { name: str(r, 'name'), systemId: int(r, 'system_id') }
+}
+
+/** 授权搜索（categories=character）：没有命中时没有 character 字段 */
+export function parseCharacterSearch(json: unknown): number[] {
+  const r = row(json, 'search')
+  return r.character === undefined ? [] : intList(r, 'character')
 }

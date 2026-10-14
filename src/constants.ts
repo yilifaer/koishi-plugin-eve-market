@@ -567,3 +567,103 @@ export const JANICE_BAD_KEY_WARN_MIN = 10
 export const JANICE_MAX_QUEUE = 10
 /** 命令最多等 Janice 多久（排队加请求）；超时回复「太慢」，读取在后台继续并写进缓存 */
 export const JANICE_WAIT_MS = 20_000
+
+// ------------------------------------------------------------------ KB 人物卡
+// zKill 的路径和字段名已用真实响应核对（2026-10-14）；人设阈值、站名兜底等文案相关的常量猜错只改这里。
+
+/** 人物统计；真实服务器会 302 到 `.../kills/`，客户端跟随跳转 */
+export const ZKILL_STATS_PATH = '/api/stats/characterID/{id}/'
+/** 人物的击杀、损失：各返回最多 200 条完整击杀（带 zkb） */
+export const ZKILL_CHAR_KILLS_PATH = '/api/kills/characterID/{id}/'
+export const ZKILL_CHAR_LOSSES_PATH = '/api/losses/characterID/{id}/'
+export const ZKILL_STATS_TIMEOUT_MS = 8000
+export const ZKILL_STATS_MAX_BYTES = 2 * 1024 * 1024
+export const ZKILL_LIST_TIMEOUT_MS = 6000
+export const ZKILL_LIST_MAX_BYTES = 3 * 1024 * 1024
+/** zKill 回 3xx 时最多跟随几次（只跟随同一主机的 /api/ 路径） */
+export const ZKILL_REDIRECT_MAX = 2
+
+/** 人物 ID 最多几位 */
+export const PILOT_ID_MAX_DIGITS = 10
+/** 英文名：3–37 个字符，英文字母、数字、空格、`'`、`-`、`.` */
+export const KB_NAME_PATTERN = /^[A-Za-z0-9 '.-]{3,37}$/
+/** 模糊搜索最多列几个候选 */
+export const KB_CANDIDATES_MAX = 8
+
+export const KB_STATS_CACHE_MIN = 60
+export const KB_LIST_CACHE_MIN = 30
+/** 成品资料（完整的、没有缺项的）的缓存 */
+export const KB_CARD_CACHE_MIN = 60
+export const KB_CACHE_MAX = 300
+/** zKill 上没有这个人（`{}`）、ESI 说不是人物：负缓存 */
+export const KB_NEGATIVE_CACHE_MIN = 10
+/** 整张卡的时限；zKill 排队 + 统计 + 两个列表 */
+export const KB_DEADLINE_MS = 20000
+/** 「近期大击杀 / 大损失」和作息要用的两个列表最多等多久，超时只丢这一栏 */
+export const KB_RECENT_DEADLINE_MS = 6000
+export const KB_RECENT_MAX_DAYS = 30
+/** 出生地（军团史 → 军团 → 空间站）最多等多久，超时写兜底说法 */
+export const KB_BIRTHPLACE_WAIT_MS = 3000
+/** 作息：至少这么多条击杀 / 损失才按小时统计，否则用 zKill 的时区标签 */
+export const KB_ACTIVITY_MIN_SAMPLES = 10
+/** 「最活跃时段」连续几小时 */
+export const KB_ACTIVITY_SPAN_HOURS = 3
+/** 北京时间比 UTC 快几小时 */
+export const BEIJING_UTC_OFFSET_HOURS = 8
+export const KB_TITLE_MAX_CHARS = 20
+export const KB_SHIPS_MAX = 5
+export const KB_PLACES_MAX = 3
+export const KB_MONTHS = 12
+
+/** 人设阈值，按顺序命中第一条（顺序在 persona.ts 的规则表里） */
+export const KB_ARCHETYPE_RULES = {
+  /** 建号不到这么多天，或记录不到 rookieMinRecords 条 */
+  rookieDays: 90,
+  rookieMinRecords: 10,
+  /** 损失 ≥ 5 条，其中工业船占一半以上，且击毁比损失少 */
+  industrialMinLosses: 5,
+  industrialLossShare: 0.5,
+  /** 虫洞里的击毁占一半以上 */
+  wormholeMinKills: 30,
+  wormholeShare: 0.5,
+  /** 被标成「ganked」的击毁占四成以上 */
+  gankerMinKills: 50,
+  gankerShare: 0.4,
+  soloMinKills: 20,
+  soloShare: 0.25,
+  fleetGang: 85,
+  fleetMinKills: 100,
+  reaperDanger: 85,
+  reaperMinKills: 50,
+  underdogMinLosses: 20,
+  /** 近况：本周击毁数、近期大击杀 / 大损失的价值（ISK） */
+  moodWeekKills: 30,
+  moodDormantMonths: 3,
+  moodBigValue: 10_000_000_000,
+} as const
+
+/** 旗舰级：无畏、航母、战力辅助舰、超级航母、泰坦 */
+export const SHIP_GROUPS_CAPITAL: readonly number[] = [485, 547, 1538, 659, 30]
+/** 工业船：采矿驳船、采掘者、工业舰、深空运输舰、货舰、战略货舰、工业指挥舰、旗舰工业舰 */
+export const SHIP_GROUPS_INDUSTRIAL: readonly number[] = [463, 543, 28, 380, 513, 902, 941, 883]
+
+/** 图片：只从这个主机下载，由插件下载后转成 data: 嵌进页面 */
+export const EVE_IMAGE_BASE = 'https://images.evetech.net'
+export const KB_PORTRAIT_SIZE = 256
+export const KB_LOGO_SIZE = 64
+export const KB_SHIP_RENDER_SIZE = 128
+export const KB_IMAGE_MAX_BYTES = 1024 * 1024
+export const KB_IMAGE_TIMEOUT_MS = 4000
+export const KB_IMAGE_CONCURRENCY = 4
+export const KB_IMAGE_CACHE_MAX = 300
+export const KB_PORTRAIT_CACHE_HOURS = 24
+export const KB_IMAGE_CACHE_DAYS = 7
+/** 下载失败的负缓存 */
+export const KB_IMAGE_FAILURE_SEC = 60
+/** 一张卡的全部图片最多等多久 */
+export const KB_IMAGES_DEADLINE_MS = 6000
+
+/** ESI：人物 1 小时，军团、联盟、军团史 1 天，空间站 7 天 */
+export const ESI_CHARACTER_CACHE_HOURS = 1
+export const ESI_CORP_CACHE_HOURS = 24
+export const ESI_STATION_CACHE_DAYS = 7

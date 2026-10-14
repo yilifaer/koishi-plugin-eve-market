@@ -109,6 +109,10 @@ export class FakeAuth implements AuthService {
     this.searches.push({ profile: name, text })
     return this.hits
   }
+
+  async searchCharacters() {
+    return [] as number[]
+  }
 }
 
 export interface FakeCore {

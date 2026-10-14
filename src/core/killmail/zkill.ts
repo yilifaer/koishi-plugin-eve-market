@@ -72,3 +72,28 @@ export function parseZkillKill(json: unknown, killId: number): ZkillKill | 'not-
     body: readBody(r, killId),
   }
 }
+
+/** 人物的击杀 / 损失列表里的一条：只留价值和击杀正文（时间、星系、受害者的船） */
+export interface ZkillListKill {
+  killId: number
+  /** zkb.totalValue；没有时 0 */
+  value: number
+  body: EsiKillmail
+}
+
+/** 人物击杀 / 损失列表：完整击杀的数组。读不懂的行（没有正文、正文不完整）跳过；不是数组抛 ShapeError */
+export function parseZkillKillList(json: unknown): ZkillListKill[] {
+  if (!Array.isArray(json)) throw new ShapeError('zKill 列表应该是数组')
+  const out: ZkillListKill[] = []
+  for (const item of json) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+    const r = item as Record<string, unknown>
+    if (typeof r.killmail_id !== 'number') continue
+    const body = readBody(r, r.killmail_id)
+    if (!body) continue
+    const zkb = r.zkb && typeof r.zkb === 'object' ? (r.zkb as Record<string, unknown>) : {}
+    const value = typeof zkb.totalValue === 'number' && Number.isFinite(zkb.totalValue) && zkb.totalValue > 0 ? zkb.totalValue : 0
+    out.push({ killId: body.killId, value, body })
+  }
+  return out
+}

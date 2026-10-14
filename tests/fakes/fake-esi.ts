@@ -136,6 +136,38 @@ export function rawKillmail(o: Partial<RawKillmail> = {}): RawKillmail {
   }
 }
 
+// ------------------------------------------------------------------ KB 人物卡（ESI 的字段名，编造的 ID）
+
+export interface RawCharacter {
+  name: string
+  corporation_id: number
+  alliance_id?: number
+  birthday: string
+  security_status?: number
+  title?: string
+  description?: string
+  gender?: string
+}
+
+export interface RawCorpHistory {
+  corporation_id: number
+  record_id: number
+  start_date: string
+  is_deleted?: boolean
+}
+
+export interface RawCorporation {
+  name: string
+  ticker: string
+  home_station_id?: number
+  alliance_id?: number
+}
+
+/** 默认：Hanako Kisaragi，Moonlit Harbor Logistics [MHL] 的成员，属于 Fictional Federation <FICT> */
+export function rawCharacter(o: Partial<RawCharacter> = {}): RawCharacter {
+  return { name: 'Hanako Kisaragi', corporation_id: 98000501, alliance_id: 99000501, birthday: '2019-03-14T08:30:00Z', security_status: 1.5, ...o }
+}
+
 // ------------------------------------------------------------------ 请求记录和故障
 
 export interface EsiLogEntry {
@@ -226,6 +258,15 @@ export class FakeEsi {
   searchResults = new Map<string, number[]>()
   /** 击杀详情：击杀编号 → hash 和内容（hash 对不上回 422，没有回 404） */
   killmails = new Map<number, { hash: string; mail: RawKillmail }>()
+  /** KB 人物卡：人物、军团史、军团、联盟、空间站（没有的回 404）；全部是编造的 */
+  characters = new Map<number, RawCharacter>()
+  corpHistory = new Map<number, RawCorpHistory[]>()
+  corporations = new Map<number, RawCorporation>()
+  alliances = new Map<number, { name: string; ticker: string }>()
+  /** zhName：Accept-Language 是 zh 时返回的名字 */
+  stations = new Map<number, { name: string; system_id: number; zhName?: string }>()
+  /** 授权搜人物：搜索词（原样）→ 命中的人物 ID */
+  characterSearch = new Map<string, number[]>()
 
   /** 限流组（按 2026-08-18 的规范） */
   buckets: Record<string, Bucket> = {
@@ -412,8 +453,35 @@ export class FakeEsi {
       if (!info || this.forbiddenStructures.has(Number(m[1]))) return this.error(res, entry, 403, 'Forbidden')
       return this.json(entry, res, `structure-info:${m[1]}`, info, 'universe')
     }
+    if (method === 'GET' && (m = /^\/characters\/(\d+)$/.exec(path))) {
+      const hit = this.characters.get(Number(m[1]))
+      return hit ? this.json(entry, res, `character:${m[1]}`, hit, 'character') : this.error(res, entry, 404, 'Character not found')
+    }
+    if (method === 'GET' && (m = /^\/characters\/(\d+)\/corporationhistory$/.exec(path))) {
+      const hit = this.corpHistory.get(Number(m[1]))
+      return hit ? this.json(entry, res, `corphistory:${m[1]}`, hit, 'character') : this.error(res, entry, 404, 'Character not found')
+    }
+    if (method === 'GET' && (m = /^\/corporations\/(\d+)$/.exec(path))) {
+      const hit = this.corporations.get(Number(m[1]))
+      return hit ? this.json(entry, res, `corporation:${m[1]}`, hit, 'character') : this.error(res, entry, 404, 'Corporation not found')
+    }
+    if (method === 'GET' && (m = /^\/alliances\/(\d+)$/.exec(path))) {
+      const hit = this.alliances.get(Number(m[1]))
+      return hit ? this.json(entry, res, `alliance:${m[1]}`, hit, 'character') : this.error(res, entry, 404, 'Alliance not found')
+    }
+    if (method === 'GET' && (m = /^\/universe\/stations\/(\d+)$/.exec(path))) {
+      const hit = this.stations.get(Number(m[1]))
+      if (!hit) return this.error(res, entry, 404, 'Station not found')
+      const zh = String(entry.headers['accept-language'] ?? 'en').startsWith('zh') && hit.zhName
+      const { zhName: _, ...plain } = hit
+      return this.json(entry, res, `station:${m[1]}:${zh ? 'zh' : 'en'}`, zh ? { ...plain, name: hit.zhName } : plain, 'universe')
+    }
     if (method === 'GET' && (m = /^\/characters\/(\d+)\/search$/.exec(path))) {
       if (!this.authorized(entry)) return this.error(res, entry, 401, 'authentication failure')
+      if (query.get('categories') === 'character') {
+        const found = this.characterSearch.get(query.get('search') ?? '') ?? []
+        return this.json(entry, res, `search-character:${query.get('search')}`, found.length ? { character: found } : {}, 'search')
+      }
       const hits = this.searchResults.get(query.get('search') ?? '') ?? []
       return this.json(entry, res, `search:${query.get('search')}`, hits.length ? { structure: hits } : {}, 'search')
     }

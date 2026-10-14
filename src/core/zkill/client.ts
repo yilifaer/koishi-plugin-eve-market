@@ -11,6 +11,7 @@ import {
   ZKILL_MAX_BYTES,
   ZKILL_MAX_QUEUE,
   ZKILL_MIN_INTERVAL_MS,
+  ZKILL_REDIRECT_MAX,
   ZKILL_THROTTLE_DEFAULT_SEC,
   ZKILL_TIMEOUT_MS,
 } from '../../constants'
@@ -80,6 +81,7 @@ const STATE_KEY = 'zkill'
 const CACHE_MAX = 500
 const FAILURES_MAX = 100
 const ACCEPT = 'application/json'
+const REDIRECTS = new Set([301, 302, 303, 307, 308])
 
 function isEmpty(json: unknown): boolean {
   if (json === null || json === undefined) return true
@@ -245,17 +247,26 @@ export class ZkillClient {
   private async send(url: string, opts: ZkillGetOptions): Promise<ZkillResult> {
     const { http, clock, logger } = this.ports
     let res
+    let target = url
     try {
-      res = await http.request({
-        method: 'GET',
-        url,
-        headers: { 'User-Agent': this.options.userAgent, Accept: ACCEPT },
-        timeoutMs: opts.timeoutMs ?? ZKILL_TIMEOUT_MS,
-        maxBytes: opts.maxBytes ?? ZKILL_MAX_BYTES,
-        signal: this.life.signal,
-      })
+      // 人物统计会 302 到 `.../kills/`：生产里 fetch 自己跟随，这里只处理收到 3xx 的情况
+      for (let hop = 0; ; hop++) {
+        res = await http.request({
+          method: 'GET',
+          url: target,
+          headers: { 'User-Agent': this.options.userAgent, Accept: ACCEPT },
+          timeoutMs: opts.timeoutMs ?? ZKILL_TIMEOUT_MS,
+          maxBytes: opts.maxBytes ?? ZKILL_MAX_BYTES,
+          signal: this.life.signal,
+        })
+        if (!REDIRECTS.has(res.status)) break
+        const next = hop < ZKILL_REDIRECT_MAX ? this.redirectTarget(target, res.header('location')) : null
+        if (!next) return this.unavailable(url, `HTTP ${res.status}（跳转目标不可用）`)
+        target = next
+        await sleep(this.ports.scheduler, this.minIntervalMs, this.life.signal)
+      }
     } catch (e) {
-      if (e instanceof NetworkError && e.kind === 'aborted') return this.fail('aborted', '请求被中止')
+      if (this.stopped || (e instanceof NetworkError && e.kind === 'aborted')) return this.fail('aborted', '请求被中止')
       return this.unavailable(url, describeError(e))
     }
     const now = clock.now()
@@ -275,6 +286,18 @@ export class ZkillClient {
     }
     logger.debug('zKill %s 成功', url.slice(this.base.length))
     return this.succeeded(url, json, opts)
+  }
+
+  /** 只跟随同一主机的 /api/ 路径；其他跳转（换主机、验证页）一律不跟 */
+  private redirectTarget(from: string, location: string | undefined): string | null {
+    if (!location) return null
+    try {
+      const next = new URL(location, from)
+      if (next.origin !== new URL(this.base).origin || !next.pathname.startsWith('/api/')) return null
+      return next.toString()
+    } catch {
+      return null
+    }
   }
 
   private succeeded(url: string, json: unknown, opts: ZkillGetOptions): ZkillResult {

@@ -1,0 +1,41 @@
+{
+ "shipsDestroyed": "37",
+ "shipsLost": "abc",
+ "iskDestroyed": {
+  "x": 1
+ },
+ "iskLost": -5,
+ "soloKills": null,
+ "dangerRatio": "88",
+ "gangRatio": 250,
+ "months": [
+  1,
+  2,
+  3
+ ],
+ "groups": "nope",
+ "topAllTime": {
+  "type": "ship"
+ },
+ "topShips": [
+  null,
+  5,
+  {
+   "shipTypeID": "x",
+   "kills": 3
+  }
+ ],
+ "labels": {
+  "tz:eu": 5,
+  "loc:nullsec": {
+   "shipsDestroyed": "7"
+  }
+ },
+ "activepvp": "none",
+ "info": {
+  "name": 42,
+  "birthday": "not a date",
+  "corporationID": "98000501",
+  "description": "secret blurb"
+ }
+}

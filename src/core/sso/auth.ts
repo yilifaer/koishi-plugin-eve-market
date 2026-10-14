@@ -79,7 +79,7 @@ export interface AuthServiceOptions {
   ports: Pick<CorePorts, 'http' | 'ssoHttp' | 'clock' | 'logger' | 'auth' | 'secrets' | 'store' | 'version'>
   settings: Pick<Settings, 'sso' | 'markets' | 'advanced'>
   /** 探测建筑、按名字搜建筑 */
-  esi: Pick<EsiApi, 'structure' | 'searchStructures'>
+  esi: Pick<EsiApi, 'structure' | 'searchStructures' | 'searchCharacters'>
   /** 测试指向假服务 */
   ssoBase?: string
 }
@@ -731,6 +731,26 @@ class SsoAuthService implements ManagedAuthService {
       }
     })
     return hits.sort((a, b) => Number(!a.name) - Number(!b.name) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
+  }
+
+  /** KB 人物卡的模糊搜索：用这个档案的角色令牌搜人物，返回人物 ID（令牌不进日志） */
+  async searchCharacters(profile: string, text: string): Promise<number[] | CoreFailure> {
+    const q = String(text ?? '').replace(/\s+/g, ' ').trim()
+    const length = [...q].length
+    if (length < STRUCTURE_SEARCH_MIN_CHARS || length > STRUCTURE_SEARCH_MAX_CHARS) {
+      return { ok: false, code: 'BAD_ARGUMENT', message: AUTH_TEXT.searchLength }
+    }
+    const token = await this.getAccessToken(profile)
+    if (!token.ok) return { ok: false, code: token.status === 'NEEDS_AUTH' ? 'NOT_CONFIGURED' : 'UPSTREAM_UNAVAILABLE', message: token.reason }
+    const rec = this.slots.get(profile)?.rec
+    if (rec && !rec.scopes.includes(SSO_SEARCH_SCOPE)) return { ok: false, code: 'NOT_CONFIGURED', message: AUTH_TEXT.noSearchScope }
+    try {
+      const found = await this.o.esi.searchCharacters(Number(token.characterId), q, { auth: this.esiAuth(profile), lane: 'interactive' })
+      return [...new Set(found.value)]
+    } catch (e) {
+      this.o.ports.logger.warn(`按名字搜人物失败（授权档案 ${profile}）：${this.safe(e)}`)
+      return { ok: false, code: 'UPSTREAM_UNAVAILABLE', message: this.searchError(e) }
+    }
   }
 }
 

@@ -1,0 +1,279 @@
+{
+ "shipsDestroyed": 290,
+ "shipsLost": 52,
+ "iskDestroyed": 23200000000,
+ "iskLost": 3100000000,
+ "soloKills": 88,
+ "soloLosses": 6,
+ "dangerRatio": 82,
+ "gangRatio": 38,
+ "avgGangSize": 4.6,
+ "pointsDestroyed": 1450,
+ "pointsLost": 156,
+ "months": {
+  "202511": {
+   "year": 2025,
+   "month": 11,
+   "shipsDestroyed": 12,
+   "shipsLost": 3,
+   "iskDestroyed": 960000000,
+   "iskLost": 180000000,
+   "pointsDestroyed": 60,
+   "pointsLost": 9
+  },
+  "202512": {
+   "year": 2025,
+   "month": 12,
+   "shipsDestroyed": 20,
+   "shipsLost": 5,
+   "iskDestroyed": 1600000000,
+   "iskLost": 300000000,
+   "pointsDestroyed": 100,
+   "pointsLost": 15
+  },
+  "202601": {
+   "year": 2026,
+   "month": 1,
+   "shipsDestroyed": 25,
+   "shipsLost": 4,
+   "iskDestroyed": 2000000000,
+   "iskLost": 240000000,
+   "pointsDestroyed": 125,
+   "pointsLost": 12
+  },
+  "202602": {
+   "year": 2026,
+   "month": 2,
+   "shipsDestroyed": 0,
+   "shipsLost": 0,
+   "iskDestroyed": 0,
+   "iskLost": 0,
+   "pointsDestroyed": 0,
+   "pointsLost": 0
+  },
+  "202603": {
+   "year": 2026,
+   "month": 3,
+   "shipsDestroyed": 31,
+   "shipsLost": 6,
+   "iskDestroyed": 2480000000,
+   "iskLost": 360000000,
+   "pointsDestroyed": 155,
+   "pointsLost": 18
+  },
+  "202604": {
+   "year": 2026,
+   "month": 4,
+   "shipsDestroyed": 18,
+   "shipsLost": 2,
+   "iskDestroyed": 1440000000,
+   "iskLost": 120000000,
+   "pointsDestroyed": 90,
+   "pointsLost": 6
+  },
+  "202605": {
+   "year": 2026,
+   "month": 5,
+   "shipsDestroyed": 22,
+   "shipsLost": 7,
+   "iskDestroyed": 1760000000,
+   "iskLost": 420000000,
+   "pointsDestroyed": 110,
+   "pointsLost": 21
+  },
+  "202606": {
+   "year": 2026,
+   "month": 6,
+   "shipsDestroyed": 27,
+   "shipsLost": 3,
+   "iskDestroyed": 2160000000,
+   "iskLost": 180000000,
+   "pointsDestroyed": 135,
+   "pointsLost": 9
+  },
+  "202607": {
+   "year": 2026,
+   "month": 7,
+   "shipsDestroyed": 15,
+   "shipsLost": 4,
+   "iskDestroyed": 1200000000,
+   "iskLost": 240000000,
+   "pointsDestroyed": 75,
+   "pointsLost": 12
+  },
+  "202608": {
+   "year": 2026,
+   "month": 8,
+   "shipsDestroyed": 30,
+   "shipsLost": 8,
+   "iskDestroyed": 2400000000,
+   "iskLost": 480000000,
+   "pointsDestroyed": 150,
+   "pointsLost": 24
+  },
+  "202609": {
+   "year": 2026,
+   "month": 9,
+   "shipsDestroyed": 41,
+   "shipsLost": 9,
+   "iskDestroyed": 3280000000,
+   "iskLost": 540000000,
+   "pointsDestroyed": 205,
+   "pointsLost": 27
+  },
+  "202610": {
+   "year": 2026,
+   "month": 10,
+   "shipsDestroyed": 9,
+   "shipsLost": 1,
+   "iskDestroyed": 720000000,
+   "iskLost": 60000000,
+   "pointsDestroyed": 45,
+   "pointsLost": 3
+  }
+ },
+ "groups": {
+  "25": {
+   "groupID": 25,
+   "shipsDestroyed": 120,
+   "shipsLost": 20,
+   "iskDestroyed": 4000000000,
+   "iskLost": 500000000
+  },
+  "463": {
+   "groupID": 463,
+   "shipsDestroyed": 0,
+   "shipsLost": 2,
+   "iskDestroyed": 0,
+   "iskLost": 9000000
+  }
+ },
+ "topAllTime": [
+  {
+   "type": "ship",
+   "data": [
+    {
+     "kills": 120,
+     "shipTypeID": 17738
+    },
+    {
+     "kills": 60,
+     "shipTypeID": 11978
+    },
+    {
+     "kills": 40,
+     "shipTypeID": 638
+    },
+    {
+     "kills": 20,
+     "shipTypeID": 587
+    }
+   ]
+  },
+  {
+   "type": "system",
+   "data": [
+    {
+     "kills": 90,
+     "solarSystemID": 30000142
+    },
+    {
+     "kills": 50,
+     "solarSystemID": 30000144
+    },
+    {
+     "kills": 10,
+     "solarSystemID": 31000005
+    }
+   ]
+  },
+  {
+   "type": "character",
+   "data": [
+    {
+     "kills": 9,
+     "characterID": 2119000001
+    }
+   ]
+  },
+  {
+   "type": "corporation",
+   "data": [
+    {
+     "kills": 9,
+     "corporationID": 98000999
+    }
+   ]
+  }
+ ],
+ "topShips": [
+  {
+   "shipTypeID": 17738,
+   "groupID": 25,
+   "appearances": 150,
+   "kills": 120,
+   "losses": 10,
+   "isk": 3000000000
+  }
+ ],
+ "topLists": [],
+ "activepvp": {
+  "kills": {
+   "type": "Kills",
+   "count": 14
+  },
+  "ships": {
+   "type": "Unique Ships",
+   "count": 6
+  },
+  "systems": {
+   "type": "Systems",
+   "count": 3
+  },
+  "regions": {
+   "type": "Regions",
+   "count": 2
+  }
+ },
+ "labels": {
+  "tz:eu": {
+   "shipsDestroyed": 200,
+   "shipsLost": 30
+  },
+  "tz:use": {
+   "shipsDestroyed": 60,
+   "shipsLost": 15
+  },
+  "tz:au": {
+   "shipsDestroyed": 5,
+   "shipsLost": 1
+  },
+  "solo": {
+   "shipsDestroyed": 88,
+   "shipsLost": 6
+  },
+  "loc:nullsec": {
+   "shipsDestroyed": 250,
+   "shipsLost": 40
+  },
+  "loc:w-space": {
+   "shipsDestroyed": 10,
+   "shipsLost": 1
+  }
+ },
+ "topIskKills": [],
+ "topIskKillIDs": [
+  131000001,
+  131000002
+ ],
+ "info": {
+  "id": 2119876543,
+  "name": "Hanako Kisaragi",
+  "type": "characterID",
+  "birthday": "2019-03-14 08:30:00",
+  "corporationID": 98000501,
+  "allianceID": 99000501,
+  "secStatus": 1.5,
+  "description": "<p>Visit http://evil.example/ads &amp; buy cheap ISK at spam.example</p>"
+ }
+}

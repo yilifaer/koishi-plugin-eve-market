@@ -583,6 +583,39 @@ describe('AuthService: search structures by name', () => {
   })
 })
 
+describe('AuthService: search characters by name (KB 人物卡)', () => {
+  it('returns the ids, asks ESI for categories=character and sends the profile token', async () => {
+    const env = await authorized()
+    env.fake.characterSearch.set('Hanako', [2119876543, 2119876544, 2119876543])
+    expect(await env.auth.searchCharacters('default', '  Hanako ')).toEqual([2119876543, 2119876544])
+    const search = env.fake.requests.filter((r) => r.path.endsWith('/search')).at(-1)!
+    expect(search.path).toBe(`/characters/${env.fake.sso.characterId}/search`)
+    expect(Object.fromEntries(search.query)).toEqual({ categories: 'character', search: 'Hanako', strict: 'false' })
+    expect(search.headers.authorization).toMatch(/^Bearer /)
+    expect(await env.auth.searchCharacters('default', 'Nobody')).toEqual([])
+  })
+
+  it('checks the input, the profile, the search permission and ESI failures', async () => {
+    const env = await authorized()
+    expect(await env.auth.searchCharacters('default', 'ab')).toEqual({ ok: false, code: 'BAD_ARGUMENT', message: AUTH_TEXT.searchLength })
+    expect(await env.auth.searchCharacters('nobody', 'Hanako')).toEqual({ ok: false, code: 'NOT_CONFIGURED', message: AUTH_TEXT.notAuthorized })
+    env.fake.fault('GET', /\/search$/, { status: 500 }, 2)
+    expect(await env.auth.searchCharacters('default', 'Hanako')).toMatchObject({ ok: false, code: 'UPSTREAM_UNAVAILABLE' })
+    env.fake.sso.scopes = [MARKETS_SCOPE, STRUCTURES_SCOPE]
+    env.clock.advance(TTL_MS)
+    expect(await token(env)).toMatchObject({ ok: true })
+    expect(await env.auth.searchCharacters('default', 'Hanako')).toEqual({ ok: false, code: 'NOT_CONFIGURED', message: AUTH_TEXT.noSearchScope })
+  })
+
+  it('never writes the token or the client secret to the log', async () => {
+    const env = await authorized()
+    env.fake.fault('GET', /\/search$/, { status: 403, body: { error: `denied for ${env.fake.sso.clientSecret}` } })
+    await env.auth.searchCharacters('default', 'Hanako')
+    const log = env.logger.text()
+    expect(env.secrets().filter((x) => log.includes(x))).toEqual([])
+  })
+})
+
 describe('AuthService: no secrets anywhere', () => {
   it('logs, status and database never contain a token, a code or the client secret', async () => {
     const env = await makeSsoEnv()

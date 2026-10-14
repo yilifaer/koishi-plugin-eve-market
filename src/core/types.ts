@@ -60,6 +60,10 @@ export type FailureCode =
   | 'JANICE_DOWN'
   /** Janice 返回成功，但内容缺编号或价格 */
   | 'JANICE_BAD_RESPONSE'
+  /** KB 人物卡：欧服没有这个名字的人物 */
+  | 'PILOT_NOT_FOUND'
+  /** KB 人物卡：这个 ID 不是人物（军团、联盟、NPC，或已经不存在） */
+  | 'NOT_A_CHARACTER'
 
 /** BAD_ARGUMENT 的具体原因，bot 按它选提示语 */
 export type FailureReason =
@@ -87,6 +91,12 @@ export type FailureReason =
   | 'chain-option'
   /** 工业：拆到原料涉及的物品超过 CHAIN_MAX_TYPES */
   | 'chain-size'
+  /** KB 人物卡：名字里有中文等非英文字符（欧服人物名都是英文） */
+  | 'cjk-name'
+  /** KB 人物卡：名字太短、太长或有不能用的字符 */
+  | 'bad-name'
+  /** PILOT_NOT_FOUND：名字不完整，而且没有做过市场授权没法模糊搜索，请写完整的名字 */
+  | 'need-full-name'
 
 export interface CoreFailure {
   ok: false
@@ -1410,6 +1420,11 @@ export interface AuthService {
   completeAuth(code: string, state: string): Promise<AuthCompletion>
   remove(profile: string): Promise<void>
   searchStructures(profile: string, text: string): Promise<StructureSearchHit[] | CoreFailure>
+  /**
+   * 用这个档案的角色令牌按名字（部分）搜人物，返回人物 ID（KB 人物卡的模糊搜索）。
+   * 失败码：BAD_ARGUMENT（字数不对）、NOT_CONFIGURED（档案没授权，或没有搜索权限）、UPSTREAM_UNAVAILABLE
+   */
+  searchCharacters(profile: string, text: string): Promise<number[] | CoreFailure>
 }
 
 // ------------------------------------------------------------------ 命令参数
@@ -1499,6 +1514,8 @@ export interface EveCore {
   kills: KillService
   /** Janice 估价：按编号读现成的估价 */
   janice: JaniceService
+  /** KB 人物卡 */
+  pilots: PilotService
   /** 查价告示：启用、没过期、本群能看的前 MAX_NOTICES 条 */
   notices(access: Access): string[]
   status(): CoreStatus
@@ -1514,6 +1531,8 @@ export interface CoreOverrides {
   zkillBase?: string
   /** Janice 的地址 */
   janiceBase?: string
+  /** 头像、图标的图片主机（KB 人物卡） */
+  imageBase?: string
   compatibilityDate?: string
   random?: () => number
 }
@@ -1642,4 +1661,168 @@ export interface JaniceService {
    */
   get(code: string, opts?: JaniceGetOptions): Promise<JaniceView | CoreFailure>
   status(): JaniceStatus
+}
+
+// ------------------------------------------------------------------ KB 人物卡
+
+/** 人设：规则表按顺序命中第一条；unknown 是 zKill 取不到时的占位，不在规则表里 */
+export type PersonaId =
+  | 'ghost' | 'rookie' | 'capital' | 'industrial' | 'wormhole' | 'ganker' | 'solo' | 'fleet' | 'reaper' | 'underdog' | 'pilot'
+  | 'unknown'
+
+export interface PilotRef {
+  id: number
+  name: string
+  /** 简称（军团、联盟）；查不到时没有 */
+  ticker?: string
+}
+
+/** 船：中文名可能是 ''（没有中文名），英文名查不到物品时是 `#typeId` */
+export interface PilotShipRef {
+  typeId: number
+  zh: string
+  en: string
+}
+
+export interface PilotShip extends PilotShipRef {
+  kills: number
+  /** 占全部击毁的百分比，整数 0–100 */
+  share: number
+}
+
+export interface PilotPlace {
+  /** 数据里查不到这个星系时 null */
+  system: SystemView | null
+  systemId: number
+  kills: number
+}
+
+/** 近期大击杀 / 大损失：ship 是被击毁的那艘船（击杀 = 对方的船，损失 = 自己的船） */
+export interface PilotKill {
+  killId: number
+  ship: PilotShipRef | null
+  system: SystemView | null
+  systemId: number
+  /** 毫秒，UTC */
+  time: number
+  /** zKill 的 totalValue（ISK） */
+  value: number
+}
+
+export type PilotZone = 'au' | 'eu' | 'ru' | 'use' | 'usw'
+
+export interface PilotActivity {
+  /** killmails = 按列表里的击杀 / 损失时间统计；labels = 样本太少，只有 zKill 的时区标签 */
+  source: 'killmails' | 'labels'
+  samples: number
+  /** 按 UTC 小时 0–23 的次数；labels 时全 0 */
+  hoursUtc: number[]
+  /** 同样的数据按北京时间小时排（hoursBeijing[h] = hoursUtc[(h - 8 + 24) % 24]） */
+  hoursBeijing: number[]
+  /** killmails：最活跃的连续 KB_ACTIVITY_SPAN_HOURS 小时，北京时间在前；labels 时 null */
+  peak: { beijingStart: number; beijingEnd: number; utcStart: number; utcEnd: number } | null
+  /** labels：按活跃程度从高到低的时区；killmails 时 [] */
+  zones: PilotZone[]
+  /** 写好的一行，例如「北京 20:00–23:00（EVE 12–15）」或「主要时区：欧洲 / 美东」 */
+  text: string
+}
+
+export interface PilotProfile {
+  id: number
+  name: string
+  /** 毫秒 */
+  birthday: number | null
+  security: number | null
+  /** 军团头衔：去掉标签、过滤网址、最多 KB_TITLE_MAX_CHARS 个字；没有时 null */
+  title: string | null
+  corporation: PilotRef | null
+  alliance: PilotRef | null
+  /** 照片说明，已写好：「摄于 <站名>」，查不到时「摄于新伊甸某处」 */
+  birthplace: string
+  totals: {
+    kills: number
+    losses: number
+    solo: number
+    iskKilled: number
+    iskLost: number
+    /** 0–100 */
+    danger: number | null
+    gang: number | null
+    /** 击毁价值占比 0–100（一位小数）；两者都是 0 时 null */
+    efficiency: number | null
+  }
+  /** 近 7 天；zKill 没给时 null */
+  week: { kills: number; ships: number; systems: number; regions: number } | null
+  /** 最近 KB_MONTHS 个月（含本月），从早到晚，缺的月份补 0 */
+  months: Array<{ ym: string; kills: number; losses: number }>
+  ships: PilotShip[]
+  places: PilotPlace[]
+  activity: PilotActivity | null
+  recentKill: PilotKill | null
+  recentLoss: PilotKill | null
+  persona: PersonaId
+  /** 人设的名字，例如「独狼猎手」 */
+  personaLabel: string
+  headline: string
+  lede: string
+  /** 近况一句；没有时 null */
+  mood: string | null
+  /** 页脚的数据来源和免责声明（时间由出图的一方补） */
+  footer: string
+  /** 拿到 zKill 统计的时间（毫秒）；没拿到时是组装的时间 */
+  updatedAt: number
+  /** 哪些部分没拿到：zkill = 整份战绩；recent = 近期大击杀 / 作息的列表；corp = 军团或联盟；birthplace = 出生地 */
+  partial: Array<'zkill' | 'recent' | 'corp' | 'birthplace'>
+  /** partial 含 zkill 时的原因（ZKILL_UNAVAILABLE / ZKILL_THROTTLED / DEADLINE），其他时候 null */
+  zkillFailure: CoreFailure | null
+}
+
+export type PilotArg =
+  | { kind: 'id'; id: number; source: 'id' | 'link' }
+  | { kind: 'name'; name: string }
+  /** empty = 什么都没写；cjk = 有中文等；bad = 太短、太长或字符不对 */
+  | { kind: 'error'; error: 'empty' | 'cjk' | 'bad' }
+
+export type PilotResolution = { id: number; name: string } | { candidates: PilotRef[] }
+
+export interface PilotOptions {
+  /** 整个调用最多等多久（毫秒），默认 KB_DEADLINE_MS；到时间返回 DEADLINE，取数据在后台继续并写进缓存 */
+  deadlineMs?: number
+  /** 要不要取「近期大击杀 / 大损失 / 作息」（多 2 次 zKill 请求）；默认要 */
+  recent?: boolean
+}
+
+/** 一张卡用的图片，都是 data: 地址；下载失败的是 null（出图时用剪影） */
+export interface PilotImageSet {
+  portrait: string | null
+  corporation: string | null
+  alliance: string | null
+  /** typeId → 舰船渲染图（王牌座驾前几名、近期大击杀 / 大损失的船） */
+  ships: Record<number, string | null>
+}
+
+export interface PilotImageService {
+  portrait(characterId: number): Promise<string | null>
+  corporationLogo(corporationId: number): Promise<string | null>
+  allianceLogo(allianceId: number): Promise<string | null>
+  shipRender(typeId: number): Promise<string | null>
+  /** 一张卡要的全部图片；总共最多等 KB_IMAGES_DEADLINE_MS，没下完的是 null */
+  forProfile(profile: PilotProfile, opts?: { deadlineMs?: number }): Promise<PilotImageSet>
+}
+
+export interface PilotService {
+  /** 命令参数：人物 ID、zKill 人物链接或英文名。只解析，不联网 */
+  parse(text: string): PilotArg
+  /**
+   * 英文名 → 人物。精确命中给 { id, name }；不完整的名字：做过市场授权就模糊搜索，给最多 KB_CANDIDATES_MAX 个候选
+   * （前缀相同的在前、名字短的在前），没有授权时 PILOT_NOT_FOUND（reason need-full-name）。
+   * 失败码：PILOT_NOT_FOUND、BAD_ARGUMENT（reason cjk-name / bad-name）、UPSTREAM_UNAVAILABLE、DEADLINE
+   */
+  resolve(name: string, opts?: { deadlineMs?: number }): Promise<PilotResolution | CoreFailure>
+  /**
+   * 人物资料。ESI 取不到才是失败：NOT_A_CHARACTER、UPSTREAM_UNAVAILABLE、DEADLINE；
+   * zKill 取不到不是失败，返回 partial 含 'zkill'（原因在 zkillFailure）。完整的资料缓存 KB_CARD_CACHE_MIN 分钟
+   */
+  profile(characterId: number, opts?: PilotOptions): Promise<PilotProfile | CoreFailure>
+  images: PilotImageService
 }

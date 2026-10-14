@@ -19,6 +19,7 @@ import type { ManagedItemResolver } from './items'
 import { createHistoryService, createMarketRegistry, createMarketService, createStructureMarkets } from './market'
 import type { ManagedMarketRegistry } from './market'
 import { createIndustryArgs, createQueryParser } from './parse'
+import { createPilotService } from './pilot'
 import type { CorePorts, Logger } from './ports'
 import { createAuthService } from './sso'
 import type {
@@ -182,6 +183,10 @@ export function createEveCore(ports: CorePorts, settings: Settings, overrides: C
   const zkill = new ZkillClient(ports, { base: overrides.zkillBase, userAgent: esi.client.userAgent })
   const janiceClient = new JaniceClient(ports, { base: overrides.janiceBase, apiKey: settings.janice.apiKey, userAgent: esi.client.userAgent })
   const janice = createJaniceService({ client: janiceClient, items, clock, scheduler, logger })
+  const format = createPriceFormatter(settings.display, clock)
+  const pilots = createPilotService({
+    esi, zkill, items, universe, auth, format, http: ports.http, clock, scheduler, logger, imageBase: overrides.imageBase,
+  })
   const unsubscribe = data.onUpdate(() => checks.recheck())
   let started: Promise<void> | undefined
   // ready 等数据和授权档案都读好：刚启动时还没读到的档案不会被当成「需要授权」
@@ -200,10 +205,11 @@ export function createEveCore(ports: CorePorts, settings: Settings, overrides: C
     industry,
     universe,
     auth,
-    format: createPriceFormatter(settings.display, clock),
+    format,
     maps,
     kills: createKillService({ zkill, esi, items, universe, clock, scheduler, logger }),
     janice,
+    pilots,
 
     notices(access: Access): string[] {
       const now = clock.now()

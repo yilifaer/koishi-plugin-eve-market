@@ -9,3 +9,5 @@ export type {
   ZkillPorts,
   ZkillResult,
 } from './client'
+export { emptyZkillStats, parseZkillStats, zkillCharKillsPath, zkillCharLossesPath, zkillStatsPath } from './stats'
+export type { ZkillGroupStat, ZkillLabelStat, ZkillMonth, ZkillStats } from './stats'

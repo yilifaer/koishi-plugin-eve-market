@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseZkillKill, zkillKillPath } from '../../../src/core/killmail'
+import { parseZkillKill, parseZkillKillList, zkillKillPath } from '../../../src/core/killmail'
 import { rawZkillKill } from '../../fakes/fake-zkill'
 
 const HASH = '0123456789abcdef0123456789abcdef01234567'
@@ -64,5 +64,40 @@ describe('parseZkillKill', () => {
     ['npc as a string', [{ killmail_id: 1, zkb: { hash: HASH, npc: 'yes' } }]],
   ])('throws a shape error for %s', (_, raw) => {
     expect(() => parseZkillKill(raw, 1)).toThrow()
+  })
+})
+
+describe('parseZkillKillList', () => {
+  it('reads full killmails with their value', () => {
+    const list = parseZkillKillList([rawZkillKill(131000001, HASH, { totalValue: 9e9 }), rawZkillKill(131000002, HASH, { totalValue: 2e6 })])
+    expect(list.map((k) => [k.killId, k.value])).toEqual([[131000001, 9e9], [131000002, 2e6]])
+    expect(list[0].body.victim.shipTypeId).toBe(638)
+    expect(list[0].body.time).toBe(Date.UTC(2026, 9, 14, 12, 34, 56))
+    expect(list[0].body.systemId).toBe(30000142)
+  })
+
+  it('skips rows it cannot read instead of failing the whole list', () => {
+    const list = parseZkillKillList([
+      rawZkillKill(131000001, HASH),
+      rawZkillKill(131000002, HASH, {}, 'minimal'),
+      { killmail_id: 'x', zkb: {} },
+      { killmail_id: 131000003, victim: 5, zkb: {} },
+      null,
+      7,
+      [],
+      { ...rawZkillKill(131000004, HASH), zkb: undefined },
+    ])
+    expect(list.map((k) => [k.killId, k.value])).toEqual([[131000001, 452_000_000], [131000004, 0]])
+  })
+
+  it('gives value 0 for a missing or invalid totalValue', () => {
+    const odd = { ...rawZkillKill(131000001, HASH), zkb: { hash: HASH, totalValue: 'big' } }
+    expect(parseZkillKillList([odd])[0].value).toBe(0)
+  })
+
+  it('an empty list is empty; a non-array is an error', () => {
+    expect(parseZkillKillList([])).toEqual([])
+    expect(() => parseZkillKillList({})).toThrow()
+    expect(() => parseZkillKillList(null)).toThrow()
   })
 })
