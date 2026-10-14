@@ -110,6 +110,18 @@ describe('KillService.summary: happy path', () => {
     expect(m.env.client.userAgent).toContain('me@example.test')
   })
 
+  it('handles a full killmail with hundreds of attackers (over the default 64 KB limit)', async () => {
+    const attackers = Array.from({ length: 600 }, (_, i) => ({
+      character_id: 2112100000 + i, corporation_id: 98000201, alliance_id: 99000201, ship_type_id: 11978,
+      final_blow: i === 0, damage_done: 10, security_status: 0.5,
+    }))
+    const m = await make({ mail: { attackers } })
+    expect(JSON.stringify(rawZkillKill(KILL, HASH, {}, { attackers })).length).toBeGreaterThan(64 * 1024)
+    const s = ok(await m.service.summary(KILL))
+    expect(s.attackers).toBe(600)
+    expect(s.finalBlow?.ship).toEqual(SHIPS.get(11978))
+  })
+
   it('passes the zKill flags through', async () => {
     const m = await make({ zkb: { npc: true, solo: true, awox: true } })
     expect(ok(await m.service.summary(KILL)).flags).toEqual({ npc: true, solo: true, awox: true })

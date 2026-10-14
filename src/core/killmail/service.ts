@@ -7,6 +7,7 @@ import {
   KILL_CACHE_HOURS,
   KILL_BR_WINDOW_MIN,
   KILL_CACHE_MAX,
+  KILL_ZKILL_MAX_BYTES,
   KILL_NAMES_WAIT_MS,
   KILL_NEGATIVE_CACHE_MIN,
   QUERY_DEADLINE_MS,
@@ -115,7 +116,11 @@ class Service implements KillService {
     let mail: EsiKillmail | null = null
     if (!hash) {
       const path = zkillKillPath(killId)
-      const got = await zkill.getJson(path, { ttlMs: KILL_CACHE_HOURS * HOUR_MS, emptyTtlMs: KILL_NEGATIVE_CACHE_MIN * MINUTE_MS })
+      const got = await zkill.getJson(path, {
+        ttlMs: KILL_CACHE_HOURS * HOUR_MS,
+        emptyTtlMs: KILL_NEGATIVE_CACHE_MIN * MINUTE_MS,
+        maxBytes: KILL_ZKILL_MAX_BYTES,
+      })
       if (!got.ok) return this.logged(killId, fromZkill(got))
       let parsed
       try {

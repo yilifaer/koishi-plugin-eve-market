@@ -501,6 +501,8 @@ export const ZKILL_KILL_PATH = '/api/killID/{id}/'
 export const ZKILL_MIN_INTERVAL_MS = 1000
 export const ZKILL_TIMEOUT_MS = 5000
 export const ZKILL_MAX_BYTES = 64 * 1024
+/** 击杀编号的响应带完整击杀正文（几百个攻击者可到几百 KB），上限单独放宽 */
+export const KILL_ZKILL_MAX_BYTES = 2 * 1024 * 1024
 /** 收到 403 或 Cloudflare 验证页后暂停多久 */
 export const ZKILL_BLOCKED_PAUSE_MIN = 5
 /** 429 没有 Retry-After 时暂停多久 */
