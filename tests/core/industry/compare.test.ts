@@ -21,10 +21,10 @@ describe('costIncomplete', () => {
 })
 
 describe('rankRows', () => {
-  it('complete rows by total cost, then incomplete rows (also by cost); the cheapest mark only goes to a complete row', () => {
+  it('rows with all prices by total cost, then rows missing prices (also by cost); a missing job cost does not demote a row', () => {
     const rows = [row('甲', { material: 10, missing: 1 }), row('乙', { material: 300 }), row('丙', { material: 100, job: null }), row('丁', { material: 200 })]
     rankRows(rows)
-    expect(rows.map((r) => [r.location, r.cheapest])).toEqual([['丁', true], ['乙', false], ['甲', false], ['丙', false]])
+    expect(rows.map((r) => [r.location, r.cheapest])).toEqual([['丙', true], ['丁', false], ['乙', false], ['甲', false]])
   })
 
   it('when every row is incomplete nobody is the cheapest', () => {

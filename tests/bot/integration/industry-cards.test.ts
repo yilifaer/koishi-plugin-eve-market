@@ -255,6 +255,17 @@ describe('compare card (§2.7)', () => {
     expect(out.split('\n').filter((l) => l.includes('XX-1'))[0]).not.toContain('最低')
   })
 
+  it('a row with all material prices but no job cost keeps its profit and rank, only marked 不完整', () => {
+    const c = comparison()
+    c.rows = [
+      { location: 'XX-1', structure: '索迪约', noRigs: false, result: example({ jobCost: undefined }), cheapest: true, fastest: true },
+    ]
+    const out = md(compareCard(env(), c, []))
+    expect(out).toContain('（不完整）')
+    expect(out).toContain('利润 ')
+    expect(out).not.toContain('利润不计算')
+  })
+
   it('the result card says the profit is not calculated when a material has no price', () => {
     const r = example({ missingPrices: 1 })
     const out = md(resultCard(env(), r, 'manufacturing', []))

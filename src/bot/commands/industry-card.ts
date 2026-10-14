@@ -468,11 +468,10 @@ export function compareCard(env: IndustryEnv, c: LocationComparison, actions: Ac
     lines.push({ text: `**${esc(row.location)}** · ${where}${rigNote}${marks ? ` ${marks}` : ''}` })
     const total = costPrice(env, r, r.materialCost + (jobOf(r)?.total ?? 0), true)
     const parts = [duration(env, r.timeSeconds)]
-    // 成本不完整的地点不写利润
-    const incomplete = costIncomplete(r)
-    if (incomplete) parts.push(IND.profitSkipped)
+    // 材料缺价格的地点不写利润；没算出安装费只标「（不完整）」
+    if (r.missingPrices) parts.push(IND.profitSkipped)
     else if (r.profit) parts.push(IND.compareProfit(amount(env, r.profit.value), marginText(r.profit.marginPct)))
-    const note = incomplete ? IND.compareIncomplete : ''
+    const note = costIncomplete(r) ? IND.compareIncomplete : ''
     lines.push({ label: IND.compareCost, price: total, extra: `${note}· ${parts.join(' · ')}`, indent: 1 })
   }
   card.sections.push({ style: 'ordered', lines })
