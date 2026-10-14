@@ -107,6 +107,8 @@ export class PilotImages implements PilotImageService {
         headers: { 'User-Agent': this.deps.userAgent, Accept: 'image/png,image/jpeg' },
         timeoutMs: KB_IMAGE_TIMEOUT_MS,
         maxBytes: KB_IMAGE_MAX_BYTES,
+        // 不跟随跳转：3xx 不是 200，按失败处理
+        redirect: 'manual',
       })
       if (res.status !== 200 || !res.body.length || res.body.length > KB_IMAGE_MAX_BYTES) return this.failed(path, `HTTP ${res.status}`)
       // 只信文件头，不信响应头

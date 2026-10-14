@@ -13,6 +13,12 @@ describe('cleanTitle', () => {
     expect(cleanTitle('<a href="http://x.example">click</a>')).toBe('click')
   })
 
+  it('removes fullwidth and ideographic-dot domains too', () => {
+    expect(cleanTitle('visit ｅｖｉｌ．ｃｏｍ today')).toBe('visit today')
+    expect(cleanTitle('visit evil。com today')).toBe('visit today')
+    expect(cleanTitle('visit evil｡com today')).toBe('visit today')
+  })
+
   it('decodes entities but never lets them form a tag', () => {
     expect(cleanTitle('Ops &amp; Logistics')).toBe('Ops & Logistics')
     expect(cleanTitle('&lt;b&gt;hi&lt;/b&gt;')).toBe('bhi/b')

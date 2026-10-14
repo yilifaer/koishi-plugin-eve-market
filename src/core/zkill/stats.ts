@@ -163,13 +163,16 @@ function topAllTime(raw: unknown, type: string, idKey: string): Array<{ id: numb
   return []
 }
 
+/** 不能做对象键的名字（会改掉原型） */
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+
 function parseLabels(raw: unknown): Record<string, ZkillLabelStat> {
   const src = obj(raw)
   const out: Record<string, ZkillLabelStat> = {}
   if (!src) return out
   for (const [key, value] of Object.entries(src)) {
     const l = obj(value)
-    if (l && /^[\w:+-]{1,32}$/.test(key)) out[key] = { kills: count(l.shipsDestroyed), losses: count(l.shipsLost) }
+    if (l && /^[\w:+-]{1,32}$/.test(key) && !UNSAFE_KEYS.has(key)) out[key] = { kills: count(l.shipsDestroyed), losses: count(l.shipsLost) }
   }
   return out
 }

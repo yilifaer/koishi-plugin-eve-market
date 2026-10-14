@@ -39,6 +39,15 @@ describe('PilotImages', () => {
     expect(fake.requests[0].userAgent).toBe('test-agent/1.0')
   })
 
+  it('asks for manual redirects, so a 3xx is just a failed download', async () => {
+    const http = new NodeHttpClient()
+    const fake = await new FakeImages().start()
+    servers.push(fake)
+    const images = new PilotImages({ http, clock: new ManualClock(), scheduler: realScheduler, logger: new MemoryLogger(), userAgent: 'test-agent/1.0', base: fake.base })
+    await images.portrait(2119876543)
+    expect(http.requests.every((r) => r.redirect === 'manual')).toBe(true)
+  })
+
   it('caches successes (portrait 24 hours, others 7 days) and merges concurrent calls', async () => {
     const { fake, clock, images } = await make()
     fake.delayMs = 20

@@ -220,8 +220,9 @@ describe('PilotProfiles: a complete card', () => {
     const { profiles, zkill } = await make({ minIntervalMs: 70 })
     zkill.charKills.set(HANAKO, [])
     ok(await profiles.profile(HANAKO))
-    const at = zkill.times
-    expect(at).toHaveLength(4)
+    // 统计的 302 跳转紧接着原请求，不另外隔开
+    const at = zkill.times.filter((_, i) => zkill.requests[i].path !== `/api/stats/characterID/${HANAKO}/`)
+    expect(at).toHaveLength(3)
     for (let i = 1; i < at.length; i++) expect(at[i] - at[i - 1]).toBeGreaterThanOrEqual(60)
   })
 
@@ -348,6 +349,33 @@ describe('PilotProfiles: no record, rookies and special personas', () => {
     expect(p).toMatchObject({ persona: 'ghost', partial: [], mood: null, activity: null })
     expect(p.totals).toMatchObject({ kills: 0, losses: 0, efficiency: null })
     expect(zkill.count(/\/api\/(kills|losses)\//)).toBe(0)
+  })
+
+  it('a ghost is cached for both recent and non-recent requests: the second look sends nothing', async () => {
+    const { profiles, zkill, env } = await make({ noStats: true })
+    const first = ok(await profiles.profile(HANAKO))
+    const sent = [zkill.requests.length, env.fake.requests.length]
+    expect(ok(await profiles.profile(HANAKO))).toBe(first)
+    expect(ok(await profiles.profile(HANAKO, { recent: false }))).toBe(first)
+    expect([zkill.requests.length, env.fake.requests.length]).toEqual(sent)
+  })
+
+  it('stats without monthly data never claim the pilot has gone quiet', async () => {
+    const stats = { shipsDestroyed: 60, shipsLost: 40, iskDestroyed: 5e9, iskLost: 2e9 }
+    const { profiles } = await make({ stats })
+    const p = ok(await profiles.profile(HANAKO))
+    expect(p.mood ?? '').not.toMatch(/潜水/)
+  })
+
+  it('the zKill client keeps no raw stats or lists: only the slim results are remembered here', async () => {
+    const { profiles, zkill, client, env } = await make({ kills: [], losses: [] })
+    ok(await profiles.profile(HANAKO))
+    const sent = zkill.requests.length
+    // 成品资料过期以后，统计和列表由 KB 自己的小缓存提供，客户端没有留原始 JSON
+    expect((client as unknown as { state: { cache: { size: number } } }).state.cache.size).toBe(0)
+    env.clock.advance(1 * MIN)
+    ok(await profiles.profile(HANAKO))
+    expect(zkill.requests.length).toBe(sent)
   })
 
   it('a character younger than 90 days is a rookie', async () => {

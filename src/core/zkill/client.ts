@@ -249,7 +249,7 @@ export class ZkillClient {
     let res
     let target = url
     try {
-      // 人物统计会 302 到 `.../kills/`：生产里 fetch 自己跟随，这里只处理收到 3xx 的情况
+      // 人物统计会 302 到 `.../kills/`：用 manual 拿到 3xx 再自己判断
       for (let hop = 0; ; hop++) {
         res = await http.request({
           method: 'GET',
@@ -258,12 +258,13 @@ export class ZkillClient {
           timeoutMs: opts.timeoutMs ?? ZKILL_TIMEOUT_MS,
           maxBytes: opts.maxBytes ?? ZKILL_MAX_BYTES,
           signal: this.life.signal,
+          // 跳转由下面自己判断，fetch 不自动跟随
+          redirect: 'manual',
         })
         if (!REDIRECTS.has(res.status)) break
         const next = hop < ZKILL_REDIRECT_MAX ? this.redirectTarget(target, res.header('location')) : null
         if (!next) return this.unavailable(url, `HTTP ${res.status}（跳转目标不可用）`)
         target = next
-        await sleep(this.ports.scheduler, this.minIntervalMs, this.life.signal)
       }
     } catch (e) {
       if (this.stopped || (e instanceof NetworkError && e.kind === 'aborted')) return this.fail('aborted', '请求被中止')

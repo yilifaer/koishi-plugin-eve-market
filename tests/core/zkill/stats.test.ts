@@ -90,6 +90,12 @@ describe('parseZkillStats', () => {
     expect(s.info).toEqual({ name: null, birthday: null, corporationId: 98000501, allianceId: null, secStatus: null })
   })
 
+  it('ignores label keys that would replace the prototype', () => {
+    const s = parseZkillStats(JSON.parse('{"shipsDestroyed":1,"labels":{"__proto__":{"shipsDestroyed":9},"constructor":{"shipsDestroyed":9},"tz:eu":{"shipsDestroyed":2,"shipsLost":1}}}'))
+    expect(Object.getPrototypeOf(s.labels)).toBe(Object.prototype)
+    expect(Object.keys(s.labels)).toEqual(['tz:eu'])
+  })
+
   it('falls back to topShips when topAllTime has no ship list', () => {
     const s = parseZkillStats({
       shipsDestroyed: 10,

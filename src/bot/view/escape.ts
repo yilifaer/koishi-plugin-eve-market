@@ -11,7 +11,7 @@ const ESCAPE_OR_BOLD = /\\([!-/:-@[-`{-~])|\*\*/g
 /** 带协议的网址 */
 const SCHEME_URL = /[a-z][a-z0-9+.-]*:\/\/[^\s<>"'「」]*/gi
 /** 像域名的片段：xx.yy.com、abc.cn */
-const DOMAIN_LIKE = /[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}(?![\w-])/gi
+const DOMAIN_LIKE = /[\w-]+(?:[.。．｡][\w-]+)*[.。．｡][a-z]{2,}(?![\w-])/gi
 
 export const LINK_PLACEHOLDER = '[链接]'
 

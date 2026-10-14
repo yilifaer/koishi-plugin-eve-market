@@ -597,6 +597,8 @@ export const KB_NAME_PATTERN = /^[A-Za-z0-9 '.-]{3,37}$/
 export const KB_CANDIDATES_MAX = 8
 /** 每个频道每分钟最多查几次人物卡（内存计数） */
 export const KB_CHANNEL_PER_MIN = 6
+/** 所有频道合计，每分钟最多用市场授权的令牌搜几次人物名（模糊搜索） */
+export const KB_SEARCH_PER_MIN = 10
 
 export const KB_STATS_CACHE_MIN = 60
 export const KB_LIST_CACHE_MIN = 30

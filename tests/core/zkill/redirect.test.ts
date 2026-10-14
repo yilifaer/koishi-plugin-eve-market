@@ -39,6 +39,14 @@ describe('ZkillClient: stats path and 302', () => {
     expect(parseZkillStats((got as { json: unknown }).json).kills).toBe(37)
   })
 
+  it('never lets fetch follow redirects by itself', async () => {
+    const http = new NodeHttpClient()
+    const { client } = await make(http)
+    await client.getJson(zkillStatsPath(HANAKO))
+    expect(http.requests.length).toBeGreaterThan(0)
+    expect(http.requests.every((r) => r.redirect === 'manual')).toBe(true)
+  })
+
   it('works when the server answers directly (no redirect)', async () => {
     const { fake, client } = await make()
     fake.redirectStats = false

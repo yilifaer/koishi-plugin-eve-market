@@ -2,10 +2,10 @@
 // 链接的主机规则和 killmail/link.ts 一样严格：主机名必须正好是 zkillboard.com / www.zkillboard.com，只取出数字 ID，
 // 用户给的网址本身永远不会被请求。
 
-import { KB_CANDIDATES_MAX, KB_NAME_PATTERN, PILOT_ID_MAX_DIGITS } from '../../constants'
+import { KB_CANDIDATES_MAX, KB_NAME_PATTERN, KB_SEARCH_PER_MIN, PILOT_ID_MAX_DIGITS } from '../../constants'
 import { isEsiError } from '../esi'
 import type { EsiApi } from '../esi'
-import type { Logger } from '../ports'
+import type { Clock, Logger } from '../ports'
 import type { AuthService, CoreFailure, PilotArg, PilotRef, PilotResolution } from '../types'
 import { describeError } from '../util'
 
@@ -48,6 +48,8 @@ export interface PilotResolverDeps {
   esi: Pick<EsiApi, 'ids' | 'names'>
   auth: Pick<AuthService, 'profiles' | 'searchCharacters'>
   logger: Logger
+  /** 模糊搜索的全局限速用；不传就不限（测试） */
+  clock?: Clock
 }
 
 /** 候选的排序：名字以输入开头的在前，然后名字短的在前，最后按字母 */
@@ -58,7 +60,21 @@ export function sortCandidates(query: string, refs: PilotRef[]): PilotRef[] {
 }
 
 export class PilotResolver {
+  /** 最近一分钟内用令牌搜索的时间 */
+  private readonly searches: number[] = []
+
   constructor(private readonly deps: PilotResolverDeps) {}
+
+  /** 所有频道合计的搜索限速，免得借市场授权的令牌刷 ESI；超了按「要写完整名字」处理 */
+  private searchAllowed(): boolean {
+    const { clock } = this.deps
+    if (!clock) return true
+    const now = clock.now()
+    while (this.searches.length && this.searches[0] <= now - 60_000) this.searches.shift()
+    if (this.searches.length >= KB_SEARCH_PER_MIN) return false
+    this.searches.push(now)
+    return true
+  }
 
   async resolve(name: string, opts: { deadlineMs?: number } = {}): Promise<PilotResolution | CoreFailure> {
     const arg = parsePilotArg(name)
@@ -78,6 +94,7 @@ export class PilotResolver {
     // 名字不完整：有可用的市场授权才能模糊搜索
     const profile = auth.profiles().find((p) => p.status === 'OK')
     if (!profile) return failure('PILOT_NOT_FOUND', '没有这个名字的人物，也没有做过市场授权没法模糊搜索', { reason: 'need-full-name' })
+    if (!this.searchAllowed()) return failure('PILOT_NOT_FOUND', '模糊搜索太频繁', { reason: 'need-full-name' })
     const found = await auth.searchCharacters(profile.profile, query)
     if (!Array.isArray(found)) {
       // 档案不能用、没有搜索权限：和没授权一样请用户写完整

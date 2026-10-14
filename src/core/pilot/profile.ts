@@ -136,19 +136,41 @@ function buildActivity(times: number[], stats: ZkillStats): PilotActivity | null
   }
 }
 
-interface Lists {
-  kills: ZkillListKill[] | null
-  losses: ZkillListKill[] | null
+/** 列表里每条只留用得到的几个字段（原始 JSON 很大，不放进缓存） */
+interface SlimKill {
+  killId: number
+  value: number
+  time: number
+  systemId: number
+  shipTypeId: number | null
 }
+
+interface Lists {
+  kills: SlimKill[] | null
+  losses: SlimKill[] | null
+}
+
+const slim = (k: ZkillListKill): SlimKill => ({
+  killId: k.killId,
+  value: k.value,
+  time: k.body.time,
+  systemId: k.body.systemId,
+  shipTypeId: k.body.victim.shipTypeId,
+})
 
 export class PilotProfiles {
   private readonly cache: LruCache<string, PilotProfile>
   private readonly notCharacter: LruCache<number, true>
+  // zKill 客户端不缓存 KB 的原始 JSON（太大），这里只缓存解析并精简后的结果
+  private readonly statsCache: LruCache<number, { stats: ZkillStats; at: number }>
+  private readonly listCache: LruCache<string, SlimKill[]>
   private readonly flights = new SingleFlight<string, PilotProfile | CoreFailure>()
 
   constructor(private readonly deps: PilotProfileDeps) {
     const now = () => deps.clock.now()
     this.cache = new LruCache({ max: KB_CACHE_MAX, ttlMs: KB_CARD_CACHE_MIN * MINUTE_MS, now })
+    this.statsCache = new LruCache({ max: KB_CACHE_MAX, now })
+    this.listCache = new LruCache({ max: KB_CACHE_MAX * 2, now })
     this.notCharacter = new LruCache({ max: KB_CACHE_MAX, ttlMs: KB_NEGATIVE_CACHE_MIN * MINUTE_MS, now })
   }
 
@@ -229,34 +251,38 @@ export class PilotProfiles {
 
   private async fetchStats(id: number): Promise<{ stats: ZkillStats; failure: CoreFailure | null; at: number }> {
     const { zkill, clock, logger } = this.deps
+    const memo = this.statsCache.get(id)
+    if (memo) return { stats: memo.stats, failure: null, at: memo.at }
     const path = zkillStatsPath(id)
-    const got = await zkill.getJson(path, {
-      timeoutMs: ZKILL_STATS_TIMEOUT_MS,
-      maxBytes: ZKILL_STATS_MAX_BYTES,
-      ttlMs: KB_STATS_CACHE_MIN * MINUTE_MS,
-      emptyTtlMs: KB_NEGATIVE_CACHE_MIN * MINUTE_MS,
-    })
+    const got = await zkill.getJson(path, { timeoutMs: ZKILL_STATS_TIMEOUT_MS, maxBytes: ZKILL_STATS_MAX_BYTES })
     if (!got.ok) {
       logger.debug('人物 %d 的 zKill 统计取不到：%s', id, got.kind)
       return { stats: emptyZkillStats(), failure: fromZkill(got), at: clock.now() }
     }
-    return { stats: parseZkillStats(got.json), failure: null, at: clock.now() }
+    const stats = parseZkillStats(got.json)
+    const at = clock.now()
+    // 没有记录的人记得短一些
+    const ttl = (stats.kills + stats.losses > 0 ? KB_STATS_CACHE_MIN : KB_NEGATIVE_CACHE_MIN) * MINUTE_MS
+    this.statsCache.set(id, { stats, at }, ttl)
+    return { stats, failure: null, at }
   }
 
   /** 击杀、损失两个列表：一起限时 recentDeadlineMs，哪个没取到哪个是 null */
   private async fetchLists(id: number): Promise<Lists> {
     const { zkill } = this.deps
-    const one = async (path: string): Promise<ZkillListKill[] | null> => {
+    const one = async (path: string): Promise<SlimKill[] | null> => {
+      const memo = this.listCache.get(path)
+      if (memo) return memo
       const got = await zkill.getJson(path, {
         timeoutMs: ZKILL_LIST_TIMEOUT_MS,
         maxBytes: ZKILL_LIST_MAX_BYTES,
-        ttlMs: KB_LIST_CACHE_MIN * MINUTE_MS,
-        emptyTtlMs: KB_NEGATIVE_CACHE_MIN * MINUTE_MS,
         deadlineMs: this.deps.recentDeadlineMs ?? KB_RECENT_DEADLINE_MS,
       })
       if (!got.ok) return null
       try {
-        return parseZkillKillList(got.json)
+        const list = parseZkillKillList(got.json).map(slim)
+        this.listCache.set(path, list, (list.length ? KB_LIST_CACHE_MIN : KB_NEGATIVE_CACHE_MIN) * MINUTE_MS)
+        return list
       } catch (e) {
         zkill.markBad(path, `响应格式不对：${describeError(e)}`)
         return null
@@ -304,22 +330,22 @@ export class PilotProfiles {
   }
 
   /** 时间窗口内价值最高的一条；同价取最近的 */
-  private pickBig(list: ZkillListKill[] | null, now: number): PilotKill | null {
+  private pickBig(list: SlimKill[] | null, now: number): PilotKill | null {
     if (!list) return null
     const since = now - KB_RECENT_MAX_DAYS * DAY_MS
-    let best: ZkillListKill | null = null
+    let best: SlimKill | null = null
     for (const k of list) {
-      if (k.value <= 0 || k.body.time < since) continue
-      if (!best || k.value > best.value || (k.value === best.value && k.body.time > best.body.time)) best = k
+      if (k.value <= 0 || k.time < since) continue
+      if (!best || k.value > best.value || (k.value === best.value && k.time > best.time)) best = k
     }
     if (!best) return null
-    const typeId = best.body.victim.shipTypeId
+    const typeId = best.shipTypeId
     return {
       killId: best.killId,
       ship: typeId === null ? null : this.shipRef(typeId),
-      system: this.deps.universe.system(best.body.systemId) ?? null,
-      systemId: best.body.systemId,
-      time: best.body.time,
+      system: this.deps.universe.system(best.systemId) ?? null,
+      systemId: best.systemId,
+      time: best.time,
       value: best.value,
     }
   }
@@ -356,7 +382,7 @@ export class PilotProfiles {
 
     const recentKill = this.pickBig(lists?.kills ?? null, now)
     const recentLoss = this.pickBig(lists?.losses ?? null, now)
-    const times = [...(lists?.kills ?? []), ...(lists?.losses ?? [])].map((k) => k.body.time)
+    const times = [...(lists?.kills ?? []), ...(lists?.losses ?? [])].map((k) => k.time)
     const activity = known ? buildActivity(times, stats) : null
 
     const ageDays = (now - char.birthday) / DAY_MS
@@ -385,7 +411,8 @@ export class PilotProfiles {
       ? null
       : pickMood({
         weekKills: stats.week?.kills ?? null,
-        months,
+        // zKill 没给月度数据时不判断潜水
+        months: stats.months.length ? months : [],
         recentKillValue: recentKill?.value ?? null,
         recentLossValue: recentLoss?.value ?? null,
         iskOf: (v) => format.compact(v),
@@ -427,7 +454,11 @@ export class PilotProfiles {
       partial,
       zkillFailure: zk.failure,
     }
-    if (!partial.length) this.cache.set(`${id}:${lists ? 1 : 0}`, profile)
+    if (!partial.length) {
+      this.cache.set(`${id}:${lists ? 1 : 0}`, profile)
+      // 没有记录的人不需要列表，带不带近期数据的请求都能用这一份
+      if (!lists && known && stats.kills + stats.losses === 0) this.cache.set(`${id}:1`, profile)
+    }
     return profile
   }
 }

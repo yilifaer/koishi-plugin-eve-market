@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { KB_CANDIDATES_MAX } from '../../../src/constants'
+import { KB_CANDIDATES_MAX, KB_SEARCH_PER_MIN } from '../../../src/constants'
 import { PilotResolver, findPilotLink, parsePilotArg, sortCandidates } from '../../../src/core/pilot'
 import { isFailure } from '../../../src/core/types'
 import type { AuthProfileStatus, AuthService, CoreFailure, PilotRef, PilotResolution } from '../../../src/core/types'
@@ -103,7 +103,7 @@ async function make(setup?: (env: Env, auth: FakeAuth) => void) {
     for (let i = 0; i < 12; i++) fake.names.set(2119100000 + i, { name: `Hanako Extra${'x'.repeat(i)}`, category: 'character' })
   })
   setup?.(env, auth)
-  const resolver = new PilotResolver({ esi: env.api, auth, logger: env.logger })
+  const resolver = new PilotResolver({ esi: env.api, auth, logger: env.logger, clock: env.clock })
   return { env, auth, resolver }
 }
 
@@ -143,6 +143,18 @@ describe('PilotResolver', () => {
   it('asks for the full name when the profile has no search permission', async () => {
     const { resolver } = await make((_, a) => { a.result = { ok: false, code: 'NOT_CONFIGURED', message: 'no scope' } })
     expect(await resolver.resolve('Hanako')).toMatchObject({ code: 'PILOT_NOT_FOUND', reason: 'need-full-name' })
+  })
+
+  it('caps token-backed searches across all callers per minute', async () => {
+    const { resolver, auth, env } = await make((_e, a) => {
+      a.result = [2119000001]
+    })
+    for (let i = 0; i < KB_SEARCH_PER_MIN; i++) ok(await resolver.resolve('Hanako'))
+    expect(await resolver.resolve('Hanako')).toMatchObject({ code: 'PILOT_NOT_FOUND', reason: 'need-full-name' })
+    expect(auth.searches).toHaveLength(KB_SEARCH_PER_MIN)
+    env.clock.advance(61_000)
+    ok(await resolver.resolve('Hanako'))
+    expect(auth.searches).toHaveLength(KB_SEARCH_PER_MIN + 1)
   })
 
   it('lists candidates: prefix first, shorter first, at most 8', async () => {
