@@ -1,6 +1,6 @@
-// 命令：查价、批量查价、走势、搜索、入侵、势力图、联盟势力图、战报、服务器状态、翻译（中英对照）、本群ID、
-// 制造、制造比价、反应，帮助（隐藏的 eve-market.help）、管理员的市场状态、市场授权和样式自检，
-// 以及后置的中间件（战报自动识别、裸物品名、兜底）。
+// 命令：查价、批量查价、走势、搜索、入侵、势力图、联盟势力图、战报、截图、服务器状态、翻译（中英对照）、本群ID、
+// 制造、制造比价、反应，帮助（隐藏的 eve-market.help）、管理员的市场状态、市场授权、样式自检和截图测试，
+// 以及后置的中间件（截图自动识别、裸物品名、兜底）。
 
 import { registerAdmin } from './admin'
 import { registerBatch } from './batch'
@@ -15,6 +15,8 @@ import { registerPrice } from './price'
 import { registerSearch } from './search'
 import { registerSelfTest } from './selftest'
 import { registerServerStatus } from './server-status'
+import { registerShot } from './shot'
+import { registerShotProbe } from './shot-probe'
 import { registerTranslate } from './translate'
 import { registerTrend } from './trend'
 
@@ -27,6 +29,8 @@ export function registerCommands(commands: CommandContext): void {
   registerIncursion(commands)
   registerMaps(commands)
   registerBr(commands)
+  registerShot(commands)
+  registerShotProbe(commands)
   registerServerStatus(commands)
   registerTranslate(commands)
   registerIndustry(commands)

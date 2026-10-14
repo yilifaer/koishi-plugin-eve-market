@@ -13,6 +13,7 @@ import { emptyCard, invoke, sendCard } from './context'
 import type { CommandContext, Invocation } from './context'
 import { INDUSTRY_TOPICS, industryHelpLines } from './industry-help'
 import { marketNames, marketPrefix } from './names'
+import { sitesOf } from './shot-send'
 
 export function registerHelp(commands: CommandContext): void {
   commands.registry.register('help', { args: '[topic:text]', description: '帮助' })
@@ -70,7 +71,14 @@ function universeLines(env: HelpEnv): Line[] {
   const simple = (['incursion', 'influenceMap', 'coalitionMap', 'serverStatus'] as const).filter((id) => has(env, id))
   const lines: Line[] = simple.length ? [{ text: simple.map((id) => nameOf(env, id)).join(' · ') }] : []
   if (has(env, 'br')) lines.push({ text: `${nameOf(env, 'br')} + BR 链接（直接 @我 发链接也行）` })
+  if (has(env, 'shot')) lines.push({ text: `${nameOf(env, 'shot')} + 网址：${siteNamesOf(env)}` })
   return lines
+}
+
+/** 能截的网站（短名）：不写网址 */
+function siteNamesOf(env: HelpEnv): string {
+  const names = sitesOf(env.commands).sites.map((s) => s.name.replace(/估价结果$/, '估价'))
+  return escapeMarkdown(names.join('、') || '暂时没有')
 }
 
 function otherLines(env: HelpEnv): Line[] {
@@ -87,7 +95,9 @@ const adminHere = (env: HelpEnv) => env.access.isAdmin && (env.access.isDirect |
 function adminLines(env: HelpEnv): Line[] {
   if (!adminHere(env)) return []
   const ids = (['marketStatus', 'marketAuth', 'selfTest'] as const).filter((id) => has(env, id))
-  return ids.length ? [{ text: `${ids.map((id) => nameOf(env, id)).join(' · ')}（只有管理员能用）` }] : []
+  const lines: Line[] = ids.length ? [{ text: `${ids.map((id) => nameOf(env, id)).join(' · ')}（只有管理员能用）` }] : []
+  if (has(env, 'shotProbe')) lines.push({ text: `${nameOf(env, 'shotProbe')}（只有管理员能用）` })
+  return lines
 }
 
 function section(heading: string, lines: Line[]): Section[] {
@@ -301,12 +311,41 @@ function brTopic(env: HelpEnv): Card {
   const card = emptyCard(`**${name}**`)
   card.sections.push({
     lines: [
-      { text: `${name} 加上 BR 工具的战报链接：把战报页面截图发出来` },
+      { text: `${name} 加上战报链接（BR 工具、Warbeacon）：把战报页面截图发出来` },
       { text: '也可以直接 @我 发战报链接，不用写命令' },
       { text: '一般要 10–30 秒；长战报分成两张图；同一个链接 10 分钟内再发很快' },
     ],
   })
   card.actions = back(env, 'br')
+  return card
+}
+
+function shotTopic(env: HelpEnv): Card {
+  const name = nameOf(env, 'shot')
+  const card = emptyCard(`**${name}**`)
+  card.sections.push({
+    lines: [
+      { text: `${name} 加上网址：把网页截图发出来` },
+      { text: `能截的网站：${siteNamesOf(env)}` },
+      { text: '也可以直接 @我 发这些网站的链接，不用写命令' },
+      { text: '一般要 10–30 秒；长页面最多分成几张图；同一个链接 10 分钟内再发很快' },
+      { text: `${nameOf(env, 'br')}：只认战报网站的链接` },
+    ],
+  })
+  card.actions = back(env, 'shot')
+  return card
+}
+
+function shotProbeTopic(env: HelpEnv): Card {
+  const name = nameOf(env, 'shotProbe')
+  const card = emptyCard(`**${name}**（管理员）`)
+  card.sections.push({
+    lines: [
+      { text: `${name} 加上网址：不用缓存截一次，先发一张检查卡片，再发图` },
+      { text: '卡片上有：HTTP 状态、打开用时、页面标题、页面高度、截了几张、是不是验证页、拦下的跳转和内网请求个数' },
+      { text: '用来核对新网站的页面参数；结果告诉开发者' },
+    ],
+  })
   return card
 }
 
@@ -375,6 +414,7 @@ const TOPICS: Partial<Record<CommandId, (env: HelpEnv) => Card>> = {
   trend: trendTopic,
   search: searchTopic,
   br: brTopic,
+  shot: shotTopic,
   translate: translateTopic,
   incursion: universeTopic,
   influenceMap: universeTopic,
@@ -389,9 +429,10 @@ const ADMIN_TOPICS: Partial<Record<CommandId, (env: HelpEnv) => Card>> = {
   marketAuth: marketAuthTopic,
 }
 
-/** 没写分项说明的命令回主卡片；管理命令只给管理员看说明（样式自检不限群） */
+/** 没写分项说明的命令回主卡片；管理命令只给管理员看说明（样式自检、截图测试不限群） */
 function topicCard(env: HelpEnv, id: CommandId): Card | undefined {
   if (id === 'selfTest') return env.access.isAdmin ? selfTestTopic(env) : undefined
+  if (id === 'shotProbe') return env.access.isAdmin ? shotProbeTopic(env) : undefined
   const admin = adminHere(env) ? ADMIN_TOPICS[id] : undefined
   return (TOPICS[id] ?? admin)?.(env)
 }

@@ -23,6 +23,25 @@ export interface FakeSite {
   height?: number
   /** goto 抛出的错误（例如 net::ERR_NAME_NOT_RESOLVED） */
   error?: string
+  /** goto 抛出页面导航超时（TimeoutError） */
+  timeout?: boolean
+  /** 页面标题；设置了它或 challenge，evaluate 才返回 4 个元素 */
+  title?: string
+  /** 页面像验证页 */
+  challenge?: boolean
+  /** 打开时页面被重定向到这个地址（发给守卫的主框架请求）；被拦下时 goto 报错 */
+  redirect?: string
+}
+
+/** 发给守卫的假请求 */
+function fakeRequest(url: string, main: object, onAbort: () => void): PageRequest {
+  return {
+    url: () => url,
+    isNavigationRequest: () => true,
+    frame: () => main,
+    continue: async () => {},
+    abort: async () => onAbort(),
+  } as unknown as PageRequest
 }
 
 /** 可以从外面放行的等待 */
@@ -84,10 +103,18 @@ export class FakePage implements RenderPage {
     this.javaScript = enabled
   }
 
+  private handler?: (request: PageRequest) => void
+  private readonly main = {}
+
   async setRequestInterception() {}
 
-  on(_event: 'request', _handler: (request: PageRequest) => void) {
+  on(_event: 'request', handler: (request: PageRequest) => void) {
+    this.handler = handler
     return this
+  }
+
+  mainFrame() {
+    return this.main
   }
 
   async setContent(html: string) {
@@ -99,11 +126,19 @@ export class FakePage implements RenderPage {
     await this.browser.holdGoto?.promise
     const site = this.browser.sites.get(url) ?? {}
     if (site.error) throw new Error(site.error)
+    if (site.timeout) throw Object.assign(new Error('Navigation timeout'), { name: 'TimeoutError' })
+    if (site.redirect && this.handler) {
+      let aborted = false
+      this.handler(fakeRequest(url, this.main, () => {}))
+      this.handler(fakeRequest(site.redirect, this.main, () => { aborted = true }))
+      if (aborted) throw new Error('net::ERR_BLOCKED_BY_CLIENT')
+    }
     return { status: () => site.status ?? 200 }
   }
 
   async evaluate() {
     const site = this.url ? this.browser.sites.get(this.url) : undefined
+    if (site?.title !== undefined || site?.challenge) return [site.height ?? 2000, true, site.challenge === true, site.title ?? '']
     return [site?.height ?? 2000, true]
   }
 

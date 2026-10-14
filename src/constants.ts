@@ -42,7 +42,7 @@ export const REPLY_BUDGET_GROUP = 4
 export const REPLY_BUDGET_DIRECT = 3
 
 export type CommandId =
-  | 'price' | 'batch' | 'trend' | 'search' | 'incursion' | 'influenceMap' | 'coalitionMap' | 'br'
+  | 'price' | 'batch' | 'trend' | 'search' | 'incursion' | 'influenceMap' | 'coalitionMap' | 'br' | 'shot' | 'shotProbe'
   | 'serverStatus' | 'translate' | 'help' | 'groupId' | 'marketStatus' | 'marketAuth' | 'selfTest'
   | 'manufacture' | 'manufactureCompare' | 'reaction'
 
@@ -56,6 +56,8 @@ export const COMMAND_NAMES: Record<CommandId, string> = {
   influenceMap: '势力图',
   coalitionMap: '联盟势力图',
   br: '战报',
+  shot: '截图',
+  shotProbe: '截图测试',
   serverStatus: '服务器状态',
   translate: '翻译',
   help: '帮助',
@@ -85,6 +87,9 @@ export const COMMAND_BUDGET: Record<CommandId, { normal: number; max: number }> 
   influenceMap: { normal: 1, max: 2 },
   coalitionMap: { normal: 1, max: 2 },
   br: { normal: 2, max: 3 },
+  // 群里：提示 + 3 张图（或卡片 + 3 张）；单聊少 1 条
+  shot: { normal: 2, max: 4 },
+  shotProbe: { normal: 2, max: 4 },
   serverStatus: { normal: 1, max: 2 },
   translate: { normal: 1, max: 2 },
   help: { normal: 1, max: 2 },

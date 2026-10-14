@@ -9,6 +9,7 @@ import type { Context } from 'koishi'
 import { formatIssue, normalizeConfig } from '../config/normalize'
 import type { Config } from '../config/schema'
 import { createEveCore } from '../core'
+import { createSiteRegistry } from '../core/sites'
 import type { AuthStore, Clock, Logger, ModuleStore, Scheduler } from '../core/ports'
 import type { CoreOverrides, EveCore, Settings } from '../core/types'
 import { puppeteerPages } from '../render'
@@ -95,13 +96,15 @@ export function installPlugin(ctx: Context, config: Config, options: PluginOptio
   const web = { ready: false }
   // puppeteer 是可选服务：每次出图时才取，插件启动后才启用 puppeteer 也能用
   const media = createMedia({ pages: puppeteerPages(() => ctx.get('puppeteer')), logger })
+  // BR 工具的自动截图还要看旧开关（settings.render.brAuto 已经合并了两个开关）
+  const sites = createSiteRegistry({ sites: settings.screenshot.sites.map((s) => (s.id === 'br' ? { ...s, auto: settings.render.brAuto } : s)) })
   const scopes = createScopes(ctx, { general: settings.general, echo: sendState(store).echo })
   const registry = new CommandRegistry(scopes.cmdCtx, { filter: scopes.filter, logger })
   const watchdog = installWatchdog(ctx, {
     enabled: settings.general.qqWatchdog, store, clock, logger, scheduler: options.watchdogScheduler ?? koishiScheduler(ctx),
   })
   const commands: CommandContext = {
-    settings, registry, pending: pendingStore(store), store, logger, core: runtime, clock, scheduler, webReady: () => web.ready, media,
+    settings, registry, pending: pendingStore(store), store, logger, core: runtime, clock, scheduler, webReady: () => web.ready, media, sites,
     watchdog: () => watchdog.status(),
   }
 

@@ -139,3 +139,20 @@ export const BR = {
   sendFailed: '战报图片发送失败，请稍后再试。',
   logNoBrowser: '战报截图需要 Koishi 的 puppeteer 插件，现在没有启用',
 } as const
+
+/** 网站截图（「截图」「截图测试」；BR 工具的链接沿用上面 BR 的文案，浏览器、繁忙、截断的说法所有网站共用 BR 里那几句） */
+export const SHOT = {
+  usageTitle: '**截图用法**',
+  hint: '⏳ 正在截图，一般要 10–30 秒…',
+  timeout: '截图超时，链接可能失效，或者网站暂时访问不了。',
+  blocked: '这个网站不让自动截图。',
+  redirect: '这个链接跳到了别的网站，没有截图。',
+  http: (status: number) => `页面打不开（网站返回 ${status}），链接可能失效。`,
+  unreachable: '网站暂时访问不了，请稍后再试。',
+  failed: '截图失败，请稍后再试。',
+  sendFailed: '截图发送失败，请稍后再试。',
+  notListed: (names: string) => `这个网站不在截图名单里。能截的网站：${names}。`,
+  badLink: (name: string, hint: string) => `这个${name}链接的格式不对：${hint}。`,
+  notBattleReport: (shot: string) => `这不是战报链接。截别的网站请发「${shot} 网址」。`,
+  brOff: '战报截图没有开启（控制台「截图」里关掉了）。',
+} as const

@@ -1,5 +1,5 @@
 // 后置中间件（§2.18、§3.7.5）：命令没匹配到、消息 @ 了机器人时才轮到。
-// 带战报链接（控制台 brAuto 开着）→ 改成「战报 <链接>」再走一遍命令；只 @ 没内容 → 简短帮助；内容精确命中一个物品 → 改成「查价 …」再走一遍命令；短的 → 「没看懂…你是想查价吗？」；
+// 带截图名单里网站的链接（该网站「自动截图」开着）→ 改成「战报 <链接>」（战报类网站）或「截图 <链接>」再走一遍命令；只 @ 没内容 → 简短帮助；内容精确命中一个物品 → 改成「查价 …」再走一遍命令；短的 → 「没看懂…你是想查价吗？」；
 // 长的（闲聊）→ 一句「发「帮助」看我能做什么」。回复了就不再调用 next()（否则 Koishi 的「您要找的是不是」还会再发一条）。
 // 没有待办时的「取消」、只有图片没有文字的消息不回复，交给后面的处理者；别人发的管理命令（对他来说不存在）也不回复。
 
@@ -7,13 +7,13 @@ import { h } from 'koishi'
 import type { Context, Next, Session } from 'koishi'
 import { BARE_ITEM_QUERY, CANCEL_WORD, FALLBACK_SHORT_CHARS } from '../../constants'
 import { isFailure } from '../../core/types'
-import { findBrLink } from '../../core/universe'
 import { buildAccess, isAddressed } from '../scope'
 import type { Action } from '../view/card'
 import { hasUrl, safeEcho } from '../view/escape'
 import { emptyCard, invoke, sendCard } from './context'
 import type { CommandContext, Invocation } from './context'
 import { shortCard } from './help'
+import { sitesOf } from './shot-send'
 import { SAY } from './text'
 
 /** 精确命中（官方名、别名、#typeID、套装名）的唯一物品，可以带市场和数量 */
@@ -89,12 +89,16 @@ async function runFallback(commands: CommandContext, session: Session, next: Nex
     await invoke(commands, 'help', session, (inv) => sendCard(inv, shortCard(inv)).then(() => undefined))
     return
   }
-  // 战报自动识别：每条消息只取第一个有效链接
-  const br = commands.settings.render.brAuto ? commands.registry.get('br') : undefined
-  const link = br ? findBrLink(content) : null
-  if (br && link) {
-    await session.execute({ command: br, args: [link.url], options: {} })
-    return
+  // 网站截图自动识别：每条消息只取第一个能截的链接，只看「自动截图」开着的网站；
+  // 战报类网站走「战报」（文案、额度和以前一样），其他走「截图」。传规范化后的地址
+  const site = sitesOf(commands).find(content, (s) => s.auto)
+  if (site) {
+    const report = site.site.kind === 'battle-report' ? commands.registry.get('br') : undefined
+    const command = report ?? commands.registry.get('shot')
+    if (command) {
+      await session.execute({ command, args: [site.url], options: {} })
+      return
+    }
   }
   const price = commands.registry.get('price')
   if (BARE_ITEM_QUERY && price && await isExactItem(commands, session, content)) {

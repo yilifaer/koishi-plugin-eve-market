@@ -1,15 +1,15 @@
-// 出图和截图的接线：Koishi 的 puppeteer 服务（可选）→ 页面队列（走势图和战报共用 2 个页面，战报最多占 1 个）、
-// 走势图的内存缓存、战报截图。puppeteer 每次用的时候才用 ctx.get('puppeteer') 取，插件启动后才启用也能用；
-// 没有 puppeteer 时走势只发文字卡片，战报回复「截图服务没有启动」。插件停用时取消排队、关掉所有页面。
+// 出图和截图的接线：Koishi 的 puppeteer 服务（可选）→ 页面队列（走势图和网站截图共用 2 个页面，截图最多占 1 个）、
+// 走势图的内存缓存、网站截图。puppeteer 每次用的时候才用 ctx.get('puppeteer') 取，插件启动后才启用也能用；
+// 没有 puppeteer 时走势只发文字卡片，截图回复「截图服务没有启动」。插件停用时取消排队、关掉所有页面。
 
 import type { Logger } from '../core/ports'
-import { BrScreenshotter, createChartImages, createRenderer } from '../render'
+import { SiteScreenshotter, createChartImages, createRenderer } from '../render'
 import type { ChartImages, PageFactory, Renderer } from '../render'
 
 export interface Media {
   renderer: Renderer
   charts: ChartImages
-  br: BrScreenshotter
+  shots: SiteScreenshotter
   dispose(): Promise<void>
 }
 
@@ -24,14 +24,14 @@ export interface MediaOptions {
 export function createMedia(options: MediaOptions): Media {
   const renderer = createRenderer({ pages: options.pages, logger: options.logger })
   const charts = createChartImages(renderer)
-  const br = new BrScreenshotter({ renderer, logger: options.logger, now: options.now })
+  const shots = new SiteScreenshotter({ renderer, logger: options.logger, now: options.now })
   let disposed: Promise<void> | undefined
   return {
     renderer,
     charts,
-    br,
+    shots,
     dispose() {
-      disposed ??= Promise.allSettled([br.dispose(), renderer.dispose()]).then(() => charts.clear())
+      disposed ??= Promise.allSettled([shots.dispose(), renderer.dispose()]).then(() => charts.clear())
       return disposed
     },
   }
