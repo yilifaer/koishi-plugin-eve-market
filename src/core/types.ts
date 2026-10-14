@@ -50,6 +50,16 @@ export type FailureCode =
   | 'ESI_UNAVAILABLE'
   /** 调用方给的时限到了 */
   | 'DEADLINE'
+  /** Janice 上没有这份估价（编号不对或已过期） */
+  | 'JANICE_NOT_FOUND'
+  /** Janice 拒绝了密钥（401 / 403） */
+  | 'JANICE_BAD_KEY'
+  /** Janice 限流（429）：retryAt 之前不再请求 */
+  | 'JANICE_BUSY'
+  /** Janice 连不上、超时、5xx */
+  | 'JANICE_DOWN'
+  /** Janice 返回成功，但内容缺编号或价格 */
+  | 'JANICE_BAD_RESPONSE'
 
 /** BAD_ARGUMENT 的具体原因，bot 按它选提示语 */
 export type FailureReason =
@@ -104,7 +114,7 @@ export interface CoreFailure {
   marketKey?: string
   /** MARKET_UNAVAILABLE 时：为什么不可用（卡片按它选说法，例如「同步异常」） */
   quoteReason?: QuoteReason
-  /** ZKILL_THROTTLED 时：什么时候可以再试（毫秒） */
+  /** ZKILL_THROTTLED、JANICE_BUSY 时：什么时候可以再试（毫秒） */
   retryAt?: number
 }
 
@@ -116,7 +126,7 @@ export function isFailure(value: unknown): value is CoreFailure {
 
 export type ConfigSection =
   | 'general' | 'display' | 'access' | 'markets' | 'aliases' | 'price' | 'appraisal'
-  | 'freight' | 'notices' | 'industry' | 'sso' | 'render' | 'screenshot' | 'advanced'
+  | 'freight' | 'notices' | 'industry' | 'sso' | 'render' | 'screenshot' | 'janice' | 'advanced'
 
 /** 配置问题：日志每次加载只写一次，「市场状态」里全部列出 */
 export interface ConfigIssue {
@@ -364,6 +374,15 @@ export interface AdvancedSettings {
   esiContact: string
 }
 
+/** 谁能用 Janice 估价：授权群和授权私聊 / 所有人 / 只有管理员 */
+export type JaniceWho = 'allowed' | 'all' | 'admins'
+
+export interface JaniceSettings {
+  /** 所有者在控制台填的；空 = 没开通。只会出现在请求头里 */
+  apiKey: string
+  who: JaniceWho
+}
+
 export interface Settings {
   general: GeneralSettings
   display: DisplaySettings
@@ -381,6 +400,7 @@ export interface Settings {
   render: RenderSettings
   screenshot: ScreenshotSettings
   advanced: AdvancedSettings
+  janice: JaniceSettings
   /** 本地检查发现的问题；需要数据的检查由 core 在数据加载后补充 */
   issues: ConfigIssue[]
 }
@@ -1477,6 +1497,8 @@ export interface EveCore {
   maps: InfluenceMapService
   /** 击杀转战报：zKill + 欧服击杀详情 */
   kills: KillService
+  /** Janice 估价：按编号读现成的估价 */
+  janice: JaniceService
   /** 查价告示：启用、没过期、本群能看的前 MAX_NOTICES 条 */
   notices(access: Access): string[]
   status(): CoreStatus
@@ -1490,6 +1512,8 @@ export interface CoreOverrides {
   ssoBase?: string
   /** zKill 的地址（击杀转战报、KB 人物卡共用） */
   zkillBase?: string
+  /** Janice 的地址 */
+  janiceBase?: string
   compatibilityDate?: string
   random?: () => number
 }
@@ -1545,4 +1569,77 @@ export interface KillService {
    * 深渊、查不到星域、地址过不了网站规则时对应项 null
    */
   relatedUrls(summary: KillSummary): { br: string | null; warbeacon: string | null }
+}
+
+// ------------------------------------------------------------------ Janice 估价
+
+export type JanicePricing = 'buy' | 'split' | 'sell' | 'purchase'
+export type JanicePricingVariant = 'immediate' | 'top5percent'
+export type JaniceDesignation = 'appraisal' | 'wtb' | 'wts'
+
+/** 三个价格，整数 ISK（已乘上这份估价自己的比例，向下取整） */
+export interface JanicePrices {
+  sell: number
+  buy: number
+  split: number
+}
+
+export interface JaniceItem {
+  typeId: TypeId
+  /** Janice 给的英文名 */
+  en: string
+  /** 词库里有中文名时 */
+  zh: string | null
+  amount: number
+  /** 这一行的小计（比例已乘） */
+  prices: JanicePrices
+}
+
+export interface JaniceView {
+  /** 估价编号（保留大小写） */
+  code: string
+  /** 市场名，例如 Jita 4-4；读不到时 null */
+  market: string | null
+  /** 读不到或不认识的取值是 null */
+  pricing: JanicePricing | null
+  variant: JanicePricingVariant | null
+  designation: JaniceDesignation | null
+  /** 1 = 100%，范围 (0, 10] */
+  percentage: number
+  /** 比例字段缺失或不合法，按 100% 算 */
+  percentageGuessed: boolean
+  totals: JanicePrices
+  items: JaniceItem[]
+  /** 物品种类数 */
+  itemTypes: number
+  /** 物品总个数 */
+  units: number
+  /** 打包体积 m³；读不到时 null */
+  packagedVolume: number | null
+  /** 价格所在时间（毫秒，UTC）；读不到时 null */
+  datasetAt: number | null
+  expiresAt: number | null
+  /** Janice 没认出来的行数（只数个数，不留内容） */
+  failedLines: number
+}
+
+export interface JaniceGetOptions {
+  /** 这一次最多等多久（毫秒）；到时间返回 DEADLINE，读取在后台继续并写进缓存 */
+  deadlineMs?: number
+}
+
+export interface JaniceStatus {
+  /** 填了密钥 */
+  configured: boolean
+  /** 最近一次服务异常（不含「没有这份估价」）；之后成功过就没有 */
+  lastError?: { code: FailureCode; at: number }
+}
+
+export interface JaniceService {
+  /**
+   * 失败码：NOT_CONFIGURED（没填密钥）、BAD_ARGUMENT（编号格式不对）、JANICE_NOT_FOUND、JANICE_BAD_KEY、
+   * JANICE_BUSY（带 retryAt）、JANICE_DOWN、JANICE_BAD_RESPONSE、DEADLINE。成功的结果在内存里放 6 小时
+   */
+  get(code: string, opts?: JaniceGetOptions): Promise<JaniceView | CoreFailure>
+  status(): JaniceStatus
 }

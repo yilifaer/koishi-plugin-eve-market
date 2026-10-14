@@ -10,6 +10,7 @@ import { createAppraisalService } from './appraisal'
 import { createDataService } from './data'
 import { createEsi } from './esi'
 import { createPriceFormatter } from './format'
+import { JaniceClient, createJaniceService } from './janice'
 import { createIndustryIndices, createIndustryLocations, createIndustryService } from './industry'
 import type { IndustryLocations } from './industry'
 import { createKillService } from './killmail'
@@ -43,6 +44,7 @@ const SECTION_LABELS: Record<ConfigSection, string> = {
   sso: 'EVE 授权',
   render: '图片与截图',
   screenshot: '截图',
+  janice: 'Janice 估价',
   advanced: '高级',
 }
 
@@ -178,6 +180,8 @@ export function createEveCore(ports: CorePorts, settings: Settings, overrides: C
     status: createServerStatus({ esi, clock, logger }),
   })
   const zkill = new ZkillClient(ports, { base: overrides.zkillBase, userAgent: esi.client.userAgent })
+  const janiceClient = new JaniceClient(ports, { base: overrides.janiceBase, apiKey: settings.janice.apiKey, userAgent: esi.client.userAgent })
+  const janice = createJaniceService({ client: janiceClient, items, clock, scheduler, logger })
   const unsubscribe = data.onUpdate(() => checks.recheck())
   let started: Promise<void> | undefined
   // ready 等数据和授权档案都读好：刚启动时还没读到的档案不会被当成「需要授权」
@@ -199,6 +203,7 @@ export function createEveCore(ports: CorePorts, settings: Settings, overrides: C
     format: createPriceFormatter(settings.display, clock),
     maps,
     kills: createKillService({ zkill, esi, items, universe, clock, scheduler, logger }),
+    janice,
 
     notices(access: Access): string[] {
       const now = clock.now()
@@ -237,6 +242,7 @@ export function createEveCore(ports: CorePorts, settings: Settings, overrides: C
       unsubscribe()
       maps.stop()
       zkill.stop()
+      janiceClient.stop()
       indices.stop()
       structures.stop()
       auth.stop()

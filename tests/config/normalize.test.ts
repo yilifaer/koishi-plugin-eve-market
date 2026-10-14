@@ -737,3 +737,28 @@ describe('normalizeConfig: screenshot', () => {
     expect(ids(custom(row()))).toEqual(['br', 'warbeacon', 'janice', 'dotlan', 'custom-1'])
   })
 })
+
+describe('janice settings', () => {
+  const KEY = 'test-janice-key-0000'
+
+  it('defaults to no key and who = allowed', () => {
+    expect(run({}).settings.janice).toEqual({ apiKey: '', who: 'allowed' })
+  })
+
+  it('keeps the key, trimmed, and a known who', () => {
+    expect(run({ janice: { apiKey: `  ${KEY}\n`, who: 'admins' } }).settings.janice).toEqual({ apiKey: KEY, who: 'admins' })
+    expect(run({ janice: { who: 'all' } }).settings.janice.who).toBe('all')
+    expect(run({ janice: { who: 'everyone' } }).settings.janice.who).toBe('allowed')
+  })
+
+  it('drops characters a header cannot carry, and no message contains the key', () => {
+    const { settings, issues } = run({ janice: { apiKey: `${KEY}中文 x` } })
+    expect(settings.janice.apiKey).toBe(`${KEY}x`)
+    expect(issues.filter((i) => i.section === 'janice')).toHaveLength(1)
+    expect(JSON.stringify(issues)).not.toContain(KEY)
+  })
+
+  it('a non-string key is off', () => {
+    expect(run({ janice: { apiKey: 12345 } }).settings.janice.apiKey).toBe('')
+  })
+})

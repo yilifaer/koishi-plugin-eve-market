@@ -6,7 +6,7 @@ import { DEFAULT_SCRAPMETAL_LEVEL, MAX_ME, MAX_QUANTITY, MAX_TE, NOTICE_MAX_CHAR
 import { FORMULA_DEFAULTS } from '../core/industry'
 import { BUILTIN_SITES, checkConfigHost, hostMatches } from '../core/sites'
 import type {
-  AccessSettings, AdvancedSettings, AppraisalSettings, ConfigIssue, ConfigSection, DefaultQuantitySetting, DisplaySettings,
+  AccessSettings, AdvancedSettings, AppraisalSettings, ConfigIssue, ConfigSection, DefaultQuantitySetting, DisplaySettings, JaniceSettings,
   FreightRoute, IndustryActivity, IndustryLocationSetting, IndustrySettings, IndustryStructureSetting, ItemAliasSetting,
   MarketRefField, MarketRefSetting, MarketSetting, MarketType, NoticeSetting, PriceSide, RenderSettings, ScreenshotSettings, Settings, ShotSiteSetting,
   SsoSettings, StructurePurpose, Visibility,
@@ -39,6 +39,7 @@ const SECTION_LABELS: Record<ConfigSection, string> = {
   sso: 'EVE 授权',
   render: '图片与截图',
   screenshot: '截图',
+  janice: 'Janice 估价',
   advanced: '高级',
 }
 
@@ -836,6 +837,16 @@ function normalizeAdvanced(raw: Raw, issues: IssueList): AdvancedSettings {
   }
 }
 
+/** Janice 估价：密钥只做清理（请求头里只能有可打印的 ASCII），任何提示都不带密钥的内容 */
+function normalizeJanice(raw: Raw, issues: IssueList): JaniceSettings {
+  const o = obj(raw.janice)
+  const given = typeof o.apiKey === 'string' ? o.apiKey : ''
+  const apiKey = given.replace(/[^\x21-\x7e]/g, '')
+  if (apiKey !== given.trim()) issues.add('janice', '「Janice 的 API 密钥」里有不能放进请求头的字符，已去掉；请检查是不是复制错了', { field: 'apiKey' })
+  const who = o.who === 'all' || o.who === 'admins' ? o.who : 'allowed'
+  return { apiKey, who }
+}
+
 // ------------------------------------------------------------------ 入口
 
 export function normalizeConfig(input: unknown): NormalizedConfig {
@@ -910,6 +921,7 @@ export function normalizeConfig(input: unknown): NormalizedConfig {
     render: { ...normalizeRender(raw, issues), brAuto: brAutoOf(raw, screenshot, issues) },
     screenshot,
     advanced: normalizeAdvanced(raw, issues),
+    janice: normalizeJanice(raw, issues),
     issues: issues.list,
   }
   return { settings, issues: issues.list }

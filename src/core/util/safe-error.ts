@@ -1,5 +1,5 @@
 // 日志脱敏。ctx.http 抛出的错误对象里带着请求配置（Authorization: Bearer …、Basic 认证头），
-// 直接 logger.warn(err) 就会把它们打出来。SSO 和带授权的 ESI 请求的错误一律经过 safeError()：
+// 直接 logger.warn(err) 就会把它们打出来（Janice 的 X-ApiKey 请求头同理）。SSO 和带授权的 ESI 请求的错误一律经过 safeError()：
 // 只留 { route, status, code, message }，不碰 config、headers、request。
 
 import { NetworkError } from '../ports'
@@ -14,9 +14,11 @@ const PATTERNS: Array<[RegExp, string]> = [
   // SecretBox 的密文
   [/\bv1:[0-9a-f]{8}:[A-Za-z0-9_-]+:[A-Za-z0-9_-]+:[A-Za-z0-9_-]+/g, 'v1:***'],
   // 查询参数、表单
-  [/\b(refresh_token|access_token|id_token|client_secret|code|state|token|password|secret|key)=[^&\s"',;]+/gi, '$1=***'],
+  [/\b(refresh_token|access_token|id_token|client_secret|code|state|token|password|secret|key|apikey)=[^&\s"',;]+/gi, '$1=***'],
   // JSON 字段
-  [/"(refresh_token|access_token|id_token|client_secret|token|password|secret|authorization)"\s*:\s*"[^"]*"/gi, '"$1":"***"'],
+  [/"(refresh_token|access_token|id_token|client_secret|token|password|secret|authorization|apikey|x-apikey)"\s*:\s*"[^"]*"/gi, '"$1":"***"'],
+  // Janice 的请求头 X-ApiKey: …（错误文字里带出请求头时）
+  [/\b(x-apikey)(\s*[:=]\s*)[^\s"',;}]+/gi, '$1$2***'],
 ]
 
 /**

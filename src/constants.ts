@@ -531,3 +531,32 @@ export const ABYSS_SYSTEM_PREFIX = '32'
 export const RELATED_BR_SOURCES = [
   { id: 'evetools', template: 'https://br.evetools.org/related/{system}/{time}' },
 ] as const
+
+// ------------------------------------------------------------------ Janice 估价（只读现成的估价链接）
+// 接口按 Janice 自己的 swagger；密钥只放在请求头里，不进日志、回复、状态。
+
+/** Janice 的主机（识别链接和接口共用，截图网站名单也用它） */
+export const JANICE_HOST = 'janice.e-351.com'
+export const JANICE_API_BASE = `https://${JANICE_HOST}`
+/** 按编号取估价；{code} 先过 JANICE_CODE_RE 再放进路径 */
+export const JANICE_APPRAISAL_PATH = '/api/rest/v2/appraisal/{code}'
+/** 密钥所在的请求头 */
+export const JANICE_KEY_HEADER = 'X-ApiKey'
+/** 估价编号：链接里 /a/ 后面的一段，大小写要保留（截图网站名单和接口共用这一条） */
+export const JANICE_CODE_PATTERN = '[A-Za-z0-9]{4,16}'
+export const JANICE_CODE_RE = new RegExp(`^${JANICE_CODE_PATTERN}$`)
+export const JANICE_TIMEOUT_MS = 10_000
+export const JANICE_MAX_BYTES = 4 * 1024 * 1024
+/** 估价的价格在创建时就定了，内容不会变 */
+export const JANICE_CACHE_MAX = 100
+export const JANICE_CACHE_HOURS = 6
+/** 404：编号不对或已过期 */
+export const JANICE_NEGATIVE_CACHE_MIN = 10
+/** 全局两次请求之间至少隔多久（别人的服务器，不连发） */
+export const JANICE_MIN_INTERVAL_MS = 1000
+/** 429 没有 Retry-After 时暂停多久 */
+export const JANICE_THROTTLE_DEFAULT_SEC = 60
+/** 密钥被拒绝时，日志告警最多多久一次 */
+export const JANICE_BAD_KEY_WARN_MIN = 10
+/** 排队等着发的请求最多几个，满了直接按忙处理 */
+export const JANICE_MAX_QUEUE = 10
