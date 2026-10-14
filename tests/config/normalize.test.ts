@@ -183,6 +183,25 @@ describe('normalizeConfig: markets', () => {
     ])
   })
 
+  it('a public market keeps an alias that only a market for allowed groups listed earlier uses', () => {
+    const { settings, lines } = run({
+      markets: [
+        { ...STRUCTURE, aliases: '大市场' },
+        { name: 'Jita 4-4', location: '60003760', aliases: '大市场, 联盟市场A' },
+        { name: 'Amarr', location: '60008494', aliases: '大市场' },
+        { ...STRUCTURE_B, aliases: '大市场, 联盟市场A' },
+      ],
+      sso: SSO,
+    })
+    // 其他群里由 core 认作 Jita 4-4；两个公开市场之间、两个只在授权群的市场之间照旧先到先得
+    expect(settings.markets.map((m) => m.aliases)).toEqual([['大市场'], ['大市场', '联盟市场A'], [], []])
+    expect(lines).toEqual([
+      '市场第 3 行别名「大市场」已经被第 2 行的市场使用，这一行的不生效',
+      '市场第 4 行别名「大市场」已经被第 1 行的市场使用，这一行的不生效',
+      '市场第 4 行别名「联盟市场A」和第 1 行市场的名称相同，这一行的不生效',
+    ])
+  })
+
   it('validates the auth profile name of structure rows', () => {
     const { settings, lines } = run({ markets: [...PRESET_MARKETS, { ...STRUCTURE, authProfile: 'bad profile!' }, { ...STRUCTURE_B, authProfile: '主号_2' }], sso: SSO })
     expect(settings.markets.filter((m) => m.type === 'structure').map((m) => m.authProfile)).toEqual(['主号_2'])

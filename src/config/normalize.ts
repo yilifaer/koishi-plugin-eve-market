@@ -353,9 +353,14 @@ function normalizeMarkets(raw: Raw, issues: IssueList): MarketDraft[] {
     byKey.set(key, draft)
   })
 
-  // 别名：所有名称都确定以后再检查冲突；名称永远优先，同一个别名先到先得
+  // 别名：所有名称都确定以后再检查冲突；名称永远优先，同一个别名先到先得。
+  // 只在授权群的市场先占了的，公开市场照样留着（其他群里认它），由 core 按可见范围分开认、报告
   const owner = new Map<string, MarketDraft>()
-  for (const d of drafts) owner.set(d.key, d)
+  const publicOwner = new Map<string, MarketDraft>()
+  for (const d of drafts) {
+    owner.set(d.key, d)
+    if (d.visibility === 'public') publicOwner.set(d.key, d)
+  }
   for (const d of drafts) {
     const kept: string[] = []
     for (const alias of d.aliases) {
@@ -366,13 +371,16 @@ function normalizeMarkets(raw: Raw, issues: IssueList): MarketDraft[] {
         issues.add(s, `别名「${alias}」${reserved}，已忽略`, { row: d.row, field: 'aliases' })
         continue
       }
-      const other = owner.get(key)
+      const first = owner.get(key)
+      const shadowed = first?.visibility === 'allowed' && d.visibility === 'public'
+      const other = shadowed ? publicOwner.get(key) : first
       if (other) {
         const what = other.key === key ? `和第 ${other.row} 行市场的名称相同` : `已经被第 ${other.row} 行的市场使用`
         issues.add(s, `别名「${alias}」${what}，这一行的不生效`, { row: d.row, field: 'aliases' })
         continue
       }
-      owner.set(key, d)
+      if (!first) owner.set(key, d)
+      if (d.visibility === 'public') publicOwner.set(key, d)
       kept.push(alias)
     }
     d.aliases = kept

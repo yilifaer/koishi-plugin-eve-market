@@ -670,7 +670,7 @@ export interface ItemResolver {
 export interface MarketDef {
   key: string
   name: string
-  /** 手写别名 + 自动加的星系中英文名 */
+  /** 手写别名 + 自动加的星系中英文名（和别的市场冲突时不加；按全部市场算） */
   aliases: string[]
   /** 生成按钮命令时用的最短写法 */
   shortAlias: string
@@ -699,7 +699,7 @@ export interface MarketRegistry {
   visible(access: Access): MarketDef[]
   /** 查价不写市场时用 */
   defaults(access: Access): MarketDef[]
-  /** 看不到的市场返回 null（和不存在一样） */
+  /** 看不到的市场返回 null（和不存在一样）；没有授权时只按公开市场的名字认 */
   match(token: string, access: Access): MarketDef | null
   /** 从查询开头切出市场名，多词名字和别名最长匹配，冲突和「未知市场」按结构规则判断 */
   split(text: string, access: Access, items: ItemResolver, scope: Scope): MarketSplit

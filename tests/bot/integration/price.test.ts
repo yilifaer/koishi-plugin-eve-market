@@ -71,6 +71,21 @@ describe('查价: markets and visibility', () => {
     expect(card(await e.h.group('查价 联盟市场A 乌鸦级'))).toContain('**联盟市场A')
   })
 
+  it('a restricted market listed first does not take a public market\'s alias or system name in other groups', async () => {
+    const markets = [{ ...ALLIANCE_MARKET, aliases: '前线, 大市场, 吉他' }, { ...PRESET_MARKETS[0], aliases: '4-4, 大市场' }, ...PRESET_MARKETS.slice(1)]
+    const e = await start({ config: { markets, access: allowed }, esi: ravenOrders })
+    const jita = await e.h.group('查价 Jita 4-4 乌鸦级', { channelId: GROUP2 })
+    expect(card(jita)).toContain('**Jita 4-4**')
+    for (const name of ['大市场', '吉他']) {
+      for (const sent of [await e.h.group(`查价 ${name} 乌鸦级`, { channelId: GROUP2 }), await e.h.direct(`查价 ${name} 乌鸦级`)]) {
+        expect(card(sent), name).toBe(card(jita))
+        expect(buttonRows(sent), name).toEqual(buttonRows(jita))
+      }
+      // 授权群里照旧认作排在前面的联盟市场A
+      expect(card(await e.h.group(`查价 ${name} 乌鸦级`))).toContain('**联盟市场A')
+    }
+  })
+
   it('a named market with a quantity compares with Jita and shows totals', async () => {
     const e = await start({ config: { markets: MARKETS_WITH_ALLIANCE, access: allowed }, esi: ravenOrders })
     const sent = await e.h.group('查价 联盟市场A 乌鸦级*10')

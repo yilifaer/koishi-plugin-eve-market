@@ -1,7 +1,8 @@
 // MarketRegistry（§2.0.5、§4.4）：控制台的市场表格 + 星图数据 → 运行时的市场。
 // - 空间站、星系、星域都从 universe.json 查出星系和星域；查不到的行标无效、跳过并报告。
 // - NPC 空间站和星系类市场自动加上星系的中英文名作别名，优先级低于名称和手写别名，冲突时不生效也不报告。
-// - 可见范围按 Access 判断：本群看不到的市场和不存在的一样。
+// - 可见范围按 Access 判断：本群看不到的市场和不存在的一样。名字分两套：全部市场一套（授权群、配置里的引用用），
+//   只有公开市场一套（其他群、私聊用），只在授权群的市场占不了公开市场的别名、星系名。
 // - 配置里对市场的引用（基准市场、默认市场、回退市场……）和用户输入用同一套匹配；数据加载后才能认出星系名。
 // 每个数据版本建一次，数据更新后第一次用到时自动重建。
 
@@ -30,21 +31,30 @@ const REF_FIELDS: readonly MarketRefField[] = [
 
 const RESERVED = new Set<string>([...PRICE_TYPE_WORDS.sell, ...PRICE_TYPE_WORDS.buy, ...PRICE_TYPE_WORDS.mid].map(marketKey))
 
+/** 一套名字。查找顺序：名称、手写别名、自动别名，然后同样三层的去空白写法 */
+interface NameSet {
+  layers: Array<Map<string, MarketDef>>
+  /** 名称和别名最多几个词（从查询开头切出市场时用） */
+  maxWords: number
+}
+
 interface Built {
   /** 数据版本 + 建筑位置的版本 */
   key: string
   /** 按显示顺序 */
   list: MarketDef[]
   byKey: Map<string, MarketDef>
-  /** 查找顺序：名称、手写别名、自动别名，然后同样三层的去空白写法 */
-  layers: Array<Map<string, MarketDef>>
-  maxWords: number
+  /** 全部市场的名字：授权群、配置里的引用用 */
+  names: NameSet
+  /** 只有公开市场的名字：其他群、私聊用 */
+  publicNames: NameSet
   refs: Partial<Record<MarketRefField, MarketDef>>
   firstPublic?: MarketDef
   issues: ConfigIssue[]
 }
 
-const EMPTY: Built = { key: '', list: [], byKey: new Map(), layers: [], maxWords: 0, refs: {}, issues: [] }
+const NO_NAMES: NameSet = { layers: [], maxWords: 0 }
+const EMPTY: Built = { key: '', list: [], byKey: new Map(), names: NO_NAMES, publicNames: NO_NAMES, refs: {}, issues: [] }
 
 export function visibleTo(market: MarketDef, access: Access): boolean {
   return market.visibility === 'public' || access.allowed
@@ -153,23 +163,45 @@ interface Owned {
   auto: string[]
 }
 
+/** 被别的市场先占了的手写别名 */
+interface Dropped {
+  draft: Draft
+  text: string
+  key: string
+  owner: Draft
+}
+
+interface Claimed {
+  layers: Array<Map<string, Draft>>
+  owned: Map<Draft, Owned>
+  dropped: Dropped[]
+}
+
 function usableAutoName(key: string): boolean {
   return !!key && !RESERVED.has(key) && !/^[\d\s.,]+$/.test(key)
 }
 
 /** 名称 → 手写别名 → 自动别名，先到先得；自动别名碰上名称或手写别名时不生效 */
-function claimNames(drafts: Draft[]): { layers: Array<Map<string, Draft>>; owned: Map<Draft, Owned> } {
+function claimNames(drafts: Draft[]): Claimed {
   const names = new Map<string, Draft>()
   const hand = new Map<string, Draft>()
   const auto = new Map<string, Draft>()
   const owned = new Map<Draft, Owned>(drafts.map((d) => [d, { hand: [], auto: [] }]))
-  const taken = (key: string) => names.has(key) || hand.has(key) || auto.has(key)
+  const dropped: Dropped[] = []
+  const ownerOf = (key: string) => names.get(key) ?? hand.get(key) ?? auto.get(key)
+  const taken = (key: string) => !!ownerOf(key)
 
   for (const d of drafts) names.set(marketKey(d.setting.name), d)
   for (const d of drafts) {
     for (const alias of d.setting.aliases) {
       const key = marketKey(alias)
-      if (!key || taken(key)) continue
+      if (!key) continue
+      const owner = ownerOf(key)
+      if (owner) {
+        // 自己的名称、自己写重的别名不算被占
+        if (owner !== d) dropped.push({ draft: d, text: alias, key, owner })
+        continue
+      }
       hand.set(key, d)
       owned.get(d)!.hand.push(alias)
     }
@@ -191,7 +223,32 @@ function claimNames(drafts: Draft[]): { layers: Array<Map<string, Draft>>; owned
     }
     return out
   }
-  return { layers: [names, hand, auto, compact(names), compact(hand), compact(auto)], owned }
+  return { layers: [names, hand, auto, compact(names), compact(hand), compact(auto)], owned, dropped }
+}
+
+function nameSet(claimed: Claimed, defs: Map<Draft, MarketDef>): NameSet {
+  const layers = claimed.layers.map((layer) => new Map([...layer].map(([k, d]) => [k, defs.get(d)!])))
+  let maxWords = 0
+  for (const layer of layers.slice(0, 3)) {
+    for (const k of layer.keys()) maxWords = Math.max(maxWords, k.split(' ').length)
+  }
+  return { layers, maxWords }
+}
+
+/**
+ * 手写的别名在全部市场里被别的市场先占了：报告。公开市场只被只在授权群的市场占了时，其他群里照样认它。
+ * 星系名不报：几个市场在同一个星系很正常，星系名归表里第一个
+ */
+function reportDropped(dropped: readonly Dropped[], publicClaimed: Claimed, issues: ConfigIssue[]): void {
+  for (const { draft, text, key, owner } of dropped) {
+    const name = draft.setting.name
+    const publicOwner = publicClaimed.layers.slice(0, 3).map((layer) => layer.get(key)).find((d) => d)
+    const result = publicOwner === draft ? `只在看不到 ${owner.setting.name} 的群和私聊里认作 ${name}` : '已跳过'
+    issues.push({
+      section: 'markets', row: draft.setting.row, field: 'aliases',
+      message: `市场 ${name} 的别名「${text}」和市场 ${owner.setting.name} 重复，${result}`,
+    })
+  }
 }
 
 /**
@@ -229,7 +286,7 @@ function resolveRefs(settings: Settings, built: Built): void {
       if (ref.whenEmpty === 'base') built.refs[field] = fallback
       continue
     }
-    const found = findIn(built.layers, ref.ref)
+    const found = findIn(built.names.layers, ref.ref)
     if (found) {
       built.refs[field] = found
       continue
@@ -250,7 +307,10 @@ function buildRegistry(settings: Settings, data: DataSet, located: ReadonlyMap<s
     else issues.push({ section: 'markets', row: m.row, field: result.field, message: result.message })
   }
 
-  const { layers: draftLayers, owned } = claimNames(drafts)
+  const claimed = claimNames(drafts)
+  const publicClaimed = claimNames(drafts.filter((d) => d.setting.visibility === 'public'))
+  reportDropped(claimed.dropped, publicClaimed, issues)
+  const { owned } = claimed
   // 先建可变的对象：默认列表要等基准市场认出来以后才知道
   const defs = new Map<Draft, MarketDef>()
   for (const d of drafts) {
@@ -279,14 +339,11 @@ function buildRegistry(settings: Settings, data: DataSet, located: ReadonlyMap<s
     key,
     list,
     byKey: new Map(list.map((m) => [m.key, m])),
-    layers: draftLayers.map((layer) => new Map([...layer].map(([k, d]) => [k, defs.get(d)!]))),
-    maxWords: 0,
+    names: nameSet(claimed, defs),
+    publicNames: nameSet(publicClaimed, defs),
     refs: {},
     firstPublic: drafts.map((d) => defs.get(d)!).find((m) => m.visibility === 'public'),
     issues,
-  }
-  for (const layer of built.layers.slice(0, 3)) {
-    for (const k of layer.keys()) built.maxWords = Math.max(built.maxWords, k.split(' ').length)
   }
   resolveRefs(settings, built)
 
@@ -325,11 +382,11 @@ class Registry implements ManagedMarketRegistry {
   }
 
   match(token: string, access: Access): MarketDef | null {
-    return findIn(this.state().layers, token, (m) => visibleTo(m, access)) ?? null
+    return findIn(this.namesFor(access).layers, token, (m) => visibleTo(m, access)) ?? null
   }
 
   split(text: string, access: Access, items: ItemResolver, scope: Scope): MarketSplit {
-    return splitMarket(text, { match: (phrase) => this.match(phrase, access), maxWords: this.state().maxWords, items, scope })
+    return splitMarket(text, { match: (phrase) => this.match(phrase, access), maxWords: this.namesFor(access).maxWords, items, scope })
   }
 
   get(key: string): MarketDef | undefined {
@@ -358,6 +415,12 @@ class Registry implements ManagedMarketRegistry {
     this.located.set(key, systemId)
     this.revision++
     return true
+  }
+
+  /** 授权的群和私聊用全部市场的名字，其他的只用公开市场的（和 visibleTo 一致） */
+  private namesFor(access: Access): NameSet {
+    const built = this.state()
+    return access.allowed ? built.names : built.publicNames
   }
 
   private state(): Built {

@@ -147,6 +147,62 @@ describe('MarketRegistry: names and aliases', () => {
   })
 })
 
+describe('MarketRegistry: names of markets only allowed groups can see', () => {
+  // 只在授权群的两个市场排在前面：一个占了 Jita 4-4 的手写别名和星系名，一个的名称就是 Jita 4-4 的手写别名
+  const markets = [
+    { name: '秘密星系', type: 'system', location: 'Jita', visibility: 'allowed', aliases: '大市场' },
+    { name: '前哨', type: 'structure', location: String(STRUCTURE_A), system: 'NIH-02' },
+    { ...PRESET_MARKETS[0], aliases: '4-4, 大市场, 前哨' },
+    ...PRESET_MARKETS.slice(1),
+  ]
+  const r = registry({ markets })
+  const DIRECT = { ...PUBLIC, channelId: 'private:u1', isDirect: true }
+
+  it('other groups and private chats still find the public market by those names', () => {
+    for (const access of [PUBLIC, DIRECT]) {
+      for (const token of ['大市场', '前哨', 'Jita', '吉他', '4-4']) expect(r.match(token, access)?.key, token).toBe('jita 4-4')
+      expect(r.match('秘密星系', access)).toBeNull()
+    }
+  })
+
+  it('allowed groups keep today\'s behaviour: the market listed first owns the name', () => {
+    expect(r.match('大市场', ALLOWED)?.key).toBe('秘密星系')
+    expect(r.match('Jita', ALLOWED)?.key).toBe('秘密星系')
+    expect(r.match('前哨', ALLOWED)?.key).toBe('前哨')
+    expect(r.match('4-4', ALLOWED)?.key).toBe('jita 4-4')
+    expect(r.get('jita 4-4')?.aliases).toEqual(['4-4'])
+  })
+
+  it('splits by the names the group can use', () => {
+    const raven = item(638, 'Raven', '乌鸦级')
+    const items = fakeResolver({ 乌鸦级: unique(raven) })
+    expect(r.split('大市场 乌鸦级', PUBLIC, items, 'market')).toEqual({ market: r.get('jita 4-4'), rest: '乌鸦级' })
+    expect(r.split('吉他 乌鸦级', DIRECT, items, 'market')).toEqual({ market: r.get('jita 4-4'), rest: '乌鸦级' })
+    expect(r.split('大市场 乌鸦级', ALLOWED, items, 'market')).toEqual({ market: r.get('秘密星系'), rest: '乌鸦级' })
+  })
+
+  it('reports the shadowed hand-written aliases, not the shared system names', () => {
+    expect(r.issues()).toEqual([
+      { section: 'markets', row: 3, field: 'aliases', message: '市场 Jita 4-4 的别名「大市场」和市场 秘密星系 重复，只在看不到 秘密星系 的群和私聊里认作 Jita 4-4' },
+      { section: 'markets', row: 3, field: 'aliases', message: '市场 Jita 4-4 的别名「前哨」和市场 前哨 重复，只在看不到 前哨 的群和私聊里认作 Jita 4-4' },
+    ])
+  })
+
+  it('a hidden market listed later with a hand alias equal to a public system name does not shadow it either', () => {
+    const r2 = registry({ markets: [...PRESET_MARKETS, { name: '联盟市场A', aliases: '吉他', type: 'structure', location: String(STRUCTURE_A), system: 'NIH-02' }] })
+    expect(r2.match('吉他', PUBLIC)?.key).toBe('jita 4-4')
+    expect(r2.match('吉他', ALLOWED)?.key).toBe('联盟市场a')
+    expect(r2.issues()).toEqual([])
+  })
+
+  it('config references still use every market', () => {
+    const r2 = registry({ markets, price: { baseMarket: '大市场' } })
+    expect(r2.base()?.key).toBe('秘密星系')
+    // 本群看不到时悄悄改用第一个公开市场
+    expect(r2.configured('price.baseMarket', PUBLIC)?.key).toBe('jita 4-4')
+  })
+})
+
 describe('MarketRegistry: market references in the config', () => {
   it('resolves references written as a system name once the data is loaded', () => {
     // 本地认不出「吉他」，normalize 把第一个公开市场（Amarr）当成了默认列表里的那个
