@@ -3,6 +3,17 @@
 /** 配置里不允许的内网后缀 */
 const LOCAL_SUFFIXES = ['.local', '.internal', '.lan', '.home.arpa', '.localdomain', '.localhost']
 const BLOCKED_DOMAINS = ['zkillboard.com']
+/** 公共 DNS 服务：任何名字都能解析到任意地址（含 127.0.0.1），等同内网 */
+const WILDCARD_DNS_DOMAINS = [
+  'nip.io', 'sslip.io', 'xip.io', 'traefik.me', 'localtest.me', 'lvh.me', 'vcap.me',
+  'lacolhost.com', '1u.ms', 'rbndr.us', 'rebind.it', 'rebind.network',
+]
+/** 公共托管域名：任何人都能在下面开网站，只能填具体的子域名 */
+const SHARED_HOSTING_SUFFIXES = [
+  'github.io', 'gitlab.io', 'pages.dev', 'workers.dev', 'vercel.app', 'netlify.app', 'herokuapp.com',
+  'web.app', 'firebaseapp.com', 'appspot.com', 'blogspot.com', 'cloudfront.net', 'azurewebsites.net',
+  'glitch.me', 'onrender.com', 'fly.dev', 'surge.sh', 'ngrok.io', 'ngrok-free.app', 'trycloudflare.com',
+]
 
 const LABEL = '[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?'
 const DOMAIN = new RegExp(`^(?:${LABEL}\\.)+${LABEL}$`)
@@ -94,6 +105,7 @@ export function isPrivateNetworkHost(input: string): boolean {
   const octets = ipv4Octets(canonical)
   if (octets) return privateV4(octets)
   if (!canonical.includes('.')) return true
+  if (WILDCARD_DNS_DOMAINS.some((d) => hostMatches(canonical, d))) return true
   return LOCAL_SUFFIXES.some((s) => canonical.endsWith(s) || canonical === s.slice(1))
 }
 
@@ -123,6 +135,8 @@ export function checkConfigHost(input: string): ConfigHostCheck {
   if (host === 'localhost' || host.endsWith('.localhost')) return { ok: false, reason: '不能填本机地址' }
   if (!host.includes('.')) return { ok: false, reason: '域名要带点，不能是单段名字' }
   if (LOCAL_SUFFIXES.some((s) => host.endsWith(s) || host === s.slice(1))) return { ok: false, reason: '不能填内网域名' }
+  if (WILDCARD_DNS_DOMAINS.some((d) => hostMatches(host, d))) return { ok: false, reason: '这个域名可以解析到任意地址（包括内网），不能用' }
+  if (SHARED_HOSTING_SUFFIXES.includes(host)) return { ok: false, reason: '这是公共托管域名，任何人都能在下面开网站，请填具体的子域名（例如 xxx.github.io）' }
   if (BLOCKED_DOMAINS.some((d) => hostMatches(host, d))) return { ok: false, reason: '暂不支持 zKillboard，以后会另做' }
   if (host.length > 253 || !DOMAIN.test(host)) return { ok: false, reason: '域名写法不对' }
   return note ? { ok: true, host, note } : { ok: true, host }
