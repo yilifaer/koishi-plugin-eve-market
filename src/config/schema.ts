@@ -1,7 +1,7 @@
 import { Schema } from 'koishi'
 import { FORMULA_DEFAULTS } from '../core/industry'
 import type {
-  Clickable, Lang, ListPriceDisplayMode, MarketType, NumberStyle, OutputMode, PriceDisplayMode, PriceSide, Visibility,
+  Clickable, JaniceWho, Lang, ListPriceDisplayMode, MarketType, NumberStyle, OutputMode, PriceDisplayMode, PriceSide, Visibility,
 } from '../core/types'
 import { INVALID_ROW_KEY } from './normalize'
 import {
@@ -137,6 +137,7 @@ export interface Config {
     dotlan: ShotSiteConfig
     custom: ShotCustomRow[]
   }
+  janice: { apiKey: string; who: JaniceWho }
   advanced: { manifestUrl: string; glossaryUrl: string; esiContact: string }
 }
 
@@ -444,6 +445,18 @@ export const Config: Schema<Config> = Schema.intersect([
         ].join('\n')),
     }).default({} as Config['screenshot']).loose(),
   }).description('截图'),
+
+  Schema.object({
+    janice: Schema.object({
+      apiKey: secret()
+        .description('Janice 的 API 密钥（向 Janice 网站申请）。只填在这里，不要发给任何人；它只会出现在发给 Janice 的请求头里，不会出现在回复、日志和「市场状态」里。留空 = 不开通，「估价」命令回复还没开通，Janice 链接只截图。'),
+      who: choice<JaniceWho>([
+        ['allowed', '授权群和授权私聊'],
+        ['all', '所有人'],
+        ['admins', '只有管理员'],
+      ]).default('allowed').loose().description('谁能用「估价」：授权群和授权私聊里的人 / 所有人 / 只有管理员。没有权限的人发 Janice 链接只会得到截图（如果截图开着）。'),
+    }).default({} as Config['janice']).loose(),
+  }).description('Janice 估价'),
 
   Schema.object({
     advanced: Schema.object({

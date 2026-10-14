@@ -115,10 +115,12 @@ export class FakeJanice {
   appraisals = new Map<string, unknown>()
   /** 下 N 个请求依次出的故障（用完恢复正常） */
   faults: JaniceFault[] = []
+  /** 回应之前先等它（测慢提示：外面放行以后才回正常内容） */
+  hold?: Promise<void>
   private held: http.ServerResponse[] = []
 
   async start() {
-    this.server = http.createServer((req, res) => this.handle(req, res))
+    this.server = http.createServer((req, res) => void this.handle(req, res))
     await new Promise<void>((resolve) => this.server.listen(0, '127.0.0.1', resolve))
     this.base = `http://127.0.0.1:${(this.server.address() as AddressInfo).port}`
     return this
@@ -140,7 +142,7 @@ export class FakeJanice {
     return this.requests.filter((r) => pattern.test(r.path)).length
   }
 
-  private handle(req: http.IncomingMessage, res: http.ServerResponse) {
+  private async handle(req: http.IncomingMessage, res: http.ServerResponse) {
     const path = req.url ?? ''
     const key = req.headers['x-apikey']
     this.requests.push({
@@ -149,6 +151,7 @@ export class FakeJanice {
       userAgent: req.headers['user-agent'],
       accept: req.headers.accept,
     })
+    await this.hold
     const fault = this.faults.shift()
     if (fault) return this.fault(fault, res)
     const m = /^\/api\/rest\/v2\/appraisal\/([A-Za-z0-9]+)$/.exec(path)

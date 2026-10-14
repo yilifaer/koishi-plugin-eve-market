@@ -1,4 +1,4 @@
-// 命令：查价、批量查价、走势、搜索、入侵、势力图、联盟势力图、战报、击杀、截图、服务器状态、翻译（中英对照）、本群ID、
+// 命令：查价、批量查价、走势、搜索、入侵、势力图、联盟势力图、战报、击杀、估价、截图、服务器状态、翻译（中英对照）、本群ID、
 // 制造、制造比价、反应，帮助（隐藏的 eve-market.help）、管理员的市场状态、市场授权、样式自检和截图测试，
 // 以及后置的中间件（截图和击杀链接自动识别、裸物品名、兜底）。
 
@@ -10,6 +10,7 @@ import { registerGroupId } from './group-id'
 import { registerHelp } from './help'
 import { registerIncursion } from './incursion'
 import { registerIndustry } from './industry'
+import { registerJanice } from './janice'
 import { registerKill } from './kill'
 import { registerMaps } from './map'
 import { registerPrice } from './price'
@@ -31,6 +32,7 @@ export function registerCommands(commands: CommandContext): void {
   registerMaps(commands)
   registerBr(commands)
   registerKill(commands)
+  registerJanice(commands)
   registerShot(commands)
   registerShotProbe(commands)
   registerServerStatus(commands)

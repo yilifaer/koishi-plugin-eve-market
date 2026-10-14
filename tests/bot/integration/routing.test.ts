@@ -238,7 +238,7 @@ describe('fallback (§2.18)', () => {
     const e = await start()
     const sent = await e.h.group('')
     expect(sent).toHaveLength(1)
-    expect(sent[0].markdown).toBe('**EVE 市场助手 · 欧服**\n\n**价格**\n\n- 查价 乌鸦级：默认市场的出售、中间、收购价\n- 查价 Jita PLEX*500：指定市场和数量\n- 批量查价：粘贴清单或装配，算总价\n- 走势 乌鸦级：近 30 天价格图')
+    expect(sent[0].markdown).toBe('**EVE 市场助手 · 欧服**\n\n**价格**\n\n- 查价 乌鸦级：默认市场的出售、中间、收购价\n- 查价 Jita PLEX*500：指定市场和数量\n- 批量查价：粘贴清单或装配，算总价\n- 估价 + Janice 估价链接：读出三个价格和物品清单（直接 @我 发链接也行）\n- 走势 乌鸦级：近 30 天价格图')
   })
 
   it('an exact item name is priced; a market and quantity in front work too', async () => {

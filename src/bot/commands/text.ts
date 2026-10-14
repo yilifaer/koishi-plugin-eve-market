@@ -181,3 +181,22 @@ export const KILL = {
   brButton: 'BR 战报',
   warbeaconButton: 'Warbeacon 战报',
 } as const
+
+/** Janice 估价；回复里从不写网址，市场名、物品名由调用方先转义 */
+export const JANICE = {
+  usageTitle: '**估价用法**',
+  hint: '⏳ 正在读取 Janice 估价…',
+  notEnabled: 'Janice 估价还没开通（管理员要在控制台填 Janice 的 API 密钥）',
+  denied: (who: 'allowed' | 'admins') => who === 'admins'
+    ? 'Janice 估价现在只有管理员能用。'
+    : 'Janice 估价只对授权的群和私聊开放。',
+  notLink: (batch: string) => `估价 后面写 Janice 估价链接；要估一段清单请用「${batch}」`,
+  notFound: 'Janice 上没有这份估价（编号不对或已经过期）',
+  badKey: 'Janice 估价暂时用不了',
+  busy: (minutes: number) => `Janice 现在太忙，${minutes} 分钟后再试。`,
+  down: (batch: string) => `Janice 暂时连不上，可以先用「${batch}」。`,
+  badResponse: 'Janice 返回的内容读不懂，请稍后再试。',
+  slow: 'Janice 回应太慢，请稍后再试。',
+  guessed: '比例读不到，按 100% 显示',
+  shotButton: '网页截图',
+} as const

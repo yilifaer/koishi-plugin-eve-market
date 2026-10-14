@@ -44,7 +44,7 @@ export const REPLY_BUDGET_DIRECT = 3
 export type CommandId =
   | 'price' | 'batch' | 'trend' | 'search' | 'incursion' | 'influenceMap' | 'coalitionMap' | 'br' | 'shot' | 'shotProbe'
   | 'serverStatus' | 'translate' | 'help' | 'groupId' | 'marketStatus' | 'marketAuth' | 'selfTest'
-  | 'manufacture' | 'manufactureCompare' | 'reaction' | 'kill'
+  | 'manufacture' | 'manufactureCompare' | 'reaction' | 'kill' | 'janice'
 
 /** 命令的默认名字（注册时用；按钮、提示里的名字在渲染时从已注册的 Command 取） */
 export const COMMAND_NAMES: Record<CommandId, string> = {
@@ -69,6 +69,7 @@ export const COMMAND_NAMES: Record<CommandId, string> = {
   manufactureCompare: '制造比价',
   reaction: '反应',
   kill: '击杀',
+  janice: '估价',
 }
 
 /** 「翻译」的别名 */
@@ -103,6 +104,8 @@ export const COMMAND_BUDGET: Record<CommandId, { normal: number; max: number }> 
   reaction: { normal: 1, max: 2 },
   // 卡片 1 条，慢提示再占 1 条
   kill: { normal: 1, max: 2 },
+  // 群里：慢提示 + 卡片 + 价格 + 清单 + 截图最多 4 条（单聊 3 条，截图改成按钮）
+  janice: { normal: 4, max: 4 },
 }
 /** 「制造 … 材料」：卡片 + 可复制的清单，大型旗舰拆分时最多 4 条（单聊 3） */
 export const MATERIALS_BUDGET = { normal: 2, max: 4 }
@@ -560,3 +563,5 @@ export const JANICE_THROTTLE_DEFAULT_SEC = 60
 export const JANICE_BAD_KEY_WARN_MIN = 10
 /** 排队等着发的请求最多几个，满了直接按忙处理 */
 export const JANICE_MAX_QUEUE = 10
+/** 命令最多等 Janice 多久（排队加请求）；超时回复「太慢」，读取在后台继续并写进缓存 */
+export const JANICE_WAIT_MS = 20_000

@@ -61,6 +61,7 @@ function priceLines(env: HelpEnv): Line[] {
     lines.push({ text: `${nameOf(env, 'price')} ${exampleMarket(env)}PLEX*500：指定市场和数量` })
   }
   if (has(env, 'batch')) lines.push({ text: `${nameOf(env, 'batch')}：粘贴清单或装配，算总价` })
+  if (has(env, 'janice')) lines.push({ text: `${nameOf(env, 'janice')} + Janice 估价链接：读出三个价格和物品清单（直接 @我 发链接也行）` })
   if (has(env, 'trend')) lines.push({ text: `${nameOf(env, 'trend')} 乌鸦级：近 30 天价格图` })
   return lines
 }

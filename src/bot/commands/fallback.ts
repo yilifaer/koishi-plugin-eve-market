@@ -1,11 +1,12 @@
 // 后置中间件（§2.18、§3.7.5）：命令没匹配到、消息 @ 了机器人时才轮到。
-// 带截图名单里网站的链接（该网站「自动截图」开着）→ 改成「战报 <链接>」（战报类网站）或「截图 <链接>」再走一遍命令；其次是 zKill / 欧服击杀链接（控制台「截图」里的开关开着）→ 「击杀 <编号>」；只 @ 没内容 → 简短帮助；内容精确命中一个物品 → 改成「查价 …」再走一遍命令；短的 → 「没看懂…你是想查价吗？」；
+// 带 Janice 估价链接（控制台填了密钥、有权限）→ 「估价」；带截图名单里网站的链接（该网站「自动截图」开着）→ 改成「战报 <链接>」（战报类网站）或「截图 <链接>」再走一遍命令；其次是 zKill / 欧服击杀链接（控制台「截图」里的开关开着）→ 「击杀 <编号>」；只 @ 没内容 → 简短帮助；内容精确命中一个物品 → 改成「查价 …」再走一遍命令；短的 → 「没看懂…你是想查价吗？」；
 // 长的（闲聊）→ 一句「发「帮助」看我能做什么」。回复了就不再调用 next()（否则 Koishi 的「您要找的是不是」还会再发一条）。
 // 没有待办时的「取消」、只有图片没有文字的消息不回复，交给后面的处理者；别人发的管理命令（对他来说不存在）也不回复。
 
 import { h } from 'koishi'
 import type { Context, Next, Session } from 'koishi'
 import { BARE_ITEM_QUERY, CANCEL_WORD, FALLBACK_SHORT_CHARS } from '../../constants'
+import { findJaniceLink, janicePageUrl } from '../../core/janice'
 import { findKillLink } from '../../core/killmail'
 import { isFailure } from '../../core/types'
 import { buildAccess, isAddressed } from '../scope'
@@ -14,6 +15,7 @@ import { hasUrl, safeEcho } from '../view/escape'
 import { emptyCard, invoke, sendCard } from './context'
 import type { CommandContext, Invocation } from './context'
 import { shortCard } from './help'
+import { janiceAllowed } from './janice'
 import { killCommandArg } from './kill'
 import { sitesOf } from './shot-send'
 import { SAY } from './text'
@@ -89,6 +91,14 @@ async function runFallback(commands: CommandContext, session: Session, next: Nex
   if (commands.registry.hiddenFrom(session, content)) return
   if (!content) {
     await invoke(commands, 'help', session, (inv) => sendCard(inv, shortCard(inv)).then(() => undefined))
+    return
+  }
+  // Janice 估价链接：控制台填了密钥、这个人有权限时走「估价」（它自己会带上截图）；其他情况落到下面的网站截图。每条消息只处理一次
+  const janiceLink = findJaniceLink(content)
+  const janiceCommand = janiceLink ? commands.registry.get('janice') : undefined
+  if (janiceLink && janiceCommand && commands.settings.janice.apiKey
+    && janiceAllowed(commands.settings.janice, buildAccess(session, commands.settings.access))) {
+    await session.execute({ command: janiceCommand, args: [janicePageUrl(janiceLink.code)], options: {} })
     return
   }
   // 网站截图自动识别：每条消息只取第一个能截的链接，只看「自动截图」开着的网站；

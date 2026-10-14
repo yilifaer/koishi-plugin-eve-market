@@ -80,7 +80,7 @@ const dateOf = (p: ZonedParts) => `${p.year}-${pad(p.month)}-${pad(p.day)}`
 const clockOf = (p: ZonedParts) => `${pad(p.hour)}:${pad(p.minute)}`
 
 /** EVE 2026-10-14 12:34 · 北京 20:34；北京时间跨了午夜时北京时间前面加日期 */
-function timeText(ms: number): string {
+export function timeText(ms: number): string {
   const eve = zonedParts(ms, 'UTC')
   const cn = zonedParts(ms, TIMEZONE)
   const date = dateOf(eve) === dateOf(cn) ? '' : `${dateOf(cn)} `

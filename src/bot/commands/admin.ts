@@ -69,6 +69,7 @@ async function runStatus(inv: Invocation, refresh: boolean): Promise<void> {
   const view = {
     ...env(inv),
     status: inv.core.status(),
+    janice: inv.core.janice.status(),
     conflicts: inv.commands.registry.conflicts(),
     breaker: sendState(inv.commands.store).breaker.status(inv.commands.clock.now()),
     ...inv.commands.watchdog ? { watchdog: inv.commands.watchdog() } : {},

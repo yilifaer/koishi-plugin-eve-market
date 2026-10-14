@@ -5,7 +5,7 @@
 import { DATA_STALE_WARN_DAYS, TIMEZONE } from '../../constants'
 import { describeIssue } from '../../core'
 import { formatClock } from '../../core/format'
-import type { AuthProfileStatus, CoreStatus, DataOrigin, MarketSourceStatus, MarketType, SafeErrorInfo } from '../../core/types'
+import type { AuthProfileStatus, CoreStatus, DataOrigin, FailureCode, JaniceStatus, MarketSourceStatus, MarketType, SafeErrorInfo } from '../../core/types'
 import type { CommandConflict } from '../register'
 import { describeConflict } from '../register'
 import type { BreakerStatus } from '../send/breaker'
@@ -63,6 +63,8 @@ export interface StatusView extends StatusEnv {
   status: CoreStatus
   conflicts: readonly CommandConflict[]
   breaker: BreakerStatus
+  /** Janice 估价的状态（只有「填了没有」和最近一次异常，没有密钥）；不写 = 不显示这一行 */
+  janice?: JaniceStatus
   /** 官方机器人和看门狗；不写 = 不显示这一行 */
   watchdog?: WatchdogStatus
   /** 「市场状态 刷新」的结果，写在标题下面 */
@@ -222,6 +224,22 @@ function esiLine(status: CoreStatus, now: number): Line[] {
   return lines
 }
 
+const JANICE_ERRORS: Partial<Record<FailureCode, string>> = {
+  JANICE_BAD_KEY: '密钥被 Janice 拒绝了，请检查控制台里的 API 密钥',
+  JANICE_BUSY: '被 Janice 限流',
+  JANICE_DOWN: '连不上 Janice',
+  JANICE_BAD_RESPONSE: 'Janice 返回的内容读不懂',
+}
+
+/** Janice 估价：已开通 / 未开通；最近一次异常写原因和时间（红色），从不带密钥 */
+function janiceLine(j: JaniceStatus | undefined, now: number): Line[] {
+  if (!j) return []
+  if (!j.configured) return [{ text: 'Janice 估价：未开通（控制台没填 API 密钥）' }]
+  if (!j.lastError) return [{ text: 'Janice 估价：已开通' }]
+  const why = JANICE_ERRORS[j.lastError.code] ?? '出过错'
+  return [{ text: `Janice 估价：已开通 · 🔴 ${why}（${clock(j.lastError.at, now)}）` }]
+}
+
 function messageLine(breaker: BreakerStatus, now: number): Line {
   const head = breaker.open && breaker.until !== null
     ? `🔴 Markdown 连续发送失败，${clock(breaker.until, now)} 之前改发纯文字`
@@ -266,6 +284,7 @@ export function statusCard(view: StatusView, actions: Action[][]): Card {
     ...dataLines(status, now),
     ...industryLines(status, now),
     ...esiLine(status, now),
+    ...janiceLine(view.janice, now),
     ...botLine(view.watchdog, now),
     messageLine(view.breaker, now),
     ...listLines('配置问题', status.issues.map((i) => escapeMarkdown(describeIssue(i)))),
