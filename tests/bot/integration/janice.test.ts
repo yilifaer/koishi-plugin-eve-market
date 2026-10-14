@@ -17,6 +17,7 @@ const KEY = 'test-janice-key-0000'
 const CODE = 'AbC123'
 const LINK = `https://janice.e-351.com/a/${CODE}`
 const PAGE = LINK
+const BR = `https://br.evetools.org/br/${'1'.padStart(24, '0')}`
 
 let env: PluginEnv | undefined
 let janice: FakeJanice | undefined
@@ -106,6 +107,23 @@ describe('估价: group order', () => {
     expect(sent[1].text).toBe('出售 10000\n收购 8000\n中间 9000')
     expect(janice!.count()).toBe(1)
     expect(browser.pages).toHaveLength(1)
+  })
+
+  it('BR link first, Janice link second: only the first one is handled (screenshot of the BR)', async () => {
+    const browser = new FakeBrowser()
+    const e = await start({ puppeteer: browser })
+    await e.h.group(`${BR} 还有 ${LINK}`)
+    expect(browser.pages.map((p) => p.url)).toEqual([BR])
+    expect(janice!.count()).toBe(0)
+  })
+
+  it('Janice link first, BR link second: the appraisal wins', async () => {
+    const browser = new FakeBrowser()
+    const e = await start({ puppeteer: browser })
+    const sent = await e.h.group(`${LINK} 还有 ${BR}`)
+    expect(sent).toHaveLength(4)
+    expect(janice!.count()).toBe(1)
+    expect(browser.pages.map((p) => p.url)).toEqual([PAGE])
   })
 
   it('a link with a subpage still reads by code', async () => {

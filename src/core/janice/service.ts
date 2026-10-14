@@ -38,14 +38,16 @@ const VARIANTS: readonly JanicePricingVariant[] = ['immediate', 'top5percent']
 const DESIGNATIONS: readonly JaniceDesignation[] = ['appraisal', 'wtb', 'wts']
 
 function pick<T extends string>(allowed: readonly T[], value: string | null): T | null {
-  return allowed.find((a) => a === value) ?? null
+  const lower = value?.toLowerCase()
+  return allowed.find((a) => a === lower) ?? null
 }
 
 /** 乘比例后向下取整到整 ISK；乘出来差一点点就是整数的（0.93 × 1000 = 930.0000000000001 一类）按整数算 */
 function scaled(value: number, percentage: number): number {
   const x = value * percentage
   const near = Math.round(x)
-  return Math.abs(x - near) < 1e-6 ? near : Math.floor(x)
+  // 容差随数值变大：千亿级的 double 间距已经超过 1e-6；相对 1e-15 约几个间距，仍远小于 1 ISK
+  return Math.abs(x - near) <= Math.max(1e-6, Math.abs(x) * 1e-15) ? near : Math.floor(x)
 }
 
 function scaledPrices(p: JaniceRawPrices, percentage: number): JanicePrices {

@@ -102,6 +102,11 @@ describe('get: the view', () => {
     expect(view(await service.get('AbC123'))).toMatchObject({ pricing: null, variant: null, designation: null, market: null })
   })
 
+  it('compares enum values case-insensitively', async () => {
+    fake.add('AbC123', { pricing: 'Buy', pricingVariant: 'Top5Percent', designation: 'WTB' })
+    expect(view(await service.get('AbC123'))).toMatchObject({ pricing: 'buy', variant: 'top5percent', designation: 'wtb' })
+  })
+
   it('skips malformed item rows instead of failing', async () => {
     fake.add('AbC123', { items: [{ amount: 5 }, null, 'x', { amount: 0, itemType: { eid: 34, name: 'Tritanium' } }, ...rawJanice('AbC123').items] })
     expect(view(await service.get('AbC123')).items).toHaveLength(2)
@@ -123,6 +128,22 @@ describe('get: pricePercentage', () => {
   it('does not lose a whole ISK to float error', async () => {
     fake.add('AbC123', { pricePercentage: 0.29 }, [{ eid: 34, name: 'Tritanium', amount: 1, sell: 100, buy: 100, split: 100 }])
     expect(view(await service.get('AbC123')).totals.sell).toBe(29)
+  })
+
+  it('keeps the exact integer for totals of hundreds of billions', async () => {
+    // 几项相加后差一点点：225367226999.99997 × 0.93 = 209591521109.99997，固定 1e-6 的容差会少 1 ISK
+    const big = (n: number) => [{ eid: 34, name: 'Tritanium', amount: 1, sell: n, buy: n, split: n }]
+    fake.add('AbC123', { pricePercentage: 0.93 }, big(225367226999.99997))
+    expect(view(await service.get('AbC123')).totals).toEqual({ sell: 209591521110, buy: 209591521110, split: 209591521110 })
+    fake.add('AbC124', { pricePercentage: 0.93 }, big(330599270799.99994))
+    expect(view(await service.get('AbC124')).totals.sell).toBe(307457321844)
+    fake.add('AbC125', { pricePercentage: 0.93 }, big(1e11))
+    expect(view(await service.get('AbC125')).totals.sell).toBe(93_000_000_000)
+  })
+
+  it('still floors a real fraction at large totals', async () => {
+    fake.add('AbC123', { pricePercentage: 1 }, [{ eid: 34, name: 'Tritanium', amount: 1, sell: 289505045780.9973, buy: 1, split: 1 }])
+    expect(view(await service.get('AbC123')).totals.sell).toBe(289505045780)
   })
 
   it('floors fractions, never rounds up', async () => {

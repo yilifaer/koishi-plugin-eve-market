@@ -93,17 +93,20 @@ async function runFallback(commands: CommandContext, session: Session, next: Nex
     await invoke(commands, 'help', session, (inv) => sendCard(inv, shortCard(inv)).then(() => undefined))
     return
   }
-  // Janice 估价链接：控制台填了密钥、这个人有权限时走「估价」（它自己会带上截图）；其他情况落到下面的网站截图。每条消息只处理一次
-  const janiceLink = findJaniceLink(content)
+  // 每条消息只处理第一个能截的链接：它是 Janice 链接、填了密钥、这个人有权限时走「估价」（它自己会带上截图）；
+  // 其他情况走网站截图（只看「自动截图」开着的网站）。战报类网站走「战报」（文案、额度和以前一样），其他走「截图」。传规范化后的地址
+  const sites = sitesOf(commands)
+  const first = sites.find(content, (s) => s.auto || s.kind === 'appraisal')
+  // Janice 在截图设置里关掉时它不在名单里，没有先后可比，仍按消息里的 Janice 链接走估价
+  const janiceListed = sites.sites.some((s) => s.kind === 'appraisal')
+  const janiceLink = janiceListed ? (first?.site.kind === 'appraisal' ? findJaniceLink(first.url) : null) : findJaniceLink(content)
   const janiceCommand = janiceLink ? commands.registry.get('janice') : undefined
   if (janiceLink && janiceCommand && commands.settings.janice.apiKey
     && janiceAllowed(commands.settings.janice, buildAccess(session, commands.settings.access))) {
     await session.execute({ command: janiceCommand, args: [janicePageUrl(janiceLink.code)], options: {} })
     return
   }
-  // 网站截图自动识别：每条消息只取第一个能截的链接，只看「自动截图」开着的网站；
-  // 战报类网站走「战报」（文案、额度和以前一样），其他走「截图」。传规范化后的地址
-  const site = sitesOf(commands).find(content, (s) => s.auto)
+  const site = first?.site.auto ? first : sites.find(content, (s) => s.auto)
   if (site) {
     const report = site.site.kind === 'battle-report' ? commands.registry.get('br') : undefined
     const command = report ?? commands.registry.get('shot')
