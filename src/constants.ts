@@ -412,6 +412,13 @@ export const BR_VIEWPORT_HEIGHT = 900
 /** 战报截图缓存最多几个链接（每个最多 2 张图） */
 export const BR_CACHE_MAX = 6
 
+/** 网站截图：每张图最高多少像素；最多几张（控制台里每个网站单独设 1–3）；自定义网站最多几行 */
+export const SHOT_SEGMENT_HEIGHT = 4000
+export const SHOT_MAX_IMAGES = 3
+export const SHOT_CUSTOM_MAX = 10
+/** 截图器是否拦截跳出名单的跳转和打内网的请求（出问题时在这里一处关掉） */
+export const SHOT_NET_GUARD = true
+
 /** 势力图下载：超时和大小上限；超过 IMAGE_MAX_BYTES 的图片不发 */
 export const MAP_TIMEOUT_MS = 30000
 export const MAP_MAX_BYTES = 20 * 1024 * 1024

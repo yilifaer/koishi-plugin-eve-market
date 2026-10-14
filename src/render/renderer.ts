@@ -15,9 +15,14 @@ export type LoadEvent = 'load' | 'domcontentloaded' | 'networkidle0' | 'networki
 /** 开了请求拦截以后收到的网络请求 */
 export interface PageRequest {
   url(): string
-  abort(): Promise<void>
+  abort(errorCode?: string): Promise<void>
   continue(): Promise<void>
   isInterceptResolutionHandled?(): boolean
+  /** 下面几个只有网络守卫用到，puppeteer 的请求都有；假请求可以不写 */
+  isNavigationRequest?(): boolean
+  frame?(): unknown
+  redirectChain?(): unknown[]
+  resourceType?(): string
 }
 
 export interface ShotClip {
@@ -50,6 +55,8 @@ export interface RenderPage {
   /** 新版 puppeteer 返回 Uint8Array，旧版返回 Buffer；指定 base64 时是字符串 */
   screenshot(options?: ShotOptions): Promise<Uint8Array | string>
   close(): Promise<void>
+  /** 主框架（网络守卫用来区分主页面跳转和子框架；假页面可以不写） */
+  mainFrame?(): unknown
 }
 
 /** 开一个新页面 */
@@ -126,7 +133,7 @@ export function toImageBuffer(data: Uint8Array | string): Buffer {
 
 // ------------------------------------------------------------------ 页面队列
 
-/** local：本地自包含 HTML（走势图、自检用图）；br：打开外部网站（战报） */
+/** local：本地自包含 HTML（走势图、自检用图）；br：打开外部网站（战报和其他截图网站，名字沿用） */
 export type PageKind = 'local' | 'br'
 
 interface Waiter {

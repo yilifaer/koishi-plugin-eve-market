@@ -11,5 +11,11 @@ export type { ChartInput, ChartOptions, ChartPalette, TrendSeries, TrendStats } 
 export { chartKey, chartPage, createChartImages, renderChart } from './chart-page'
 export type { ChartImages, ChartPageOptions, ChartShotOptions } from './chart-page'
 export * from './br'
+export { SiteScreenshotter } from './site-shot'
+export type {
+  ShotDiag, ShotFailureReason, ShotOutcome, ShotRequestOptions, ShotTarget, ShotTicket, SiteScreenshotterOptions, SiteShot,
+} from './site-shot'
+export { installNetGuard } from './net-guard'
+export type { NetGuard, NetGuardOptions, NetGuardStats } from './net-guard'
 export { BAND_COLORS, BAND_NAMES, bandsPng } from './bands'
 export type { BandsOptions } from './bands'
