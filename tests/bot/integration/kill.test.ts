@@ -137,7 +137,7 @@ describe('击杀: card', () => {
   it('flags go behind the title; unknown names say 未知', async () => {
     const e = await start({ withNames: false, zkb: { npc: true, solo: true, awox: true } })
     const text = card(await e.h.group(`击杀 ${KILL}`))
-    expect(text.split('\n')[0]).toBe('**击杀 #131234567 · NPC · 单杀 · 内鬼**')
+    expect(text.split('\n')[0]).toBe('**击杀 #131234567 · NPC · 单杀 · 间谍击杀**')
     expect(text).toContain('- 受害者：未知')
     expect(text).toContain('最后一击 未知（乌鸦级海军型 Raven Navy Issue）')
   })

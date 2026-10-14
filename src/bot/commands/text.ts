@@ -165,7 +165,7 @@ export const KILL = {
   reportHint: '⏳ 正在查询击杀并截取战报，一般要 10–30 秒…',
   badArg: '击杀编号不对：请写 zKill 击杀链接，或者纯数字的击杀编号。',
   unknown: '未知',
-  flags: { npc: 'NPC', solo: '单杀', awox: '内鬼' },
+  flags: { npc: 'NPC', solo: '单杀', awox: '间谍击杀' },
   notFound: 'zKill 上没有这个击杀（编号不对，或者刚发生还没收录，过几分钟再试）。',
   notFoundEsi: '欧服接口里没有这个击杀（链接不对，或者击杀还没收录）。',
   zkillDown: 'zKill 暂时连不上，请稍后再试。',
