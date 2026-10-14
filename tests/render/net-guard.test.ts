@@ -135,4 +135,20 @@ describe('installNetGuard', () => {
     expect(await send(req('https://cdn.example.net/a.js', { throws: true }))).toEqual([])
     expect(await send(req('http://127.0.0.1/x', { throws: true }))).toEqual([])
   })
+
+  it('closes a popup and counts it as a blocked redirect', async () => {
+    let popupHandler: ((popup: { close(): Promise<void> } | null) => void) | undefined
+    const page = {
+      setRequestInterception: async () => undefined,
+      on: () => undefined,
+      onPopup: (h: typeof popupHandler) => { popupHandler = h },
+      mainFrame: () => MAIN,
+    } as unknown as RenderPage
+    const guard = await installNetGuard(page, { allowHosts: ['br.example.com'] })
+    let closed = 0
+    popupHandler!({ close: async () => { closed++ } })
+    popupHandler!(null)
+    expect(closed).toBe(1)
+    expect(guard.stats.blockedRedirects).toBe(2)
+  })
 })

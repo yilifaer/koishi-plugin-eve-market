@@ -395,6 +395,27 @@ describe('puppeteerPages', () => {
   })
 })
 
+describe('puppeteerPages with a browser context', () => {
+  it('opens each page in its own context and closes the context with the page', async () => {
+    const events: string[] = []
+    const page = new FakePage()
+    page.close = async () => { events.push('page') }
+    const context = { newPage: async () => page, close: async () => { events.push('context') } }
+    const service = { page: async () => { throw new Error('should not be used') }, browser: { createBrowserContext: async () => context } }
+    const opened = await puppeteerPages(() => service)()!()
+    await opened.close()
+    expect(events).toEqual(['page', 'context'])
+  })
+
+  it('closes the context when the page cannot be opened', async () => {
+    let closed = 0
+    const context = { newPage: async () => { throw new Error('boom') }, close: async () => { closed++ } }
+    const service = { page: async () => new FakePage(), browser: { createBrowserContext: async () => context } }
+    await expect(puppeteerPages(() => service)()!()).rejects.toThrow('boom')
+    expect(closed).toBe(1)
+  })
+})
+
 describe('imageSize', () => {
   it('reads PNG and JPEG headers', () => {
     expect(imageSize(png(1600, 900))).toEqual({ width: 1600, height: 900 })

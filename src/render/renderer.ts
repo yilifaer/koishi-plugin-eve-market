@@ -55,6 +55,8 @@ export interface RenderPage {
   /** 新版 puppeteer 返回 Uint8Array，旧版返回 Buffer；指定 base64 时是字符串 */
   screenshot(options?: ShotOptions): Promise<Uint8Array | string>
   close(): Promise<void>
+  /** 页面弹出的新窗口（网络守卫用来关掉它；假页面可以不写） */
+  onPopup?(handler: (popup: { close(): Promise<void> } | null) => void): unknown
   /** 主框架（网络守卫用来区分主页面跳转和子框架；假页面可以不写） */
   mainFrame?(): unknown
 }
@@ -68,10 +70,30 @@ export type PageFactory = () => Promise<RenderPage>
  */
 export function puppeteerPages(get: () => unknown): () => PageFactory | undefined {
   return () => {
-    const service = get() as { page?: unknown } | null | undefined
+    const service = get() as { page?: unknown; browser?: unknown } | null | undefined
     if (!service || typeof service.page !== 'function') return undefined
     const open = service.page as (this: unknown) => Promise<RenderPage>
-    return () => open.call(service)
+    return async () => {
+      // 每个页面一个独立上下文：关页面时整个上下文一起关，弹窗、Cookie、Service Worker 都不会留下
+      const browser = service.browser as { createBrowserContext?: () => Promise<{ newPage(): Promise<RenderPage>; close(): Promise<void> }> } | undefined
+      if (typeof browser?.createBrowserContext !== 'function') return open.call(service)
+      const context = await browser.createBrowserContext()
+      try {
+        const page = await context.newPage()
+        const close = page.close.bind(page)
+        page.close = async () => {
+          try {
+            await close()
+          } finally {
+            await context.close()
+          }
+        }
+        return page
+      } catch (error) {
+        await context.close().catch(() => undefined)
+        throw error
+      }
+    }
   }
 }
 

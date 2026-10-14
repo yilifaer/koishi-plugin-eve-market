@@ -54,6 +54,7 @@ describe.skipIf(!HAS_CHROME)('SiteScreenshotter net guard with Chromium and loca
       screenshot: (options) => typed.screenshot(options),
       close: () => typed.close(),
       mainFrame: () => page.mainFrame(),
+      onPopup: (handler) => page.on('popup', handler),
     }
   }
 
@@ -74,6 +75,7 @@ describe.skipIf(!HAS_CHROME)('SiteScreenshotter net guard with Chromium and loca
       if (path === '/challenge') return html(BODY, 'Just a moment...')
       if (path === '/private-image') return html(`${BODY}<img src="http://127.0.0.1:${port}/x.png" width="10" height="10">`)
       if (path === '/script-redirect') return html(`${BODY}<script>setTimeout(function () { location.href = 'https://example.invalid/' }, 50)</script>`)
+      if (path === '/popup') return html(`${BODY}<script>window.open('http://127.0.0.1:${port}/popped')</script>`)
       if (path === '/ok') return html(BODY)
       res.writeHead(404)
       res.end()
@@ -133,5 +135,13 @@ describe.skipIf(!HAS_CHROME)('SiteScreenshotter net guard with Chromium and loca
     const outcome = await run('/script-redirect')
     expect(outcome).toMatchObject({ ok: false, reason: 'redirect', diag: { blockedRedirects: 1 } })
     expect(opened.at(-1)!.isClosed()).toBe(true)
+  }, 30000)
+
+  it('a popup is closed, counted as a redirect, and leaves no extra page behind', async () => {
+    const before = (await browser.pages()).length
+    const outcome = await run('/popup')
+    expect(outcome).toMatchObject({ ok: false, reason: 'redirect' })
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    expect((await browser.pages()).length).toBe(before)
   }, 30000)
 })
