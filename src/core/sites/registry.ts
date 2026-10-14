@@ -91,8 +91,9 @@ export function createSiteRegistry(input: SiteRegistryInput): SiteRegistry {
     hosts,
     find(text, filter) {
       if (!rules.length) return null
+      // 只看前 20 个链接起点，防止恶意长文本拖慢
       const starts = schemeStarts(text)
-      for (let i = 0; i < starts.length; i++) {
+      for (let i = 0; i < Math.min(starts.length, 20); i++) {
         const link = linkAt(text, starts[i], i + 1 < starts.length ? starts[i + 1] : text.length, filter)
         if (link) return link
       }

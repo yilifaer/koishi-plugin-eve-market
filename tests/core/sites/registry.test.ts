@@ -281,4 +281,12 @@ describe('registry', () => {
     reg.find(inputs[1])
     expect(performance.now() - started).toBeLessThan(50)
   })
+
+  it('stays fast on long runs of scheme starts and closing brackets', () => {
+    const reg = all()
+    const text = ('http://'.repeat(70) + ')'.repeat(505) + ' ').repeat(Math.ceil(20000 / 582)).slice(0, 20000)
+    const t0 = performance.now()
+    reg.find(text)
+    expect(performance.now() - t0).toBeLessThan(50)
+  })
 })

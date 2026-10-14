@@ -28,13 +28,23 @@ export function schemeStarts(text: string): number[] {
 }
 
 function trimTail(input: string): string {
-  let s = input
-  for (;;) {
-    const c = s[s.length - 1]
-    if (c && '.,;:!?\'"]}'.includes(c)) s = s.slice(0, -1)
-    else if (c === ')' && s.split(')').length > s.split('(').length) s = s.slice(0, -1)
-    else return s
+  let end = input.length
+  // 括号个数只数一次，之后随去掉的字符递减，保持线性
+  let open = 0
+  let close = 0
+  for (const ch of input) {
+    if (ch === '(') open++
+    else if (ch === ')') close++
   }
+  while (end > 0) {
+    const c = input[end - 1]
+    if ('.,;:!?\'"]}'.includes(c)) end--
+    else if (c === ')' && close > open) {
+      close--
+      end--
+    } else break
+  }
+  return input.slice(0, end)
 }
 
 /**
