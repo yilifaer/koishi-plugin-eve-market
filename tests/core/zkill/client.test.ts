@@ -270,9 +270,73 @@ describe('ZkillClient challenge / 403', () => {
     expect(logger.lines.warn).toHaveLength(2)
   })
 
+  it.each([
+    ['404 HTML page', { status: 404, headers: { 'Content-Type': 'text/html' }, body: '<html>Not found</html>' }],
+    ['502 HTML page', { status: 502, headers: { 'Content-Type': 'text/html' }, body: '<html>Bad gateway</html>' }],
+    ['503 HTML page without Cloudflare marks', { status: 503, body: '<html>Maintenance</html>' }],
+  ] as Array<[string, Step]>)('a %s is a plain failure: no pause, others still go through', async (_, step) => {
+    const client = make({ minIntervalMs: 0 })
+    http.script = [step]
+    expect(failure(await client.getJson(A)).kind).toBe('unavailable')
+    expect((await client.getJson(B)).ok).toBe(true)
+    expect(http.calls).toHaveLength(2)
+  })
+
+  it('a 503 with cf-ray and a Just a moment page is blocked', async () => {
+    const client = make()
+    http.script = [{ status: 503, headers: { 'cf-ray': 'abc' }, body: html }]
+    expect(failure(await client.getJson(A)).kind).toBe('blocked')
+  })
+
   it('does not take a JSON body that merely contains < for a challenge', async () => {
     http.script = [{ body: [{ name: '<b>' }] }]
     expect((await make().getJson(A)).ok).toBe(true)
+  })
+})
+
+describe('ZkillClient queue limit', () => {
+  it('turns new urls away when the queue is full, but still merges the same url', async () => {
+    const client = make()
+    http.fallback = { body: [{ n: 1 }] }
+    const flights = Array.from({ length: 10 }, (_, i) => client.getJson(`/api/killID/${100 + i}/`))
+    expect(client.pending).toBe(10)
+    expect(failure(await client.getJson('/api/killID/999/')).kind).toBe('unavailable')
+    const same = client.getJson('/api/killID/100/')
+    expect(client.pending).toBe(10)
+    await time.advance(20_000)
+    expect((await same).ok).toBe(true)
+    await Promise.all(flights)
+    expect(http.calls).toHaveLength(10)
+    expect(client.pending).toBe(0)
+  })
+
+  it('a queued request whose only caller timed out is never sent', async () => {
+    const client = make()
+    http.fallback = { body: [{ n: 1 }] }
+    const first = client.getJson(A)
+    await flush()
+    const second = client.getJson(B, { deadlineMs: 200 })
+    await time.advance(300)
+    expect(failure(await second).kind).toBe('deadline')
+    await time.advance(5000)
+    await first
+    expect(http.calls.map((c) => c.url)).toEqual([`${BASE}${A}`])
+    expect(client.pending).toBe(0)
+  })
+
+  it('keeps the request when another caller is still waiting for it', async () => {
+    const client = make()
+    http.fallback = { body: [{ n: 1 }] }
+    const first = client.getJson(A)
+    await flush()
+    const impatient = client.getJson(B, { deadlineMs: 200 })
+    const patient = client.getJson(B)
+    await time.advance(300)
+    expect(failure(await impatient).kind).toBe('deadline')
+    await time.advance(5000)
+    await first
+    expect((await patient).ok).toBe(true)
+    expect(http.calls).toHaveLength(2)
   })
 })
 

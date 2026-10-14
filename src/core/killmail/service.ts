@@ -109,7 +109,7 @@ class Service implements KillService {
     }
 
     const final = mail.attackers.find((a) => a.finalBlow) ?? null
-    const names = await this.names([mail.victim, ...(final ? [final] : [])])
+    const { names, complete } = await this.names([mail.victim, ...(final ? [final] : [])])
     const summary: KillSummary = {
       killId,
       time: mail.time,
@@ -122,7 +122,8 @@ class Service implements KillService {
       flags: { npc: zkb?.npc ?? false, solo: zkb?.solo ?? false, awox: zkb?.awox ?? false },
       abyssal: String(mail.systemId).startsWith(ABYSS_SYSTEM_PREFIX),
     }
-    if (!userHash) this.cache.set(killId, summary)
+    // 名字没查全就不缓存，免得慢一次就整天显示未知
+    if (!userHash && complete) this.cache.set(killId, summary)
     logger.debug('击杀 %d 摘要已取到', killId)
     return summary
   }
@@ -145,17 +146,17 @@ class Service implements KillService {
   // ------------------------------------------------------------------ 名字
 
   /** 受害者和最后一击的人物、军团、联盟名字；只等一小会儿，失败就都是未知 */
-  private async names(parties: EsiKillParty[]): Promise<Map<number, string>> {
+  private async names(parties: EsiKillParty[]): Promise<{ names: Map<number, string>; complete: boolean }> {
     const ids = [...new Set(parties.flatMap((p) => [p.characterId, p.corporationId, p.allianceId]).filter((id): id is number => id !== null))]
     const out = new Map<number, string>()
-    if (!ids.length) return out
+    if (!ids.length) return { names: out, complete: true }
     try {
       const { value } = await this.deps.esi.names(ids, { deadlineMs: this.deps.namesWaitMs ?? KILL_NAMES_WAIT_MS })
       for (const n of value) out.set(n.id, n.name)
     } catch (e) {
       this.deps.logger.debug('击杀名字查不到，写未知：%s', describeError(e))
     }
-    return out
+    return { names: out, complete: ids.every((id) => out.has(id)) }
   }
 
   private party(p: EsiKillParty, names: Map<number, string>): KillParty {

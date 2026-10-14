@@ -302,6 +302,18 @@ describe('KillService.summary: names', () => {
     expect(s.victim.character).toBeNull()
   })
 
+  it('does not cache a summary with missing names: the next call asks for names again', async () => {
+    const m = await make()
+    m.env.fake.fault('POST', /^\/universe\/names$/, { status: 500 }, 2)
+    expect(ok(await m.service.summary(KILL)).victim.character).toBeNull()
+    m.env.clock.advance(60_000)
+    expect(ok(await m.service.summary(KILL)).victim.character).toBe('Some Pilot')
+    expect(esiCalls(m, /^\/universe\/names$/)).toBeGreaterThan(1)
+    const again = esiCalls(m, /^\/universe\/names$/)
+    expect(ok(await m.service.summary(KILL)).victim.character).toBe('Some Pilot')
+    expect(esiCalls(m, /^\/universe\/names$/)).toBe(again)
+  })
+
   it('leaves a name null when ESI does not know the id (whole lookup is 404)', async () => {
     const m = await make()
     m.env.fake.names.delete(2112000101)

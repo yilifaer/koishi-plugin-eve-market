@@ -9,6 +9,7 @@ import {
   ZKILL_API_BASE,
   ZKILL_BLOCKED_PAUSE_MIN,
   ZKILL_MAX_BYTES,
+  ZKILL_MAX_QUEUE,
   ZKILL_MIN_INTERVAL_MS,
   ZKILL_THROTTLE_DEFAULT_SEC,
   ZKILL_TIMEOUT_MS,
@@ -86,10 +87,24 @@ function isEmpty(json: unknown): boolean {
   return typeof json === 'object' && Object.keys(json).length === 0
 }
 
-function isChallenge(status: number, contentType: string | undefined, body: Buffer, mitigated: string | undefined): boolean {
-  if (status === 403 || mitigated) return true
+/** 排队项：同一地址的多个调用方共用，所有调用方都放弃且还没发出时取消 */
+interface QueueItem {
+  waiters: number
+  started: boolean
+  cancel: AbortController
+}
+
+function looksHtml(contentType: string | undefined, body: Buffer): boolean {
   if (contentType && /html/i.test(contentType)) return true
   return body.subarray(0, 64).toString('utf8').trimStart().startsWith('<')
+}
+
+/** 403、cf-mitigated、200 的 HTML、带 Cloudflare 特征的 503 才算拦截；其他 HTML 错误页（404、502 等）只是普通失败 */
+function isChallenge(status: number, contentType: string | undefined, body: Buffer, mitigated: string | undefined, cfRay: string | undefined): boolean {
+  if (status === 403 || mitigated) return true
+  if (!looksHtml(contentType, body)) return false
+  if (status >= 200 && status < 300) return true
+  return status === 503 && (!!cfRay || /just a moment|cloudflare/i.test(body.subarray(0, 4096).toString('utf8')))
 }
 
 export class ZkillClient {
@@ -100,6 +115,7 @@ export class ZkillClient {
   private readonly life = new AbortController()
   private tail: Promise<unknown> = Promise.resolve()
   private queued = 0
+  private readonly items = new Map<string, QueueItem>()
 
   constructor(private readonly ports: ZkillPorts, private readonly options: ZkillClientOptions) {
     this.base = (options.base ?? ZKILL_API_BASE).replace(/\/+$/, '')
@@ -139,10 +155,21 @@ export class ZkillClient {
     if (remembered) return remembered
     const paused = this.paused()
     if (paused) return paused
-    const flight = this.flights.run(url, () => this.enqueue(url, opts))
+    let item = this.items.get(url)
+    if (!item) {
+      if (this.queued >= ZKILL_MAX_QUEUE) return this.fail('unavailable', 'zKill 排队已满，稍后再试')
+      item = { waiters: 0, started: false, cancel: new AbortController() }
+      this.items.set(url, item)
+    }
+    const mine = item
+    mine.waiters++
+    const flight = this.flights.run(url, () => this.enqueue(url, opts, mine))
     if (opts.deadlineMs === undefined) return flight
     const waited = await withDeadline(flight, opts.deadlineMs, this.ports.scheduler)
-    return waited.done ? waited.value : this.fail('deadline', `${opts.deadlineMs} 毫秒内没有结果`)
+    if (waited.done) return waited.value
+    // 没人再等、还没轮到发：不发了
+    if (--mine.waiters <= 0 && !mine.started) mine.cancel.abort()
+    return this.fail('deadline', `${opts.deadlineMs} 毫秒内没有结果`)
   }
 
   /** 调用方发现缓存里的内容解析不了：丢掉它，并把这个地址当作失败记一小段时间 */
@@ -169,29 +196,36 @@ export class ZkillClient {
   }
 
   /** 全局只有一个队列：前一个结束（并隔够时间）以后才发下一个 */
-  private enqueue(url: string, opts: ZkillGetOptions): Promise<ZkillResult> {
+  private enqueue(url: string, opts: ZkillGetOptions, item: QueueItem): Promise<ZkillResult> {
     this.queued++
-    const run = this.tail.then(() => this.turn(url, opts)).finally(() => { this.queued-- })
+    const run = this.tail.then(() => this.turn(url, opts, item)).finally(() => {
+      this.queued--
+      this.items.delete(url)
+    })
     this.tail = run.catch(() => undefined)
     return run
   }
 
-  private async turn(url: string, opts: ZkillGetOptions): Promise<ZkillResult> {
+  private async turn(url: string, opts: ZkillGetOptions, item: QueueItem): Promise<ZkillResult> {
     const { clock, scheduler } = this.ports
     const { state } = this
+    const cancelled = () => this.fail('deadline', '调用方已放弃，没有发请求')
     if (this.stopped) return this.fail('aborted', '客户端已停止')
+    if (item.cancel.signal.aborted) return cancelled()
     const early = this.paused()
     if (early) return early
     const wait = state.lastEnd + this.minIntervalMs - clock.now()
     if (wait > 0) {
       try {
-        await sleep(scheduler, wait, this.life.signal)
+        await sleep(scheduler, wait, AbortSignal.any([this.life.signal, item.cancel.signal]))
       } catch {
-        return this.fail('aborted', '客户端已停止')
+        return this.stopped ? this.fail('aborted', '客户端已停止') : cancelled()
       }
     }
+    if (item.cancel.signal.aborted) return cancelled()
     const late = this.paused()
     if (late) return late
+    item.started = true
     try {
       return await this.send(url, opts)
     } finally {
@@ -222,7 +256,7 @@ export class ZkillClient {
       const retryAt = parseRetryAfter(res.header('retry-after'), now) ?? now + ZKILL_THROTTLE_DEFAULT_SEC * 1000
       return this.pause('throttled', retryAt, 'zKill 返回 429（请求太频繁）')
     }
-    if (isChallenge(res.status, res.header('content-type'), res.body, res.header('cf-mitigated'))) {
+    if (isChallenge(res.status, res.header('content-type'), res.body, res.header('cf-mitigated'), res.header('cf-ray'))) {
       return this.pause('blocked', now + ZKILL_BLOCKED_PAUSE_MIN * 60_000, `zKill 返回 ${res.status}（被拦截或验证页）`)
     }
     if (res.status < 200 || res.status >= 300) return this.unavailable(url, `HTTP ${res.status}`)

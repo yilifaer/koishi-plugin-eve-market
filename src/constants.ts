@@ -502,6 +502,8 @@ export const ZKILL_MAX_BYTES = 64 * 1024
 export const ZKILL_BLOCKED_PAUSE_MIN = 5
 /** 429 没有 Retry-After 时暂停多久 */
 export const ZKILL_THROTTLE_DEFAULT_SEC = 60
+/** 排队等着发的请求最多几个，满了新地址直接失败（防止群里连发链接排出长队） */
+export const ZKILL_MAX_QUEUE = 10
 
 /** 击杀编号最多几位 */
 export const KILL_ID_MAX_DIGITS = 12
