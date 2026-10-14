@@ -168,7 +168,14 @@ export class ZkillClient {
     const waited = await withDeadline(flight, opts.deadlineMs, this.ports.scheduler)
     if (waited.done) return waited.value
     // 没人再等、还没轮到发：不发了
-    if (--mine.waiters <= 0 && !mine.started) mine.cancel.abort()
+    if (--mine.waiters <= 0 && !mine.started) {
+      mine.cancel.abort()
+      // 立刻摘掉，免得同一地址的新调用合并到已取消的排队项上
+      if (this.items.get(url) === mine) {
+        this.items.delete(url)
+        this.flights.forget(url)
+      }
+    }
     return this.fail('deadline', `${opts.deadlineMs} 毫秒内没有结果`)
   }
 
@@ -200,7 +207,7 @@ export class ZkillClient {
     this.queued++
     const run = this.tail.then(() => this.turn(url, opts, item)).finally(() => {
       this.queued--
-      this.items.delete(url)
+      if (this.items.get(url) === item) this.items.delete(url)
     })
     this.tail = run.catch(() => undefined)
     return run

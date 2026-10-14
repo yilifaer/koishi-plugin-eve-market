@@ -12,6 +12,11 @@ export class SingleFlight<K, V> {
     return this.flights.has(key)
   }
 
+  /** 不再合并到这条进行中的调用（它自己照常跑完），之后的 run 会重新发起 */
+  forget(key: K) {
+    this.flights.delete(key)
+  }
+
   run(key: K, fn: () => Promise<V>): Promise<V> {
     const existing = this.flights.get(key)
     if (existing) return existing

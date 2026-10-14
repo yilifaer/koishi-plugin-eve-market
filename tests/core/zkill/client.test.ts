@@ -324,6 +324,25 @@ describe('ZkillClient queue limit', () => {
     expect(client.pending).toBe(0)
   })
 
+  it('a new caller of the same url after everyone gave up gets a real request', async () => {
+    const client = make()
+    http.fallback = { body: [{ n: 1 }] }
+    http.script = ['hang']
+    const first = client.getJson(A)
+    await flush()
+    const second = client.getJson(B, { deadlineMs: 200 })
+    await time.advance(300)
+    expect(failure(await second).kind).toBe('deadline')
+    // A 还卡着，B 的排队项还没轮到：这时新调用不能合并到已放弃的项上
+    const third = client.getJson(B)
+    http.releaseAll()
+    await time.advance(5000)
+    await first
+    expect((await third).ok).toBe(true)
+    expect(http.calls.map((c) => c.url)).toEqual([`${BASE}${A}`, `${BASE}${B}`])
+    expect(client.pending).toBe(0)
+  })
+
   it('keeps the request when another caller is still waiting for it', async () => {
     const client = make()
     http.fallback = { body: [{ n: 1 }] }
