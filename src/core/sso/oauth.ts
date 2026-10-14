@@ -302,9 +302,14 @@ export class SsoClient {
         body: new URLSearchParams(form).toString(),
         timeoutMs: this.o.timeoutMs ?? ESI_TIMEOUT_MS,
         maxBytes: MAX_RESPONSE_BYTES,
+        // 带着 Secret Key 和 refresh token，不跟随重定向
+        redirect: 'manual',
       })
     } catch (e) {
       throw transportError(e, route, all)
+    }
+    if (res.status >= 300 && res.status < 400) {
+      throw new SsoError('unavailable', `HTTP ${res.status}：不跟随跳转`, { route, status: res.status, code: 'redirect' })
     }
     if (res.status < 200 || res.status >= 300) throw httpError(res, route, all)
     return res

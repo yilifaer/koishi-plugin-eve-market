@@ -547,6 +547,8 @@ export class EsiClient {
         timeoutMs,
         maxBytes: this.options.maxResponseBytes ?? ESI_MAX_RESPONSE_BYTES,
         signal: link.signal,
+        // 带 token 时不跟随重定向，免得授权头被带到别的主机；3xx 在 httpError 里当失败
+        ...token ? { redirect: 'manual' as const } : {},
       })
     } catch (e) {
       if (timedOut && !this.stopped) throw new NetworkError('timeout', `${timeoutMs} 毫秒没有响应`)
@@ -655,6 +657,10 @@ export class EsiClient {
   }
 
   private httpError(req: EsiRequest<unknown>, res: HttpResponse, token: string | undefined): EsiError {
+    if (res.status >= 300 && res.status < 400) {
+      // 不读响应体和 Location，只说是跳转
+      return new EsiError('http', `HTTP ${res.status}：不跟随跳转`, { route: req.route, status: res.status, code: 'redirect' })
+    }
     const secrets = token ? [token] : []
     const detail = errorBody(res.body)
     const message = redact(detail ? `HTTP ${res.status}: ${detail}` : `HTTP ${res.status}`, secrets).slice(0, 200)
