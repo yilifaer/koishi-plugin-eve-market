@@ -36,6 +36,9 @@ export interface KillServiceDeps {
 
 const HOUR_MS = 3_600_000
 const MINUTE_MS = 60_000
+/** 已解析的 zKill 击杀暂存：条数少、时间短 */
+const PARSED_MAX = 20
+const PARSED_MINUTES = 10
 
 const p2 = (n: number) => String(n).padStart(2, '0')
 
@@ -78,9 +81,12 @@ export function createKillService(deps: KillServiceDeps): KillService {
 
 class Service implements KillService {
   private readonly cache: LruCache<number, KillSummary>
+  /** zKill 已解析但 ESI 还没取成功的击杀：短时间内重试不再问 zKill（原始 JSON 不缓存） */
+  private readonly parsedMails: LruCache<number, Exclude<ReturnType<typeof parseZkillKill>, 'not-found'>>
   private readonly flights = new SingleFlight<string, KillSummary | CoreFailure>()
 
   constructor(private readonly deps: KillServiceDeps) {
+    this.parsedMails = new LruCache({ max: PARSED_MAX, ttlMs: PARSED_MINUTES * MINUTE_MS, now: () => deps.clock.now() })
     this.cache = new LruCache({ max: KILL_CACHE_MAX, ttlMs: KILL_CACHE_HOURS * HOUR_MS, now: () => deps.clock.now() })
   }
 
@@ -115,20 +121,25 @@ class Service implements KillService {
     let zkb: { value: number | null; npc: boolean; solo: boolean; awox: boolean } | null = null
     let mail: EsiKillmail | null = null
     if (!hash) {
-      const path = zkillKillPath(killId)
-      const got = await zkill.getJson(path, {
-        ttlMs: KILL_CACHE_HOURS * HOUR_MS,
-        emptyTtlMs: KILL_NEGATIVE_CACHE_MIN * MINUTE_MS,
-        maxBytes: KILL_ZKILL_MAX_BYTES,
-      })
-      if (!got.ok) return this.logged(killId, fromZkill(got))
-      let parsed
-      try {
-        parsed = parseZkillKill(got.json, killId)
-      } catch (e) {
-        return this.logged(killId, fromZkill(zkill.markBad(path, `响应格式不对：${describeError(e)}`)))
+      let parsed = this.parsedMails.get(killId)
+      if (!parsed) {
+        const path = zkillKillPath(killId)
+        const got = await zkill.getJson(path, {
+          // 原始 JSON 不缓存（最大 2 MB），摘要由本服务缓存；只留空结果的负缓存
+          emptyTtlMs: KILL_NEGATIVE_CACHE_MIN * MINUTE_MS,
+          maxBytes: KILL_ZKILL_MAX_BYTES,
+        })
+        if (!got.ok) return this.logged(killId, fromZkill(got))
+        let result
+        try {
+          result = parseZkillKill(got.json, killId)
+        } catch (e) {
+          return this.logged(killId, fromZkill(zkill.markBad(path, `响应格式不对：${describeError(e)}`)))
+        }
+        if (result === 'not-found') return this.logged(killId, failure('KILL_NOT_FOUND', 'zKill 上没有这个击杀'))
+        parsed = result
+        this.parsedMails.set(killId, parsed)
       }
-      if (parsed === 'not-found') return this.logged(killId, failure('KILL_NOT_FOUND', 'zKill 上没有这个击杀'))
       hash = parsed.hash
       zkb = parsed
       mail = parsed.body
@@ -158,7 +169,10 @@ class Service implements KillService {
       abyssal: String(mail.systemId).startsWith(ABYSS_SYSTEM_PREFIX),
     }
     // 名字没查全就不缓存，免得慢一次就整天显示未知
-    if (!userHash && complete) this.cache.set(killId, summary)
+    if (!userHash && complete) {
+      this.cache.set(killId, summary)
+      this.parsedMails.delete(killId)
+    }
     logger.debug('击杀 %d 摘要已取到', killId)
     return summary
   }
