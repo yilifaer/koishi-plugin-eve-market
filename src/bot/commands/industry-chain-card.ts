@@ -8,6 +8,7 @@ import type { ChainLeaf, ChainNode, ChainResult, FormattedPrice, IndustryResult,
 import type { Action, Card, Line } from '../view/card'
 import { escapeMarkdown, scrubUrls } from '../view/escape'
 import { emptyCard } from './context'
+import { downtimeWarnings } from './downtime'
 import { priceSource, productTitle } from './industry-card'
 import type { IndustryEnv } from './industry-card'
 import { ALCHEMY_NAME, CH, LAYER_NAME, MODE_NAME } from './industry-chain-text'
@@ -53,8 +54,9 @@ function footer(env: IndustryEnv, r: ChainResult): string {
 }
 
 /** 引擎写的警告（已经是完整的句子） */
-function engineWarnings(r: ChainResult): string[] {
-  return r.warnings.map((w) => esc(scrubUrls(w)))
+function engineWarnings(env: IndustryEnv, r: ChainResult): string[] {
+  const gap = r.totals.missingPrices > 0 || !!r.materialPrices?.unavailable
+  return [...downtimeWarnings(env.now, gap), ...r.warnings.map((w) => esc(scrubUrls(w)))]
 }
 
 /** 去掉空白后的地点和建筑：「星点甲 甲莱塔卢」 */
@@ -243,7 +245,7 @@ export function overviewCard(env: IndustryEnv, r: ChainResult, actions: Action[]
   })
   const tail = [...valueLines(env, r), ...timeLines(env, r)]
   if (tail.length) card.sections.push({ style: 'plain', lines: tail })
-  card.warnings = [...noteWarning(r), ...engineWarnings(r)]
+  card.warnings = [...noteWarning(r), ...engineWarnings(env, r)]
   card.footer = footer(env, r)
   card.actions = actions
   return card
@@ -296,7 +298,7 @@ export function detailsCard(env: IndustryEnv, r: ChainResult, actions: Action[][
     if (list.length) card.sections.push({ heading: layerHeading(r, layer, list), style: 'ordered', lines: list.flatMap((n) => nodeLines(env, n)) })
   }
   if (r.nodes.some((n) => n.surplus > 0)) card.sections.push({ style: 'plain', lines: [{ text: CH.detailNote }] })
-  card.warnings = [...noteWarning(r), ...engineWarnings(r)]
+  card.warnings = [...noteWarning(r), ...engineWarnings(env, r)]
   card.footer = footer(env, r)
   card.actions = actions
   return card
@@ -353,7 +355,7 @@ export function materialsChainCard(env: IndustryEnv, r: ChainResult, copies: str
   }
   if (copies.length) lines.push({ text: IND.pasteNext })
   card.sections.push({ style: 'plain', lines })
-  card.warnings = engineWarnings(r)
+  card.warnings = engineWarnings(env, r)
   card.footer = footer(env, r)
   card.actions = actions
   card.copyBlocks = copies

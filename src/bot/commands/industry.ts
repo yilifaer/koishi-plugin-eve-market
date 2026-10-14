@@ -55,7 +55,7 @@ export function registerIndustry(commands: CommandContext): void {
 const textOf = (args: unknown) => (typeof args === 'string' ? args.replace(/\s+/g, ' ').trim() : '')
 
 function env(inv: Invocation): IndustryEnv {
-  return { core: inv.core, display: inv.commands.settings.display, industry: inv.commands.settings.industry, direct: inv.access.isDirect }
+  return { core: inv.core, display: inv.commands.settings.display, industry: inv.commands.settings.industry, direct: inv.access.isDirect, now: inv.commands.clock.now() }
 }
 
 // ------------------------------------------------------------------ 按钮里的命令

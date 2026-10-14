@@ -13,6 +13,7 @@ import type {
 import type { Action, Card, Choice, CommandRef, Line } from '../view/card'
 import { escapeMarkdown, scrubUrls } from '../view/escape'
 import { emptyCard } from './context'
+import { downtimeWarnings } from './downtime'
 import { IND, SIDE_NONE, SIDE_SHORT } from './industry-text'
 import { amountText, itemName } from './names'
 import { SEC_CLASS, SIDE_LABEL } from './text'
@@ -23,6 +24,8 @@ export interface IndustryEnv {
   industry: Pick<IndustrySettings, 'sellFeesPct'>
   /** 私聊里不说「本群」 */
   direct?: boolean
+  /** 现在的时间（毫秒）；写了才会在每日维护时间里提示价格暂时取不到 */
+  now?: number
 }
 
 /** 舰船大类：数量单位写「艘」 */
@@ -82,9 +85,12 @@ function footer(env: IndustryEnv, r: IndustryResult, withIndices: boolean): stri
   return parts.join(' · ')
 }
 
+/** 有取不到的材料价格（缺价格，或者材料市场整个不可用） */
+const priceGap = (r: IndustryResult) => r.missingPrices > 0 || !!r.materialPrices?.unavailable
+
 /** 警告：结果自带的（已经是完整的句子），再加没有价格的材料 */
-function warningsOf(r: IndustryResult): string[] {
-  const out = r.warnings.map((w) => esc(scrubUrls(w)))
+function warningsOf(env: IndustryEnv, r: IndustryResult): string[] {
+  const out = [...downtimeWarnings(env.now, priceGap(r)), ...r.warnings.map((w) => esc(scrubUrls(w)))]
   const missing = r.materials.filter((m) => m.total === null)
   if (missing.length) {
     const names = missing.slice(0, MISSING_LISTED).map((m) => nameOf(m.item)).join('、')
@@ -259,7 +265,7 @@ function manufacturingBaseCard(env: IndustryEnv, r: IndustryResult, actions: Act
   const product = productLine(env, r)
   card.sections.push({ style: 'plain', lines: [...fallbackLine(env, r), ...product ? [product] : []] })
   card.sections.push({ style: 'plain', lines: [{ text: IND.baseNote }] })
-  card.warnings = warningsOf(r)
+  card.warnings = warningsOf(env, r)
   card.footer = footer(env, r, false)
   card.actions = actions
   return card
@@ -309,7 +315,7 @@ function reactionBaseCard(env: IndustryEnv, r: IndustryResult, actions: Action[]
   card.sections.push({ lines })
   const fallback = fallbackLine(env, r)
   if (fallback.length) card.sections.push({ style: 'plain', lines: fallback })
-  card.warnings = warningsOf(r)
+  card.warnings = warningsOf(env, r)
   card.footer = footer(env, r, false)
   card.actions = actions
   return card
@@ -351,7 +357,7 @@ export function resultCard(env: IndustryEnv, r: IndustryResult, activity: Indust
   const profit = profitLine(env, r)
   if (profit) tail.push(profit)
   if (tail.length) card.sections.push({ style: 'plain', lines: tail })
-  card.warnings = warningsOf(r)
+  card.warnings = warningsOf(env, r)
   card.footer = footer(env, r, true)
   card.actions = actions
   return card
@@ -389,7 +395,7 @@ export function materialsCard(env: IndustryEnv, r: IndustryResult, activity: Ind
   const lines: Line[] = [{ label: IND.materialsTotal, price: costPrice(env, r, r.materialCost), extra }, ...fallbackLine(env, r)]
   if (copies.length) lines.push({ text: IND.pasteNext })
   card.sections.push({ style: 'plain', lines })
-  card.warnings = warningsOf(r)
+  card.warnings = warningsOf(env, r)
   card.footer = footer(env, r, false)
   card.actions = actions
   card.copyBlocks = copies
@@ -482,7 +488,7 @@ export function compareCard(env: IndustryEnv, c: LocationComparison, actions: Ac
   card.sections.push({ style: 'plain', lines: tail })
   // 每个地点都一样的警告（T2 说明、市场不可用）只写一次
   const seen = new Set<string>()
-  for (const row of c.rows) for (const w of warningsOf(row.result)) seen.add(w)
+  for (const row of c.rows) for (const w of warningsOf(env, row.result)) seen.add(w)
   card.warnings = [...seen]
   if (first) card.footer = footer(env, first, true)
   card.actions = actions

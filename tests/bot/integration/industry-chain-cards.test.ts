@@ -165,6 +165,19 @@ function result(over: Partial<ChainResult> = {}): ChainResult {
 }
 
 describe('编出来的结果', () => {
+  it('during the daily maintenance a missing price adds one notice to each chain card', () => {
+    const notice = '⚠ EVE 每日维护中（北京时间 19:00 左右），价格暂时取不到，15 分钟后再试'
+    const at = (h: number): IndustryEnv => ({ ...env0, now: Date.UTC(2026, 9, 14, h, 10) })
+    const leaf: ChainLeaf = { item: TRIT, quantity: 500, offset: 0, unit: null, total: null, kind: 'raw' }
+    const r = result({ leaves: [leaf], totals: { ...result().totals, missingPrices: 1 } })
+    const count = (out: string) => out.split(notice).length - 1
+    for (const make of [overviewCard, (e: IndustryEnv, x: ChainResult) => detailsCard(e, x, []), (e: IndustryEnv, x: ChainResult) => materialsChainCard(e, x, [], [])]) {
+      expect(count(md(make(at(11), r, [], false) as never))).toBe(1)
+      expect(count(md(make(at(12), r, [], false) as never))).toBe(0)
+    }
+    expect(count(md(overviewCard(at(11), result(), [], false)))).toBe(0)
+  })
+
   it('the fastest-time line appears only when parallel lines beat the serial total', () => {
     const same = md(overviewCard(env0, result(), [], false))
     expect(same).toContain('按每层 1 条生产线算，多开可以更快')

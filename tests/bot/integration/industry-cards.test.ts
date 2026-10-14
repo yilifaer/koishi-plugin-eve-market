@@ -263,6 +263,22 @@ describe('compare card (§2.7)', () => {
     expect(out).not.toContain('利润率')
   })
 
+  it('during the daily maintenance a missing price adds one notice to the result, materials and compare cards; nothing otherwise', () => {
+    const notice = '⚠ EVE 每日维护中（北京时间 19:00 左右），价格暂时取不到，15 分钟后再试'
+    const at = (h: number, m: number) => ({ ...env(), now: Date.UTC(2026, 9, 14, h, m) })
+    const missing = example({ missingPrices: 1 })
+    const count = (out: string) => out.split(notice).length - 1
+    expect(count(md(resultCard(at(11, 10), missing, 'manufacturing', [])))).toBe(1)
+    expect(count(md(materialsCard(at(11, 10), missing, 'manufacturing', [], [])))).toBe(1)
+    const c = comparison()
+    c.rows = c.rows.map((row) => ({ ...row, result: { ...row.result, missingPrices: 1 } }))
+    expect(count(md(compareCard(at(11, 10), c, [])))).toBe(1)
+    // 时间窗外、价格都取到、没有时钟：不写
+    expect(count(md(resultCard(at(12, 0), missing, 'manufacturing', [])))).toBe(0)
+    expect(count(md(resultCard(at(11, 10), example(), 'manufacturing', [])))).toBe(0)
+    expect(count(md(resultCard(env(), missing, 'manufacturing', [])))).toBe(0)
+  })
+
   it('every row follows listPriceDisplayMode', () => {
     expect(md(compareCard(env(), comparison(), []))).toContain([
       '1. **XX-2 · 阿兹贝尔 💰最低**',

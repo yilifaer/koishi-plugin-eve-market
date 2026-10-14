@@ -14,6 +14,7 @@ import type {
 import type { Action, Card, Choice, Line, Section } from '../view/card'
 import { escapeMarkdown, safeEcho } from '../view/escape'
 import { emptyCard } from './context'
+import { downtimeWarnings } from './downtime'
 import { amountText, itemName, langOf, shortName } from './names'
 import { diffText, footerText } from './quotes'
 import { SIDE_LABEL } from './text'
@@ -26,6 +27,8 @@ export interface BatchEnv {
   commandName: string
   /** 「改用 Jita」：基准市场（本群看得到时） */
   base?: MarketDef
+  /** 现在的时间（毫秒）；写了才会在每日维护时间里提示价格暂时取不到 */
+  now?: number
 }
 
 export interface ResultOptions {
@@ -299,6 +302,7 @@ function headCard(env: BatchEnv, result: AppraisalResult, options: ResultOptions
   const subtotals = subtotalSection(env, result)
   if (subtotals) card.sections.push(subtotals)
   card.footer = footerText(env.core.format, result.dataTime, [`估价 #${result.id}`], `${escapeMarkdown(result.market.name)} `)
+  card.warnings = downtimeWarnings(env.now, result.noPrice.some((n) => n.reason !== 'no-orders'))
   card.notices = options.notices
   return card
 }

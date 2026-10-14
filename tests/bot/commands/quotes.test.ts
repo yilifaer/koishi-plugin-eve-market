@@ -24,7 +24,7 @@ describe('quoteView', () => {
   it('markets without usable data show one sentence instead of prices', () => {
     const problem = (extra: Parameters<typeof q>[0]) => quoteView(q(extra), NOW, NOW).problem
     expect(problem({ status: 'unavailable', reason: 'esi_error' })).toBe('⚠ ESI 暂时没有响应')
-    expect(problem({ status: 'unavailable', reason: 'esi_error', downtime: true })).toBe('⚠ DT 维护中，暂时取不到价格')
+    expect(problem({ status: 'unavailable', reason: 'esi_error', downtime: true })).toBe('⚠ 暂时取不到价格')
     expect(problem({ status: 'unavailable', reason: 'sync_error' })).toBe('⚠ 市场数据暂时不可用（同步异常）')
     expect(problem({ status: 'auth_error', reason: 'auth' })).toBe('⚠ 市场数据暂时不可用（ESI 授权或建筑访问权限异常）')
     // 还没授权：群友看到的和授权异常同一句话

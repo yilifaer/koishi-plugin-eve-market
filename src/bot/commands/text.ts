@@ -33,7 +33,9 @@ export const QUOTE = {
   syncError: (ago: string) => `⚠ ${ago}（同步异常）`,
   refreshing: (ago: string) => `⚠ ${ago}（正在刷新）`,
   esiDown: '⚠ ESI 暂时没有响应',
-  downtime: '⚠ DT 维护中，暂时取不到价格',
+  downtime: '⚠ 暂时取不到价格',
+  /** 卡片上取不到价格、又正好在每日维护时间里时的一句话（不带 ⚠，警告行统一加） */
+  downtimeNotice: 'EVE 每日维护中（北京时间 19:00 左右），价格暂时取不到，15 分钟后再试',
   syncDown: '⚠ 市场数据暂时不可用（同步异常）',
   authDown: '⚠ 市场数据暂时不可用（ESI 授权或建筑访问权限异常）',
   firstSync: '⏳ 首次同步中，请稍后再查',

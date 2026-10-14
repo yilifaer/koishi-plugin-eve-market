@@ -62,6 +62,7 @@ function batchEnv(inv: Invocation): BatchEnv {
     display: inv.commands.settings.display,
     routes: inv.commands.settings.freight.routes,
     commandName: inv.commands.registry.name('batch'),
+    now: inv.commands.clock.now(),
   }
   if (base && inv.core.markets.visible(inv.access).some((m) => m.key === base.key)) env.base = base
   return env

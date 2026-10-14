@@ -9,6 +9,7 @@ import type { Action, Card, Line, Section } from '../view/card'
 import { escapeMarkdown } from '../view/escape'
 import { emptyCard } from './context'
 import { amountText, itemName, itemTitle, listPriceText } from './names'
+import { downtimeWarnings } from './downtime'
 import { diffMark, footerText, newestTime, quoteView, usableQuote } from './quotes'
 import { setName } from './resolution'
 import { QUOTE } from './text'
@@ -109,6 +110,7 @@ export function priceCard(env: CardEnv, input: PriceCardInput): Card {
   if (input.global) extras.push(`${escapeMarkdown(input.item.en)} 全宇宙统一交易，不分市场`)
   const where = input.single && !input.global && input.quotes[0] ? `${escapeMarkdown(input.quotes[0].market.name)} ` : ''
   card.footer = footerText(env.core.format, newest, extras, where)
+  card.warnings = downtimeWarnings(env.now, quotes.some((q) => !usableQuote(q)))
   card.notices = input.notices
   card.actions = input.actions
   return card
@@ -220,6 +222,7 @@ export function setCard(env: CardEnv, input: SetCardInput): Card {
   const compared = summaries.some((l) => 'text' in l && /[▲▼]/.test(l.text))
   const extras = compared && input.base ? [`▲▼ 与 ${escapeMarkdown(input.base.market.name)} 比较`] : []
   card.footer = footerText(env.core.format, newest, extras)
+  card.warnings = downtimeWarnings(env.now, input.markets.some((m) => !m.quotes || !m.quotes.size || ![...m.quotes.values()].some(usableQuote)))
   card.notices = input.notices
   card.actions = input.actions
   return card

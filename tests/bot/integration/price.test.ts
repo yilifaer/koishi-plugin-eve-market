@@ -94,6 +94,7 @@ describe('查价: markets and visibility', () => {
     const out = card(await e.h.group('查价 乌鸦级'))
     expect(out).toMatch(/\*\*Amarr · 2\d 分钟前\*\*\n\n- 出售 `250,000,000 ISK`（250\.00M）▼3\.3%\n- 中间 —\n- 收购 暂无买单/)
     expect(out).toContain('**Dodixie**\n⚠ ESI 暂时没有响应')
+    expect(out).not.toContain('每日维护')
     expect(out).toContain('**Jita 4-4**\n\n- 出售 `258,400,000 ISK`')
   })
 
@@ -108,7 +109,8 @@ describe('查价: markets and visibility', () => {
       },
     })
     const out = card(await e.h.group('查价 乌鸦级'))
-    expect(out).toContain('**Dodixie**\n⚠ DT 维护中，暂时取不到价格')
+    expect(out).toContain('**Dodixie**\n⚠ 暂时取不到价格')
+    expect(out.split('⚠ EVE 每日维护中（北京时间 19:00 左右），价格暂时取不到，15 分钟后再试')).toHaveLength(2)
     expect(out).toContain('**Jita 4-4**\n\n- 出售 `258,400,000 ISK`')
   })
 
