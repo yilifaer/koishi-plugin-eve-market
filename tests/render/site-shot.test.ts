@@ -210,7 +210,7 @@ describe('SiteScreenshotter profiles', () => {
     const { source } = fakeSource(() => new FakePage({ title: '估价结果' }))
     const { shots } = shooter(source)
     const shot = shotOf(await outcomeOf(shots.request(target('janice'))))
-    expect(shot.diag).toMatchObject({ status: 200, title: '估价结果', challenge: false, blockedRedirects: 0, blockedPrivate: 0 })
+    expect(shot.diag).toMatchObject({ status: 200, title: '估价结果', challenge: false, blockedRedirects: 0, blockedPrivate: 0, closedPopups: 0 })
     expect(shot.diag.elapsedMs).toBeGreaterThanOrEqual(0)
   })
 })

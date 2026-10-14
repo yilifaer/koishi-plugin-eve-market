@@ -137,10 +137,11 @@ describe.skipIf(!HAS_CHROME)('SiteScreenshotter net guard with Chromium and loca
     expect(opened.at(-1)!.isClosed()).toBe(true)
   }, 30000)
 
-  it('a popup is closed, counted as a redirect, and leaves no extra page behind', async () => {
+  it('a popup is closed, counted, does not fail the shot, and leaves no extra page behind', async () => {
     const before = (await browser.pages()).length
     const outcome = await run('/popup')
-    expect(outcome).toMatchObject({ ok: false, reason: 'redirect' })
+    expect(outcome).toMatchObject({ ok: true })
+    if (outcome.ok) expect(outcome.shot.diag).toMatchObject({ blockedRedirects: 0, closedPopups: 1 })
     await new Promise((resolve) => setTimeout(resolve, 300))
     expect((await browser.pages()).length).toBe(before)
   }, 30000)

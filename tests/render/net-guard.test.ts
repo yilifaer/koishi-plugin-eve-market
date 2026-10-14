@@ -54,7 +54,7 @@ describe('installNetGuard', () => {
   it('lets the first main-frame navigation through, even to a host outside the list', async () => {
     const { send, guard } = await setup()
     expect(await send(req('http://127.0.0.1:9/br/1', { nav: true }))).toEqual(['continue'])
-    expect(guard.stats).toEqual({ blockedRedirects: 0, blockedPrivate: 0 })
+    expect(guard.stats).toEqual({ blockedRedirects: 0, blockedPrivate: 0, closedPopups: 0 })
   })
 
   it('blocks a later main-frame navigation outside the list or not https', async () => {
@@ -91,7 +91,7 @@ describe('installNetGuard', () => {
     await send(req('https://br.example.com/', { nav: true }))
     expect(await send(req('https://ads.example.net/frame', { nav: true, frame: CHILD }))).toEqual(['continue'])
     expect(await send(req('http://10.0.0.5/frame', { nav: true, frame: CHILD }))).toEqual(['abort:blockedbyclient'])
-    expect(guard.stats).toEqual({ blockedRedirects: 0, blockedPrivate: 1 })
+    expect(guard.stats).toEqual({ blockedRedirects: 0, blockedPrivate: 1, closedPopups: 0 })
   })
 
   it('blocks sub-resources to local and private addresses and counts them', async () => {
@@ -114,7 +114,7 @@ describe('installNetGuard', () => {
     for (const url of ['https://cdn.example.net/a.js', 'http://93.184.216.34/x', 'http://198.18.0.1/x', 'data:image/png;base64,AAAA', 'blob:https://br.example.com/1']) {
       expect(await send(req(url)), url).toEqual(['continue'])
     }
-    expect(guard.stats).toEqual({ blockedRedirects: 0, blockedPrivate: 0 })
+    expect(guard.stats).toEqual({ blockedRedirects: 0, blockedPrivate: 0, closedPopups: 0 })
   })
 
   it('aborts other protocols and unparsable urls', async () => {
@@ -136,7 +136,7 @@ describe('installNetGuard', () => {
     expect(await send(req('http://127.0.0.1/x', { throws: true }))).toEqual([])
   })
 
-  it('closes a popup and counts it as a blocked redirect', async () => {
+  it('closes a popup and counts it as a closed popup, not a redirect', async () => {
     let popupHandler: ((popup: { close(): Promise<void> } | null) => void) | undefined
     const page = {
       setRequestInterception: async () => undefined,
@@ -149,6 +149,6 @@ describe('installNetGuard', () => {
     popupHandler!({ close: async () => { closed++ } })
     popupHandler!(null)
     expect(closed).toBe(1)
-    expect(guard.stats.blockedRedirects).toBe(2)
+    expect(guard.stats).toMatchObject({ blockedRedirects: 0, closedPopups: 2 })
   })
 })

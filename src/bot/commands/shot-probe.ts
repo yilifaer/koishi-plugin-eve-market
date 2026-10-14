@@ -61,7 +61,7 @@ function probeCard(site: SiteInfo, outcome: ShotOutcome): Card {
     lines.push({ text: `截图：${shot.images.length} 张（最多 ${site.profile.maxImages} 张）${shot.truncated ? '，页面过长，后面截掉了' : ''}` })
   }
   lines.push({ text: `验证页：${yesNo(diag.challenge === true)}` })
-  lines.push({ text: `拦下的跳转：${diag.blockedRedirects ?? 0} 个，拦下的内网请求：${diag.blockedPrivate ?? 0} 个` })
+  lines.push({ text: `拦下的跳转：${diag.blockedRedirects ?? 0} 个，拦下的内网请求：${diag.blockedPrivate ?? 0} 个，关掉的弹窗：${diag.closedPopups ?? 0} 个` })
   if (!outcome.ok) {
     const reply = failureText(site, outcome)
     lines.push({ text: `失败原因：${outcome.reason}${reply ? `（${reply}）` : ''}` })

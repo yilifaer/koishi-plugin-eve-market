@@ -44,6 +44,7 @@ export interface ShotDiag {
   elapsedMs: number
   blockedRedirects: number
   blockedPrivate: number
+  closedPopups: number
 }
 
 export interface SiteShot {
@@ -299,6 +300,7 @@ export class SiteScreenshotter {
       elapsedMs: this.now() - started,
       blockedRedirects: guard?.stats.blockedRedirects ?? 0,
       blockedPrivate: guard?.stats.blockedPrivate ?? 0,
+      closedPopups: guard?.stats.closedPopups ?? 0,
       ...extra,
     })
     const redirected = (): ShotOutcome | undefined =>
