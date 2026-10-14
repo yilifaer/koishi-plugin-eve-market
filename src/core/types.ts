@@ -1538,4 +1538,9 @@ export interface KillService {
   summary(killId: number, opts?: KillOptions): Promise<KillSummary | CoreFailure>
   /** 这个击杀所在星系、所在整点的 BR 相关战报地址；深渊、数据里查不到星域时 null */
   relatedBrUrl(summary: KillSummary): string | null
+  /**
+   * 两个战报网站的相关战报地址：br 是所在整点（BR 工具），warbeacon 是击杀时间前后各 KILL_BR_WINDOW_MIN 分钟的范围。
+   * 深渊、查不到星域、地址过不了网站规则时对应项 null
+   */
+  relatedUrls(summary: KillSummary): { br: string | null; warbeacon: string | null }
 }

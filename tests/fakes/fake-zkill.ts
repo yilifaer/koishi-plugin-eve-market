@@ -3,8 +3,11 @@
 
 import http from 'node:http'
 import type { AddressInfo } from 'node:net'
+import { rawKillmail } from './fake-esi'
+import type { RawKillmail } from './fake-esi'
 
-export interface RawZkillKill {
+/** 真实响应是完整击杀 + zkb；minimal 的是老格式，只有 killmail_id 和 zkb */
+export interface RawZkillKill extends Partial<Omit<RawKillmail, 'killmail_id'>> {
   killmail_id: number
   zkb: {
     hash: string
@@ -21,9 +24,15 @@ export interface RawZkillKill {
   }
 }
 
-/** 默认：估值 4.52 亿，有人击杀，不是单杀 */
-export function rawZkillKill(killId = 131234567, hash = '0123456789abcdef0123456789abcdef01234567', zkb: Partial<RawZkillKill['zkb']> = {}): RawZkillKill {
+/** 默认：完整击杀（和 fake-esi 的默认击杀一致），估值 4.52 亿，有人击杀，不是单杀；body 传 'minimal' 得到老格式，传对象改击杀正文 */
+export function rawZkillKill(
+  killId = 131234567,
+  hash = '0123456789abcdef0123456789abcdef01234567',
+  zkb: Partial<RawZkillKill['zkb']> = {},
+  body: Partial<RawKillmail> | 'minimal' = {},
+): RawZkillKill {
   return {
+    ...(body === 'minimal' ? {} : rawKillmail({ ...body, killmail_id: killId })),
     killmail_id: killId,
     zkb: {
       hash, totalValue: 452_000_000, fittedValue: 120_000_000, droppedValue: 30_000_000, destroyedValue: 422_000_000,

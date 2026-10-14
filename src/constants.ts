@@ -518,6 +518,8 @@ export const ESI_KILLMAIL_CACHE_DAYS = 30
 export const KILL_NAMES_WAIT_MS = 1500
 /** 战报时间怎么取整到整点：先按击杀所在的整点，实测 BR 页面覆盖范围后再定 */
 export const KILL_BR_ROUNDING = 'floor' as 'floor' | 'nearest'
+/** Warbeacon 关联战报的时间范围：击杀时间前后各几分钟 */
+export const KILL_BR_WINDOW_MIN = 60
 /** 深渊星系的编号前缀；深渊里没有对应的战报 */
 export const ABYSS_SYSTEM_PREFIX = '32'
 /** 「按星系和时间的相关战报」的来源；以后加别的网站就加一行（用第一行） */

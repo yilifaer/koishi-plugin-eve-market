@@ -2,6 +2,7 @@
 
 import { afterEach, describe, expect, it } from 'vitest'
 import { createKillService } from '../../../src/core/killmail'
+import { createSiteRegistry } from '../../../src/core/sites'
 import { isFailure } from '../../../src/core/types'
 import type { CoreFailure, ItemInfo, KillService, KillSummary, SystemView } from '../../../src/core/types'
 import { ZkillClient } from '../../../src/core/zkill'
@@ -37,6 +38,8 @@ interface Setup {
   kill?: boolean
   mail?: Partial<RawKillmail>
   zkb?: Parameters<typeof rawZkillKill>[2]
+  /** zKill 回老格式（只有 hash 和估值），击杀正文要去 ESI 取 */
+  minimal?: boolean
   minIntervalMs?: number
 }
 
@@ -61,7 +64,7 @@ async function make(setup: Setup = {}): Promise<Made> {
     f.names.set(98000201, { name: 'Other Corp', category: 'corporation' })
     f.names.set(99000201, { name: 'Other Alliance', category: 'alliance' })
   })
-  if (setup.kill !== false) zkill.kills.set(KILL, rawZkillKill(KILL, HASH, setup.zkb))
+  if (setup.kill !== false) zkill.kills.set(KILL, rawZkillKill(KILL, HASH, setup.zkb, setup.minimal ? 'minimal' : setup.mail))
   const client = new ZkillClient(
     { http: new NodeHttpClient(), clock: env.clock, scheduler: realScheduler, logger: env.logger, store: createModuleStore() },
     { base: zkill.base, userAgent: env.client.userAgent, minIntervalMs: setup.minIntervalMs ?? 0 },
@@ -145,6 +148,22 @@ describe('KillService.summary: happy path', () => {
   })
 })
 
+describe('KillService.summary: killmail body from zKill', () => {
+  it('a full zKill body: ESI killmail is not requested, only names', async () => {
+    const m = await make()
+    ok(await m.service.summary(KILL))
+    expect(esiCalls(m, /^\/killmails\//)).toBe(0)
+    expect(esiCalls(m, /^\/universe\/names$/)).toBe(1)
+  })
+
+  it('a minimal zKill body: falls back to the ESI killmail with the same result', async () => {
+    const full = ok(await (await make()).service.summary(KILL))
+    const m = await make({ minimal: true })
+    expect(ok(await m.service.summary(KILL))).toEqual(full)
+    expect(esiCalls(m, /^\/killmails\//)).toBe(1)
+  })
+})
+
 describe('KillService.summary: caches and single flight', () => {
   it('serves a repeat from memory without asking zKill or ESI', async () => {
     const m = await make()
@@ -155,7 +174,7 @@ describe('KillService.summary: caches and single flight', () => {
   })
 
   it('asks zKill again after 24 hours but the immutable ESI killmail stays cached', async () => {
-    const m = await make()
+    const m = await make({ minimal: true })
     ok(await m.service.summary(KILL))
     m.env.clock.advance(24 * 3_600_000 + 1)
     ok(await m.service.summary(KILL))
@@ -163,12 +182,12 @@ describe('KillService.summary: caches and single flight', () => {
     expect(esiCalls(m, /^\/killmails\//)).toBe(1)
   })
 
-  it('merges concurrent callers for the same kill into one zKill and one ESI request', async () => {
+  it('merges concurrent callers for the same kill into one zKill request, no ESI killmail and one names request', async () => {
     const m = await make()
     const all = await Promise.all(Array.from({ length: 6 }, () => m.service.summary(KILL)))
     expect(all.every((r) => !isFailure(r))).toBe(true)
     expect(m.zkill.requests).toHaveLength(1)
-    expect(esiCalls(m, /^\/killmails\//)).toBe(1)
+    expect(esiCalls(m, /^\/killmails\//)).toBe(0)
     expect(esiCalls(m, /^\/universe\/names$/)).toBe(1)
   })
 
@@ -246,25 +265,25 @@ describe('KillService.summary: zKill failures', () => {
 
 describe('KillService.summary: ESI failures', () => {
   it('ESI 5xx -> ESI_UNAVAILABLE', async () => {
-    const m = await make()
+    const m = await make({ minimal: true })
     m.env.fake.fault('GET', /^\/killmails\//, { status: 503 }, 5)
     expect(bad(await m.service.summary(KILL)).code).toBe('ESI_UNAVAILABLE')
   })
 
   it('ESI does not know the hash zKill gave -> ESI_UNAVAILABLE (not "not found")', async () => {
-    const m = await make()
+    const m = await make({ minimal: true })
     m.env.fake.killmails.set(KILL, { hash: 'f'.repeat(40), mail: rawKillmail() })
     expect(bad(await m.service.summary(KILL)).code).toBe('ESI_UNAVAILABLE')
   })
 
   it('an unreadable ESI body -> ESI_UNAVAILABLE', async () => {
-    const m = await make()
+    const m = await make({ minimal: true })
     m.env.fake.fault('GET', /^\/killmails\//, { status: 200, raw: '{"killmail_id":1}' })
     expect(bad(await m.service.summary(KILL)).code).toBe('ESI_UNAVAILABLE')
   })
 
   it('zKill answered but ESI is down: a retry does not ask zKill again', async () => {
-    const m = await make()
+    const m = await make({ minimal: true })
     m.env.fake.fault('GET', /^\/killmails\//, { status: 503 }, 5)
     bad(await m.service.summary(KILL))
     m.env.fake.faults = []
@@ -274,7 +293,7 @@ describe('KillService.summary: ESI failures', () => {
   })
 
   it('a slow ESI -> DEADLINE for this caller, and the next call gets the finished result', async () => {
-    const m = await make()
+    const m = await make({ minimal: true })
     const release = m.env.fake.hold(/^\/killmails\//)
     expect(bad(await m.service.summary(KILL, { deadlineMs: 100 })).code).toBe('DEADLINE')
     release()
@@ -381,5 +400,67 @@ describe('KillService.relatedBrUrl', () => {
     const m = await make()
     const s = ok(await m.service.summary(KILL))
     expect(m.service.relatedBrUrl({ ...s, systemId: 3000014, system: SYSTEMS.get(30000142)! })).toBeNull()
+  })
+})
+
+describe('KillService.relatedUrls', () => {
+  const summaryAt = async (iso: string, mail: Partial<RawKillmail> = {}) => {
+    const m = await make({ mail: { killmail_time: iso, ...mail } })
+    return { m, s: ok(await m.service.summary(KILL)) }
+  }
+  const wb = (sys: number, a: string, b: string) => `https://warbeacon.net/br/related/${sys}/${a}/${b}/`
+
+  it('gives the whole-hour BR address and the +-60 minute Warbeacon range', async () => {
+    const { m, s } = await summaryAt('2026-10-14T12:34:56Z')
+    expect(m.service.relatedUrls(s)).toEqual({
+      br: 'https://br.evetools.org/related/30000142/202610141200',
+      warbeacon: wb(30000142, '202610141134', '202610141334'),
+    })
+  })
+
+  it('keeps minute precision and floors the seconds', async () => {
+    const { m, s } = await summaryAt('2026-10-14T12:00:59Z')
+    expect(m.service.relatedUrls(s).warbeacon).toBe(wb(30000142, '202610141100', '202610141300'))
+  })
+
+  it('crosses midnight in both directions', async () => {
+    const a = await summaryAt('2026-10-14T00:20:00Z')
+    expect(a.m.service.relatedUrls(a.s).warbeacon).toBe(wb(30000142, '202610132320', '202610140120'))
+    const b = await summaryAt('2026-10-14T23:30:00Z')
+    expect(b.m.service.relatedUrls(b.s).warbeacon).toBe(wb(30000142, '202610142230', '202610150030'))
+  })
+
+  it('crosses the year boundary in both directions', async () => {
+    const a = await summaryAt('2027-01-01T00:10:00Z')
+    expect(a.m.service.relatedUrls(a.s).warbeacon).toBe(wb(30000142, '202612312310', '202701010110'))
+    const b = await summaryAt('2026-12-31T23:59:59Z')
+    expect(b.m.service.relatedUrls(b.s).warbeacon).toBe(wb(30000142, '202612312259', '202701010059'))
+  })
+
+  it('is null for both on an abyssal kill or a system without a region', async () => {
+    const a = await summaryAt('2026-10-14T12:34:56Z', { solar_system_id: 32000005 })
+    expect(a.m.service.relatedUrls(a.s)).toEqual({ br: null, warbeacon: null })
+    const b = await summaryAt('2026-10-14T12:34:56Z', { solar_system_id: 30000999 })
+    expect(b.m.service.relatedUrls(b.s)).toEqual({ br: null, warbeacon: null })
+  })
+
+  it.each([3000014, 300001420])('is null for both when the system id has %s digits', async (id) => {
+    const { m, s } = await summaryAt('2026-10-14T12:34:56Z')
+    expect(m.service.relatedUrls({ ...s, systemId: id })).toEqual({ br: null, warbeacon: null })
+  })
+
+  it('a wormhole kill has both addresses', async () => {
+    const { m, s } = await summaryAt('2026-10-14T12:34:56Z', { solar_system_id: 31000005 })
+    expect(m.service.relatedUrls(s)).toEqual({
+      br: 'https://br.evetools.org/related/31000005/202610141200',
+      warbeacon: wb(31000005, '202610141134', '202610141334'),
+    })
+  })
+
+  it('the Warbeacon address is accepted by the built-in site rule', async () => {
+    const { m, s } = await summaryAt('2026-10-14T12:34:56Z')
+    const registry = createSiteRegistry({ sites: [{ id: 'warbeacon', builtin: true, name: 'Warbeacon', auto: true, maxImages: 1, host: '', pathPrefix: '' }] })
+    const url = m.service.relatedUrls(s).warbeacon!
+    expect(registry.parse(url)?.url).toBe(url)
   })
 })

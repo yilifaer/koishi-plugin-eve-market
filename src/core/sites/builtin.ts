@@ -85,3 +85,18 @@ export const CUSTOM_PROFILE: Omit<ShotProfile, 'maxImages'> = { ...VIEWPORT, wai
 
 /** 最长的规范化地址 */
 export const MAX_URL_LENGTH = 500
+
+/** 一个地址按内置网站的规则检查：主机对、路径合格时给出规范化后的地址，否则 null（BR 不走这里，用 parseBrLink） */
+export function checkBuiltinUrl(id: Exclude<BuiltinSiteId, 'br'>, url: string): string | null {
+  const site = BUILTIN_SITES.find((b) => b.id === id)
+  if (!site?.path) return null
+  let u: URL
+  try {
+    u = new URL(url)
+  } catch {
+    return null
+  }
+  if (u.protocol !== 'https:' || u.host !== site.host) return null
+  const path = site.path(u.pathname)
+  return path ? `https://${site.host}${path}` : null
+}

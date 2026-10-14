@@ -1,20 +1,22 @@
-// KillService：击杀编号 → 摘要。先问 zKill 要 hash 和估值，再用 hash 向欧服接口取击杀详情，
+// KillService：击杀编号 → 摘要。先问 zKill 要击杀正文、hash 和估值（响应里没有正文才用 hash 向欧服接口取击杀详情），
 // 最后查受害者和最后一击的名字（失败不影响摘要，名字写 null）。同一编号并发合并；成功的摘要放 24 小时；
 // zKill 的 `[]`（没收录）和网络失败的缓存在 ZkillClient 里。
 
 import {
   ABYSS_SYSTEM_PREFIX,
   KILL_CACHE_HOURS,
+  KILL_BR_WINDOW_MIN,
   KILL_CACHE_MAX,
   KILL_NAMES_WAIT_MS,
   KILL_NEGATIVE_CACHE_MIN,
   QUERY_DEADLINE_MS,
 } from '../../constants'
 import { isEsiError } from '../esi'
-import type { EsiApi, EsiKillParty } from '../esi'
+import type { EsiApi, EsiKillParty, EsiKillmail } from '../esi'
 import type { Clock, Logger, Scheduler } from '../ports'
 import type { CoreFailure, FailureCode, ItemInfo, KillOptions, KillParty, KillService, KillSummary, SystemView } from '../types'
-import { relatedBrUrl } from '../universe'
+import { checkBuiltinUrl } from '../sites'
+import { parseBrLink, relatedBrUrl } from '../universe'
 import { LruCache, SingleFlight, describeError, withDeadline } from '../util'
 import type { ZkillClient, ZkillFailure } from '../zkill'
 import { parseZkillKill, zkillKillPath } from './zkill'
@@ -33,6 +35,25 @@ export interface KillServiceDeps {
 
 const HOUR_MS = 3_600_000
 const MINUTE_MS = 60_000
+
+const p2 = (n: number) => String(n).padStart(2, '0')
+
+/** UTC，精确到分钟（秒向下取整）：YYYYMMDDHHmm */
+function minuteStamp(ms: number): string | null {
+  const d = new Date(Math.floor(ms / MINUTE_MS) * MINUTE_MS)
+  const year = d.getUTCFullYear()
+  if (!(year >= 1000 && year <= 9999)) return null
+  return `${year}${p2(d.getUTCMonth() + 1)}${p2(d.getUTCDate())}${p2(d.getUTCHours())}${p2(d.getUTCMinutes())}`
+}
+
+/** Warbeacon 的时间范围写法：击杀时间前后各 KILL_BR_WINDOW_MIN 分钟；拼完过一遍网站规则 */
+function warbeaconUrl(systemId: number, timeMs: number): string | null {
+  if (!Number.isInteger(systemId) || !/^\d{8}$/.test(String(systemId)) || !Number.isFinite(timeMs)) return null
+  const start = minuteStamp(timeMs - KILL_BR_WINDOW_MIN * MINUTE_MS)
+  const end = minuteStamp(timeMs + KILL_BR_WINDOW_MIN * MINUTE_MS)
+  if (!start || !end) return null
+  return checkBuiltinUrl('warbeacon', `https://warbeacon.net/br/related/${systemId}/${start}/${end}/`)
+}
 
 function failure(code: FailureCode, message: string, extra: Partial<CoreFailure> = {}): CoreFailure {
   return { ok: false, code, message, ...extra }
@@ -76,8 +97,13 @@ class Service implements KillService {
   }
 
   relatedBrUrl(s: KillSummary): string | null {
-    if (s.abyssal || !s.system?.region) return null
-    return relatedBrUrl(s.systemId, s.time)
+    return this.relatedUrls(s).br
+  }
+
+  relatedUrls(s: KillSummary): { br: string | null; warbeacon: string | null } {
+    if (s.abyssal || !s.system?.region) return { br: null, warbeacon: null }
+    const br = relatedBrUrl(s.systemId, s.time)
+    return { br: br ? parseBrLink(br)?.url ?? null : null, warbeacon: warbeaconUrl(s.systemId, s.time) }
   }
 
   // ------------------------------------------------------------------ 取数据
@@ -86,6 +112,7 @@ class Service implements KillService {
     const { zkill, esi, logger } = this.deps
     let hash = userHash
     let zkb: { value: number | null; npc: boolean; solo: boolean; awox: boolean } | null = null
+    let mail: EsiKillmail | null = null
     if (!hash) {
       const path = zkillKillPath(killId)
       const got = await zkill.getJson(path, { ttlMs: KILL_CACHE_HOURS * HOUR_MS, emptyTtlMs: KILL_NEGATIVE_CACHE_MIN * MINUTE_MS })
@@ -99,13 +126,16 @@ class Service implements KillService {
       if (parsed === 'not-found') return this.logged(killId, failure('KILL_NOT_FOUND', 'zKill 上没有这个击杀'))
       hash = parsed.hash
       zkb = parsed
+      mail = parsed.body
     }
 
-    let mail
-    try {
-      mail = (await esi.killmail(killId, hash)).value
-    } catch (e) {
-      return this.logged(killId, this.esiFailure(e, userHash !== null))
+    // zKill 已经给了完整击杀就不问欧服接口，只查名字；老格式或欧服链接才去取
+    if (!mail) {
+      try {
+        mail = (await esi.killmail(killId, hash)).value
+      } catch (e) {
+        return this.logged(killId, this.esiFailure(e, userHash !== null))
+      }
     }
 
     const final = mail.attackers.find((a) => a.finalBlow) ?? null

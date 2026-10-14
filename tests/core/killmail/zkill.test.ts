@@ -12,8 +12,28 @@ describe('zkillKillPath', () => {
 
 describe('parseZkillKill', () => {
   it('reads hash, value and flags', () => {
-    const raw = [rawZkillKill(131234567, HASH, { totalValue: 4.5e8, npc: true, solo: true, awox: false })]
-    expect(parseZkillKill(raw, 131234567)).toEqual({ hash: HASH, value: 4.5e8, npc: true, solo: true, awox: false })
+    const raw = [rawZkillKill(131234567, HASH, { totalValue: 4.5e8, npc: true, solo: true, awox: false }, 'minimal')]
+    expect(parseZkillKill(raw, 131234567)).toEqual({ hash: HASH, value: 4.5e8, npc: true, solo: true, awox: false, body: null })
+  })
+
+  it('reads the full killmail body when present', () => {
+    const r = parseZkillKill([rawZkillKill(131234567, HASH)], 131234567)
+    if (r === 'not-found') throw new Error('should be found')
+    expect(r.body).toEqual({
+      killId: 131234567,
+      time: Date.UTC(2026, 9, 14, 12, 34, 56),
+      systemId: 30000142,
+      victim: { characterId: 2112000101, corporationId: 98000101, allianceId: 99000101, factionId: null, shipTypeId: 638 },
+      attackers: [
+        { characterId: 2112000201, corporationId: 98000201, allianceId: null, factionId: null, shipTypeId: 17738, finalBlow: false },
+        { characterId: 2112000202, corporationId: 98000201, allianceId: 99000201, factionId: null, shipTypeId: 11978, finalBlow: true },
+      ],
+    })
+  })
+
+  it('has no body when the victim cannot be read', () => {
+    const raw = [{ ...rawZkillKill(7, HASH), victim: { damage_taken: 1 } }]
+    expect(parseZkillKill(raw, 7)).toMatchObject({ hash: HASH, body: null })
   })
 
   it('lowercases the hash', () => {
@@ -26,7 +46,7 @@ describe('parseZkillKill', () => {
 
   it('tolerates a missing totalValue and missing flags', () => {
     const raw = [{ killmail_id: 7, zkb: { hash: HASH } }]
-    expect(parseZkillKill(raw, 7)).toEqual({ hash: HASH, value: null, npc: false, solo: false, awox: false })
+    expect(parseZkillKill(raw, 7)).toEqual({ hash: HASH, value: null, npc: false, solo: false, awox: false, body: null })
   })
 
   it.each([
