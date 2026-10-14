@@ -130,7 +130,7 @@ describe('市场状态: the whole card', () => {
       '- Jita 4-4：🟢 正常 · NPC 市场 · 最近请求 14:19',
       '- 联盟市场A：🟢 正常 · 建筑市场 · 同步于 14:16 · 3 页 2,841 单',
       '- 授权档案 default：🟢 令牌有效 · 权限 3/3 · 刷新于 14:01',
-      '- 物品数据：SDE build 3579973 · 来自在线（06:00 确认最新）',
+      '- 物品数据：SDE build 3579973 · 数据版本 1 · 来自在线（06:00 确认最新）',
       '- 黑话表：在线 · 325 条 · 别名接入 612 个',
       '- ESI 配额：market-order 剩余 97% · 错误额度 100',
       '- 消息：Markdown 正常',
@@ -156,12 +156,18 @@ describe('市场状态: the whole card', () => {
     const out = md(card)
     expect(out).toContain('**数据状态 · 14:20**\n刷新结果：物品数据在线确认是最新\n\n')
     expect(out).toContain('- 授权页面：需要 Koishi 的 server 插件')
-    expect(out).toContain('- ⚠ 物品数据已经 16 天没更新（eve-cn-slang 的每周更新可能没合并或没运行）\n    - SDE build 3579973 · 来自在线\n    - 最近一次在线检查失败：HTTP 503')
+    expect(out).toContain('- ⚠ 物品数据已经 16 天没更新（eve-cn-slang 的每周更新可能没合并或没运行）\n    - SDE build 3579973 · 数据版本 1 · 来自在线\n    - 最近一次在线检查失败：HTTP 503')
     expect(out).toContain('- ESI 配额：market-order 暂停到 14:25 · 错误额度 0\n    - ⚠ 错误太多（420），全部请求暂停到 14:21')
     expect(out).toContain('- 消息：🔴 Markdown 连续发送失败，14:49 之前改发纯文字 · 累计降级 2 次（最近 14:19）')
     expect(out).toContain('- 配置问题：10 条\n    - 物品别名第 1 行别名第 1 个有问题')
     expect(out).toContain('    - 另有 2 条，详见 Koishi 日志')
     expect(out).toContain('- 命令冲突：「搜索」和别的插件的命令重名，没有注册')
+  })
+
+  it('物品数据一行带数据版本', () => {
+    const data = { ...coreStatus().data, buildNumber: 3607705, dataRevision: 2, origin: 'cache' as const, lastConfirmedAt: null }
+    const out = md(statusCard(view({ status: coreStatus({ data }) }), []))
+    expect(out).toContain('- 物品数据：SDE build 3607705 · 数据版本 2 · 来自本机缓存')
   })
 
   it('the official bot line: online with past restarts, offline counting towards a restart, watchdog off, no bot', () => {

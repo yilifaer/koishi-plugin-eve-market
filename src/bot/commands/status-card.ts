@@ -180,7 +180,7 @@ export function profileLines(p: AuthProfileStatus, now: number, forStatus: boole
 function dataLines(status: CoreStatus, now: number): Line[] {
   const d = status.data
   if (!d.ready) return [{ text: '物品数据：加载中' }]
-  const build = `SDE build ${d.buildNumber ?? '?'}`
+  const build = `SDE build ${d.buildNumber ?? '?'}${d.dataRevision === null ? '' : ` · 数据版本 ${d.dataRevision}`}`
   const origin = d.origin ? ORIGIN_LABEL[d.origin] : ''
   const confirmed = d.lastConfirmedAt === null ? '' : `（${clock(d.lastConfirmedAt, now)} 确认最新）`
   const lines: Line[] = []

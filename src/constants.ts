@@ -464,13 +464,13 @@ export const CHAIN_QUERY_DEADLINE_MS = 12000
 export const CHAIN_MAX_TYPES = 200
 /** 中间层（组件、反应）的 ME、TE 固定值 */
 export const CHAIN_COMPONENT_ME_TE = { me: 10, te: 20 }
-/** 炼金术：废料提炼的基础产出率 */
+/** 炼金术：废料提炼的基础产出率（2026-10-14 已在游戏里核对：5 级 55%） */
 export const SCRAP_BASE = 0.5
 /** 炼金术：废料处理技能每级加多少产出率 */
 export const SCRAP_PER_LEVEL = 0.02
 /** 废料处理技能默认等级 */
 export const DEFAULT_SCRAPMETAL_LEVEL = 5
-/** 提炼取整方式：还没在游戏里核对，核对后改这里 */
+/** 提炼取整方式：每个单位先向下取整再乘个数（2026-10-14 已在游戏里核对） */
 export const REPROCESS_ROUNDING = 'per-unit' as const
-/** 提炼税的算法：还没在游戏里核对，核对后改这里 */
+/** 提炼税的算法：按 ISK 收（2026-10-14 已在游戏里核对；废料处理 5 级的产出率是 55%） */
 export const REPROCESS_TAX_MODE = 'isk' as const
