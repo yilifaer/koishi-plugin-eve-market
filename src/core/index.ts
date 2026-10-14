@@ -46,6 +46,7 @@ const SECTION_LABELS: Record<ConfigSection, string> = {
   render: '图片与截图',
   screenshot: '截图',
   janice: 'Janice 估价',
+  kb: 'KB 人物卡',
   advanced: '高级',
 }
 

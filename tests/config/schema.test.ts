@@ -20,7 +20,7 @@ function tableOf(schema: any) {
 describe('Config schema', () => {
   it('fills every group from an empty config', () => {
     const c = Config({} as any)
-    expect(Object.keys(c)).toEqual(['general', 'display', 'access', 'markets', 'aliases', 'price', 'appraisal', 'freight', 'notices', 'industry', 'sso', 'render', 'screenshot', 'janice', 'advanced'])
+    expect(Object.keys(c)).toEqual(['general', 'display', 'access', 'markets', 'aliases', 'price', 'appraisal', 'freight', 'notices', 'industry', 'sso', 'render', 'screenshot', 'janice', 'kb', 'advanced'])
     expect(c.general).toEqual({ requireAt: true, allowSandbox: false, qqWatchdog: true })
     expect(c.display).toMatchObject({ output: 'markdown', numberStyle: 'code', priceDisplayMode: 'full_and_compact', listPriceDisplayMode: 'compact_only', compactDecimals: 2, clickable: 'buttons' })
     expect(c.markets.map((m) => m.name)).toEqual(['Jita 4-4', 'Amarr', 'Dodixie', 'Rens', 'Hek'])
@@ -46,11 +46,20 @@ describe('Config schema', () => {
     expect(Config({ janice: { who: 'bogus' } } as any).janice.who).toBe('allowed')
   })
 
+  it('the KB group: everyone, recent and auto on, an empty hidden table of id / note / enabled', () => {
+    expect(Config({} as any).kb).toEqual({ scope: 'all', recent: true, auto: true, hidden: [] })
+    expect(Config({ kb: { scope: 'bogus' } } as any).kb.scope).toBe('all')
+    const kb = (Config as any).list[14].dict.kb
+    expect(Object.keys(kb.dict)).toEqual(['scope', 'recent', 'auto', 'hidden'])
+    expect(tableOf(kb.dict.hidden)).toEqual(['characterId', 'note', 'enabled'])
+    expect(kb.dict.auto.meta.description).toContain('zKill 人物链接')
+  })
+
   it('has the groups in console order with Chinese titles; industry since 0.2.0', () => {
     const titles = (Config as any).list.map((g: any) => g.meta.description)
-    expect(titles).toEqual(['基本', '显示', '权限', '市场', '物品别名', '查价', '批量查价', '运费', '查价告示', '工业', 'EVE 授权', '图片与截图', '截图', 'Janice 估价', '高级'])
+    expect(titles).toEqual(['基本', '显示', '权限', '市场', '物品别名', '查价', '批量查价', '运费', '查价告示', '工业', 'EVE 授权', '图片与截图', '截图', 'Janice 估价', 'KB 人物卡', '高级'])
     expect(group(9).key).toBe('industry')
-    expect(group(14).schema.meta.collapse).toBe(true)
+    expect(group(15).schema.meta.collapse).toBe(true)
   })
 
   it('keeps every table an object schema so the console table works', () => {

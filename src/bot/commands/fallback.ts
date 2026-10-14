@@ -1,5 +1,5 @@
 // 后置中间件（§2.18、§3.7.5）：命令没匹配到、消息 @ 了机器人时才轮到。
-// 带 Janice 估价链接（控制台填了密钥、有权限）→ 「估价」；带截图名单里网站的链接（该网站「自动截图」开着）→ 改成「战报 <链接>」（战报类网站）或「截图 <链接>」再走一遍命令；其次是 zKill / 欧服击杀链接（控制台「截图」里的开关开着）→ 「击杀 <编号>」；只 @ 没内容 → 简短帮助；内容精确命中一个物品 → 改成「查价 …」再走一遍命令；短的 → 「没看懂…你是想查价吗？」；
+// 带 Janice 估价链接（控制台填了密钥、有权限）→ 「估价」；带截图名单里网站的链接（该网站「自动截图」开着）→ 改成「战报 <链接>」（战报类网站）或「截图 <链接>」再走一遍命令；其次是 zKill / 欧服击杀链接（控制台「截图」里的开关开着）→ 「击杀 <编号>」；再其次是 zKill 人物链接（控制台「KB 人物卡」里的开关开着）→ 「KB <人物ID>」；只 @ 没内容 → 简短帮助；内容精确命中一个物品 → 改成「查价 …」再走一遍命令；短的 → 「没看懂…你是想查价吗？」；
 // 长的（闲聊）→ 一句「发「帮助」看我能做什么」。回复了就不再调用 next()（否则 Koishi 的「您要找的是不是」还会再发一条）。
 // 没有待办时的「取消」、只有图片没有文字的消息不回复，交给后面的处理者；别人发的管理命令（对他来说不存在）也不回复。
 
@@ -8,6 +8,7 @@ import type { Context, Next, Session } from 'koishi'
 import { BARE_ITEM_QUERY, CANCEL_WORD, FALLBACK_SHORT_CHARS } from '../../constants'
 import { findJaniceLink, janicePageUrl } from '../../core/janice'
 import { findKillLink } from '../../core/killmail'
+import { findPilotLink } from '../../core/pilot'
 import { isFailure } from '../../core/types'
 import { buildAccess, isAddressed } from '../scope'
 import type { Action } from '../view/card'
@@ -16,6 +17,7 @@ import { emptyCard, invoke, sendCard } from './context'
 import type { CommandContext, Invocation } from './context'
 import { shortCard } from './help'
 import { janiceAllowed } from './janice'
+import { kbAllowed } from './kb'
 import { killCommandArg } from './kill'
 import { sitesOf } from './shot-send'
 import { SAY } from './text'
@@ -120,6 +122,13 @@ async function runFallback(commands: CommandContext, session: Session, next: Nex
   const killCommand = kill ? commands.registry.get('kill') : undefined
   if (kill && killCommand) {
     await session.execute({ command: killCommand, args: [killCommandArg(commands, kill)], options: {} })
+    return
+  }
+  // zKill 人物链接：排在击杀链接后面、物品名前面（控制台「KB 人物卡」里的开关，且这个人能用 KB）
+  const pilot = commands.settings.kb.auto && kbAllowed(commands.settings.kb, buildAccess(session, commands.settings.access)) ? findPilotLink(content) : null
+  const kbCommand = pilot ? commands.registry.get('kb') : undefined
+  if (pilot && kbCommand) {
+    await session.execute({ command: kbCommand, args: [String(pilot)], options: {} })
     return
   }
   const price = commands.registry.get('price')

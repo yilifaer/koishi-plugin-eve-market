@@ -2,12 +2,13 @@
 // 星系名、空间站、别名目标、改装件、对市场的引用这些要等数据加载后由 core 再检查一遍。
 // 原则：写错一行只影响那一行；坏行跳过并报告，插件照常加载。
 
-import { DEFAULT_SCRAPMETAL_LEVEL, MAX_ME, MAX_QUANTITY, MAX_TE, NOTICE_MAX_CHARS, PRICE_TYPE_WORDS, SHOT_CUSTOM_MAX, SHOT_MAX_IMAGES, SSO_CALLBACK_PATH } from '../constants'
+import { DEFAULT_SCRAPMETAL_LEVEL, MAX_ME, MAX_QUANTITY, MAX_TE, NOTICE_MAX_CHARS, PILOT_ID_MAX_DIGITS, PRICE_TYPE_WORDS, SHOT_CUSTOM_MAX, SHOT_MAX_IMAGES, SSO_CALLBACK_PATH } from '../constants'
 import { FORMULA_DEFAULTS } from '../core/industry'
 import { BUILTIN_SITES, checkConfigHost, hostMatches } from '../core/sites'
 import type {
   AccessSettings, AdvancedSettings, AppraisalSettings, ConfigIssue, ConfigSection, DefaultQuantitySetting, DisplaySettings, JaniceSettings,
   FreightRoute, IndustryActivity, IndustryLocationSetting, IndustrySettings, IndustryStructureSetting, ItemAliasSetting,
+  KbScope, KbSettings,
   MarketRefField, MarketRefSetting, MarketSetting, MarketType, NoticeSetting, PriceSide, RenderSettings, ScreenshotSettings, Settings, ShotSiteSetting,
   SsoSettings, StructurePurpose, Visibility,
 } from '../core/types'
@@ -40,6 +41,7 @@ const SECTION_LABELS: Record<ConfigSection, string> = {
   render: '图片与截图',
   screenshot: '截图',
   janice: 'Janice 估价',
+  kb: 'KB 人物卡',
   advanced: '高级',
 }
 
@@ -847,6 +849,33 @@ function normalizeJanice(raw: Raw, issues: IssueList): JaniceSettings {
   return { apiKey, who }
 }
 
+const KB_HIDDEN_TABLE = '不显示的人物'
+const KB_CHARACTER_ID = new RegExp(`^\\d{1,${PILOT_ID_MAX_DIGITS}}$`)
+
+/** KB 人物卡：不显示的人物 ID 必须是纯数字（最多 PILOT_ID_MAX_DIGITS 位），写错的行跳过并写进配置问题 */
+function normalizeKb(raw: Raw, issues: IssueList): KbSettings {
+  const s: ConfigSection = 'kb'
+  const o = obj(raw.kb)
+  const hidden = new Set<number>()
+  tableRows(issues, s, o.hidden, [], KB_HIDDEN_TABLE).forEach((rawRow, i) => {
+    const row = i + 1
+    if (isInvalidRow(rawRow)) return invalidRow(issues, s, row, KB_HIDDEN_TABLE)
+    const r = rawRow as Raw
+    if (!bool(r.enabled, true)) return
+    const id = text(r.characterId).trim()
+    if (!KB_CHARACTER_ID.test(id) || Number(id) <= 0) {
+      return issues.add(s, '「人物 ID」要写纯数字，已跳过', { row, table: KB_HIDDEN_TABLE, field: 'characterId' })
+    }
+    hidden.add(Number(id))
+  })
+  return {
+    scope: pick<KbScope>(issues, s, '在哪里可用', o.scope, ['all', 'allowed', 'off'], 'all', { field: 'scope' }),
+    recent: bool(o.recent, true),
+    auto: bool(o.auto, true),
+    hidden: [...hidden],
+  }
+}
+
 // ------------------------------------------------------------------ 入口
 
 export function normalizeConfig(input: unknown): NormalizedConfig {
@@ -922,6 +951,7 @@ export function normalizeConfig(input: unknown): NormalizedConfig {
     screenshot,
     advanced: normalizeAdvanced(raw, issues),
     janice: normalizeJanice(raw, issues),
+    kb: normalizeKb(raw, issues),
     issues: issues.list,
   }
   return { settings, issues: issues.list }

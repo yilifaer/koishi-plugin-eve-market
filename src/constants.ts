@@ -44,7 +44,7 @@ export const REPLY_BUDGET_DIRECT = 3
 export type CommandId =
   | 'price' | 'batch' | 'trend' | 'search' | 'incursion' | 'influenceMap' | 'coalitionMap' | 'br' | 'shot' | 'shotProbe'
   | 'serverStatus' | 'translate' | 'help' | 'groupId' | 'marketStatus' | 'marketAuth' | 'selfTest'
-  | 'manufacture' | 'manufactureCompare' | 'reaction' | 'kill' | 'janice'
+  | 'manufacture' | 'manufactureCompare' | 'reaction' | 'kill' | 'janice' | 'kb'
 
 /** 命令的默认名字（注册时用；按钮、提示里的名字在渲染时从已注册的 Command 取） */
 export const COMMAND_NAMES: Record<CommandId, string> = {
@@ -70,8 +70,12 @@ export const COMMAND_NAMES: Record<CommandId, string> = {
   reaction: '反应',
   kill: '击杀',
   janice: '估价',
+  // Koishi 的命令名不分大小写，「kb」也能用
+  kb: 'KB',
 }
 
+/** 「KB」的别名 */
+export const KB_ALIAS = '战绩'
 /** 「翻译」的别名 */
 export const TRANSLATE_ALIAS = '中英对照'
 /** 「帮助」「菜单」改写成这个隐藏命令，避开 plugin-help 的快捷方式 */
@@ -106,6 +110,8 @@ export const COMMAND_BUDGET: Record<CommandId, { normal: number; max: number }> 
   kill: { normal: 1, max: 2 },
   // 群里：慢提示 + 卡片 + 价格 + 清单 + 截图最多 4 条（单聊 3 条，截图改成按钮）
   janice: { normal: 4, max: 4 },
+  // 慢提示 + 图（或文字卡）；候选卡片 1 条
+  kb: { normal: 1, max: 2 },
 }
 /** 「制造 … 材料」：卡片 + 可复制的清单，大型旗舰拆分时最多 4 条（单聊 3） */
 export const MATERIALS_BUDGET = { normal: 2, max: 4 }
@@ -589,6 +595,8 @@ export const PILOT_ID_MAX_DIGITS = 10
 export const KB_NAME_PATTERN = /^[A-Za-z0-9 '.-]{3,37}$/
 /** 模糊搜索最多列几个候选 */
 export const KB_CANDIDATES_MAX = 8
+/** 每个频道每分钟最多查几次人物卡（内存计数） */
+export const KB_CHANNEL_PER_MIN = 6
 
 export const KB_STATS_CACHE_MIN = 60
 export const KB_LIST_CACHE_MIN = 30

@@ -200,3 +200,23 @@ export const JANICE = {
   guessed: '比例读不到，按 100% 显示',
   shotButton: '网页截图',
 } as const
+
+/** KB 人物卡；人物名由调用方先过 safeEcho，回复里从不写网址 */
+export const KB = {
+  usageTitle: '**KB 用法**',
+  hint: '⏳ 正在查询人物战绩，一般要 5–15 秒…',
+  off: 'KB 人物卡没有开启。',
+  denied: 'KB 人物卡只对授权的群和私聊开放。',
+  tooFast: '查得太快了，稍等一会',
+  hidden: '这个人物的战绩不在这里显示。',
+  notFound: (name: string) => `欧服没有叫 “${name}” 的人物。名字要写完整（大小写无所谓），也可以发人物 ID。`,
+  noMatch: (name: string) => `没有找到名字和 “${name}” 相近的人物。`,
+  cjk: '欧服人物名都是英文，请写游戏里的英文名。',
+  badName: '人物名不对：请写 3–37 个字的英文名，或者人物 ID。',
+  notCharacter: '这个 ID 不是人物（可能是军团、联盟或 NPC）。',
+  esiDown: '欧服接口暂时连不上，请稍后再试。',
+  deadline: '查询超时了，请稍后再试。',
+  candidatesTitle: (name: string) => `**「${name}」可能是以下人物，请选择：**`,
+  cardTitle: (name: string, persona: string) => `**${name}｜${persona}**`,
+  sendFailed: '人物卡图片发送失败，请稍后再试。',
+} as const

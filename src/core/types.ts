@@ -136,7 +136,7 @@ export function isFailure(value: unknown): value is CoreFailure {
 
 export type ConfigSection =
   | 'general' | 'display' | 'access' | 'markets' | 'aliases' | 'price' | 'appraisal'
-  | 'freight' | 'notices' | 'industry' | 'sso' | 'render' | 'screenshot' | 'janice' | 'advanced'
+  | 'freight' | 'notices' | 'industry' | 'sso' | 'render' | 'screenshot' | 'janice' | 'kb' | 'advanced'
 
 /** 配置问题：日志每次加载只写一次，「市场状态」里全部列出 */
 export interface ConfigIssue {
@@ -393,6 +393,19 @@ export interface JaniceSettings {
   who: JaniceWho
 }
 
+/** KB 人物卡在哪里可用：所有群和私聊 / 只在授权群和授权私聊 / 关闭 */
+export type KbScope = 'all' | 'allowed' | 'off'
+
+export interface KbSettings {
+  scope: KbScope
+  /** 显示近期大击杀 / 大损失和作息（多 2 次 zKill 请求，慢 2–3 秒） */
+  recent: boolean
+  /** @机器人 的消息里带 zKill 人物链接时自动出人物卡 */
+  auto: boolean
+  /** 不显示的人物 ID（控制台表格里启用且合法的行） */
+  hidden: number[]
+}
+
 export interface Settings {
   general: GeneralSettings
   display: DisplaySettings
@@ -411,6 +424,7 @@ export interface Settings {
   screenshot: ScreenshotSettings
   advanced: AdvancedSettings
   janice: JaniceSettings
+  kb: KbSettings
   /** 本地检查发现的问题；需要数据的检查由 core 在数据加载后补充 */
   issues: ConfigIssue[]
 }

@@ -762,3 +762,40 @@ describe('janice settings', () => {
     expect(run({ janice: { apiKey: 12345 } }).settings.janice.apiKey).toBe('')
   })
 })
+
+describe('kb settings', () => {
+  const row = (characterId: unknown, extra: Record<string, unknown> = {}) => ({ characterId, note: '', enabled: true, ...extra })
+
+  it('defaults: everyone, recent and auto on, nobody hidden', () => {
+    const { settings, issues } = run({})
+    expect(settings.kb).toEqual({ scope: 'all', recent: true, auto: true, hidden: [] })
+    expect(issues).toEqual([])
+  })
+
+  it('keeps known scopes and switches', () => {
+    expect(run({ kb: { scope: 'allowed', recent: false, auto: false } }).settings.kb).toMatchObject({ scope: 'allowed', recent: false, auto: false })
+    expect(run({ kb: { scope: 'off' } }).settings.kb.scope).toBe('off')
+    const bad = run({ kb: { scope: 'nobody' } })
+    expect(bad.settings.kb.scope).toBe('all')
+    expect(bad.issues.filter((i) => i.section === 'kb')).toHaveLength(1)
+  })
+
+  it('hidden rows: digits only, enabled only, duplicates merged', () => {
+    const { settings, lines } = run({ kb: { hidden: [row('2119876543'), row(' 2112345678 '), row('2119876543'), row('2100000001', { enabled: false })] } })
+    expect(settings.kb.hidden).toEqual([2119876543, 2112345678])
+    expect(lines).toEqual([])
+  })
+
+  it('a hidden id that is not plain digits is a config issue and skipped', () => {
+    const { settings, issues, lines } = run({ kb: { hidden: [row('Hanako Kisaragi'), row('21198x'), row(''), row('0'), row('12345678901'), row('2119876543')] } })
+    expect(settings.kb.hidden).toEqual([2119876543])
+    expect(issues.filter((i) => i.section === 'kb').map((i) => i.row)).toEqual([1, 2, 3, 4, 5])
+    expect(lines[0]).toContain('不显示的人物第 1 行')
+  })
+
+  it('a broken row only costs that row', () => {
+    const { settings, issues } = run({ kb: { hidden: [{ [INVALID_ROW_KEY]: true }, row('2119876543')] } })
+    expect(settings.kb.hidden).toEqual([2119876543])
+    expect(issues.filter((i) => i.section === 'kb')).toHaveLength(1)
+  })
+})

@@ -1,7 +1,7 @@
 import { Schema } from 'koishi'
 import { FORMULA_DEFAULTS } from '../core/industry'
 import type {
-  Clickable, JaniceWho, Lang, ListPriceDisplayMode, MarketType, NumberStyle, OutputMode, PriceDisplayMode, PriceSide, Visibility,
+  Clickable, JaniceWho, KbScope, Lang, ListPriceDisplayMode, MarketType, NumberStyle, OutputMode, PriceDisplayMode, PriceSide, Visibility,
 } from '../core/types'
 import { INVALID_ROW_KEY } from './normalize'
 import {
@@ -44,6 +44,7 @@ export interface FreightRow {
   note: string
 }
 
+export interface KbHiddenRow { characterId: string; note: string; enabled: boolean }
 export interface NoticeRow { text: string; visibility: 'all' | 'allowed'; until: string; enabled: boolean }
 
 export interface IndustryLocationRow {
@@ -138,6 +139,7 @@ export interface Config {
     custom: ShotCustomRow[]
   }
   janice: { apiKey: string; who: JaniceWho }
+  kb: { scope: KbScope; recent: boolean; auto: boolean; hidden: KbHiddenRow[] }
   advanced: { manifestUrl: string; glossaryUrl: string; esiContact: string }
 }
 
@@ -457,6 +459,26 @@ export const Config: Schema<Config> = Schema.intersect([
       ]).default('allowed').loose().description('谁能用「估价」：授权群和授权私聊里的人 / 所有人 / 只有管理员。没有权限的人发 Janice 链接只会得到截图（如果截图开着）。'),
     }).default({} as Config['janice']).loose(),
   }).description('Janice 估价'),
+
+  Schema.object({
+    kb: Schema.object({
+      scope: choice<KbScope>([
+        ['all', '所有群和私聊'],
+        ['allowed', '只在授权群和授权私聊'],
+        ['off', '关闭'],
+      ]).default('all').loose().description('谁能用「KB」：所有群和私聊 / 只在授权群和授权私聊 / 关闭。'),
+      recent: bool(true)
+        .description('人物卡上显示近期大击杀、大损失和活跃时段（每张卡多查 2 次 zKill，慢 2–3 秒）。关掉出图更快。'),
+      auto: bool(true)
+        .description('@机器人 的消息里带 zKill 人物链接时，自动回复人物卡。'),
+      hidden: table(Schema.object({
+        characterId: str().description('人物 ID'),
+        note: str().description('备注'),
+        enabled: strictBool(true).description('启用'),
+      }))
+        .description('**不显示的人物**：一行一个，人物 ID 只能写数字，备注随便写（例如名字）。查到这些人只回一句话，不出卡片。默认空。'),
+    }).default({} as Config['kb']).loose(),
+  }).description('KB 人物卡'),
 
   Schema.object({
     advanced: Schema.object({

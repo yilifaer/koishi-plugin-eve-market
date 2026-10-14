@@ -4,7 +4,7 @@
 // （单聊或授权群里；样式自检在哪个群都行），别人发「帮助 市场状态」得到的是主卡片。
 
 import { Command } from 'koishi'
-import { COMMAND_NAMES, SERVER_LABEL, TRANSLATE_ALIAS } from '../../constants'
+import { COMMAND_NAMES, KB_ALIAS, SERVER_LABEL, TRANSLATE_ALIAS } from '../../constants'
 import type { CommandId } from '../../constants'
 import type { CommandRegistry } from '../register'
 import type { Action, Card, Line, Section } from '../view/card'
@@ -73,6 +73,9 @@ function universeLines(env: HelpEnv): Line[] {
   const lines: Line[] = simple.length ? [{ text: simple.map((id) => nameOf(env, id)).join(' · ') }] : []
   if (has(env, 'br')) lines.push({ text: `${nameOf(env, 'br')} + BR 链接（直接 @我 发链接也行）` })
   if (has(env, 'kill')) lines.push({ text: `${nameOf(env, 'kill')} + zKill 击杀链接或编号：击杀卡片，可以接着生成战报（直接 @我 发击杀链接也行）` })
+  if (has(env, 'kb') && env.commands.settings.kb.scope !== 'off') {
+    lines.push({ text: `${nameOf(env, 'kb')} + 人物英文名、ID 或 zKill 人物链接：人物战绩卡（也可以写「${escapeMarkdown(KB_ALIAS)}」；直接 @我 发人物链接也行）` })
+  }
   if (has(env, 'shot')) lines.push({ text: `${nameOf(env, 'shot')} + 网址：${siteNamesOf(env)}` })
   return lines
 }
