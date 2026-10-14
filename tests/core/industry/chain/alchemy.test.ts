@@ -1,7 +1,7 @@
 // 炼金术：低级反应产物走「粗糙配方 → 废料提炼」。黄金向量 G1：铁磁流体 1,000 个，废料处理 V 级，不加建筑加成。
 
 import { describe, expect, it } from 'vitest'
-import { chooseRoute } from '../../../../src/core/industry/chain/alchemy'
+import { chooseRoute, portionsFor } from '../../../../src/core/industry/chain/alchemy'
 import { reprocessOut, scrapYield } from '../../../../src/core/industry/reprocess'
 import type { ChainResult } from '../../../../src/core/types'
 import { loadFixtureData } from '../../../fixtures/data/load'
@@ -31,24 +31,44 @@ function ferrofluid(opts: { data?: ReturnType<typeof loadFixtureData>; prices?: 
 }
 
 describe('alchemy: golden vector G1', () => {
-  it('forced alchemy: 25 units, 25 runs, inputs and byproduct offset, 540,000 s', async () => {
+  it('forced alchemy (whole-batch rounding): 25 units, 25 runs, output 1,003, byproduct offset, 540,000 s', async () => {
     const { go } = ferrofluid()
     const r = chainResult(await go({ on: true, alchemy: 'alchemy' }))
     const n = node(r, FERROFLUID)
-    expect(n).toMatchObject({ route: 'alchemy', demand: 1000, runs: 25, output: 1000, surplus: 0, timeSeconds: 540000, layer: 'reaction1' })
-    expect(n.alchemy).toMatchObject({ perUnit: 40, units: 25, runs: 25, yieldPct: 55, byproducts: [{ typeId: HAFNIUM, quantity: 2375 }] })
+    expect(n).toMatchObject({ route: 'alchemy', demand: 1000, runs: 25, output: 1003, surplus: 3, timeSeconds: 540000, layer: 'reaction1' })
+    expect(n.alchemy).toMatchObject({ perUnit: 40.15, units: 25, runs: 25, yieldPct: 55, byproducts: [{ typeId: HAFNIUM, quantity: 2378 }] })
     expect(n.alchemy?.unrefined.typeId).toBe(UNREFINED)
     expect(inputs(r, FERROFLUID)).toEqual({ [CADMIUM]: 2500, [HAFNIUM]: 2500, [HYDROGEN_BLOCK]: 125 })
-    // 副产品铪 2,375 抵掉要买的铪：2,500 - 2,375 = 125
-    expect(leaf(r, HAFNIUM)).toMatchObject({ quantity: 2500, offset: 2375 })
+    // 副产品铪 floor(173 × 0.55 × 25) = 2,378 抵掉要买的铪：2,500 - 2,378 = 122
+    expect(leaf(r, HAFNIUM)).toMatchObject({ quantity: 2500, offset: 2378 })
     expect(leaf(r, CADMIUM)).toMatchObject({ quantity: 2500, offset: 0 })
-    expect(leaf(r, HAFNIUM)!.total).toBeCloseTo(125 * leaf(r, HAFNIUM)!.unit!, 2)
+    expect(leaf(r, HAFNIUM)!.total).toBeCloseTo(122 * leaf(r, HAFNIUM)!.unit!, 2)
     expect(r.surplusByproducts).toEqual([])
     // 另一条路线（正常）的成本和时间在 other 里
     expect(n.alchemy?.other).toMatchObject({ route: 'normal', timeSeconds: 54000 })
-    // 按整批取整是 1,003，0 级技能每单位 36 个
+    // 整批一次取整：25 份出 1,003；逐个取整是 1,000
     expect(reprocessOut(73, 25, scrapYield(5), 'batch')).toBe(1003)
+    expect(reprocessOut(73, 25, scrapYield(5), 'per-unit')).toBe(1000)
+    expect(reprocessOut(73, 10, scrapYield(5), 'batch')).toBe(401)
+    expect(reprocessOut(73, 10, scrapYield(5), 'per-unit')).toBe(400)
+    expect(reprocessOut(73, 100, scrapYield(5), 'batch')).toBe(4015)
+  })
+
+  it('smallest unit count: 401 needs 10, 402 needs 11 (batch); per-unit mode still works as before', () => {
+    const y5 = scrapYield(5)
+    expect(portionsFor(73, y5, 401, 'batch')).toBe(10)
+    expect(portionsFor(73, y5, 402, 'batch')).toBe(11)
+    expect(portionsFor(73, y5, 1000, 'batch')).toBe(25)
+    expect(portionsFor(73, scrapYield(0), 1000, 'batch')).toBe(28)
+    expect(reprocessOut(73, 28, scrapYield(0), 'batch')).toBe(1022)
+    expect(reprocessOut(73, 27, scrapYield(0), 'batch')).toBe(985)
+    // 逐个取整：每份 40 个，1,000 个要 25 份；0 级每份 36 个，要 28 份
+    expect(portionsFor(73, y5, 1000, 'per-unit')).toBe(25)
+    expect(portionsFor(73, y5, 401, 'per-unit')).toBe(11)
+    expect(portionsFor(73, scrapYield(0), 1000, 'per-unit')).toBe(28)
     expect(reprocessOut(73, 1, scrapYield(0), 'per-unit')).toBe(36)
+    // 一份都提炼不出整数个时没法走炼金（逐个取整）
+    expect(portionsFor(1, y5, 5, 'per-unit')).toBeNull()
   })
 
   it('normal route: 5 runs, hafnium 500, dysprosium 500, fuel blocks 25, 54,000 s', async () => {
@@ -61,11 +81,21 @@ describe('alchemy: golden vector G1', () => {
     expect(leaf(r, HAFNIUM)).toMatchObject({ quantity: 500, offset: 0 })
   })
 
-  it('skill level 0: 36 per unit, so 28 units', async () => {
+  it('skill level 0: 36.5 per unit (50%), whole batch floored, so 28 units', async () => {
     const { go } = ferrofluid({ industry: { scrapmetalLevel: 0 } })
     const r = chainResult(await go({ on: true, alchemy: 'alchemy' }))
-    expect(node(r, FERROFLUID).alchemy).toMatchObject({ perUnit: 36, units: 28, runs: 28, yieldPct: 50 })
-    expect(node(r, FERROFLUID)).toMatchObject({ output: 1008, surplus: 8 })
+    expect(node(r, FERROFLUID).alchemy).toMatchObject({ perUnit: 36.5, units: 28, runs: 28, yieldPct: 50 })
+    expect(node(r, FERROFLUID)).toMatchObject({ output: 1022, surplus: 22 })
+  })
+})
+
+describe('alchemy: demand 401 / 402', () => {
+  it('401 Ferrofluid needs exactly 10 units (output 401); 402 needs 11', async () => {
+    const a = chainResult(await ferrofluid({ qty: 401 }).go({ on: true, alchemy: 'alchemy' }))
+    expect(node(a, FERROFLUID)).toMatchObject({ output: 401, surplus: 0 })
+    expect(node(a, FERROFLUID).alchemy).toMatchObject({ units: 10, runs: 10 })
+    const b = chainResult(await ferrofluid({ qty: 402 }).go({ on: true, alchemy: 'alchemy' }))
+    expect(node(b, FERROFLUID).alchemy).toMatchObject({ units: 11, runs: 11 })
   })
 })
 
@@ -145,7 +175,7 @@ describe('alchemy: byproducts, tax', () => {
       (row) => ({ ...row, materials: [...row.materials, { typeId: TRITANIUM, quantity: 500 }] }))
     const env = setup({ data, industry: { structures: STATIONS } })
     const r = chainResult(await env.run(RAVEN, { on: true, alchemy: 'alchemy' }, { structure: 'none', me: 0, te: 0 }))
-    // 25 个单位 × floor(500 × 0.55) = 6,875 个三钛合金，抵掉要买的 1,000 个，剩 5,875
+    // 整批 floor(500 × 0.55 × 25) = 6,875 个三钛合金，抵掉要买的 1,000 个，剩 5,875
     expect(leaf(r, TRITANIUM)).toMatchObject({ quantity: 1000, offset: 1000, total: 0 })
     expect(r.surplusByproducts.map((b) => [b.item.typeId, b.quantity])).toEqual([[TRITANIUM, 5875]])
     // 抵不完的部分不算钱，也不进合计
@@ -154,14 +184,14 @@ describe('alchemy: byproducts, tax', () => {
   })
 
   it('a fallback-bought item (cannot be built here) is offset by a byproduct too', async () => {
-    // 乌鸦级还要 1 艘永恒级超旗：莱塔卢造不了，改成买；粗糙铁磁流体假设提炼出 10 个永恒级，每单位 5 个，共 125 个
+    // 乌鸦级还要 1 艘永恒级超旗：莱塔卢造不了，改成买；粗糙铁磁流体假设提炼出 10 个永恒级，整批 floor(10 × 0.55 × 25) = 137 个
     const AEON_HULL = 23919
     const data = withReprocessing(withRecipes(loadFixtureData(), { manufacturing: { [RAVEN]: [[FERROFLUID, 1000], [AEON_HULL, 1]], [AEON_HULL]: [[TRITANIUM, 100]] } }), UNREFINED,
       (row) => ({ ...row, materials: [...row.materials, { typeId: AEON_HULL, quantity: 10 }] }))
     const env = setup({ data, industry: { structures: STATIONS } })
     const r = chainResult(await env.run(RAVEN, { on: true, alchemy: 'alchemy', layers: { other: 'build' } } as never, { structure: 'none', me: 0, te: 0 }))
     expect(leaf(r, AEON_HULL)).toMatchObject({ kind: 'unbuildable', quantity: 1, offset: 1, total: 0 })
-    expect(r.surplusByproducts.find((b) => b.item.typeId === AEON_HULL)?.quantity).toBe(124)
+    expect(r.surplusByproducts.find((b) => b.item.typeId === AEON_HULL)?.quantity).toBe(136)
   })
 
   it('a byproduct nobody needs to buy is only surplus', async () => {
@@ -177,10 +207,10 @@ describe('alchemy: byproducts, tax', () => {
     const prices = new ChainPrices({ [FERROFLUID]: 50, [HAFNIUM]: 100 })
     const { go } = ferrofluid({ prices, industry: { structures: stations } })
     const r = chainResult(await go({ on: true, alchemy: 'alchemy' }))
-    // 产出：1,000 个铁磁流体（50）+ 2,375 个铪（100）= 287,500 ISK，税 1%
-    expect(r.totals.reprocessTax).toBe(2875)
-    expect(node(r, FERROFLUID).alchemy).toMatchObject({ reprocessTax: 2875, reprocessAt: '甲便宜提炼厂', reprocessLocation: '星点甲', reprocessPct: 1 })
-    expect(r.totals.total).toBe(r.totals.leaves + r.totals.jobs + 2875)
+    // 产出：1,003 个铁磁流体（50）+ 2,378 个铪（100）= 287,950 ISK，税 1%
+    expect(r.totals.reprocessTax).toBe(2879.5)
+    expect(node(r, FERROFLUID).alchemy).toMatchObject({ reprocessTax: 2879.5, reprocessAt: '甲便宜提炼厂', reprocessLocation: '星点甲', reprocessPct: 1 })
+    expect(r.totals.total).toBe(r.totals.leaves + r.totals.jobs + 2879.5)
     expect(r.warnings).not.toContain('未配置提炼建筑，提炼税按 0 算')
   })
 
@@ -232,7 +262,7 @@ describe('alchemy: refinery lookup by the reaction node\'s own location', () => 
     const r = chainResult(await go({ on: true, alchemy: 'alchemy' }))
     const n = node(r, FERROFLUID)
     expect(n).toMatchObject({ location: '星点丙', fallbackLocation: true })
-    expect(n.alchemy).toMatchObject({ reprocessAt: '丙提炼厂', reprocessLocation: '星点丙', reprocessPct: 1, reprocessTax: 2875 })
+    expect(n.alchemy).toMatchObject({ reprocessAt: '丙提炼厂', reprocessLocation: '星点丙', reprocessPct: 1, reprocessTax: 2879.5 })
     expect(r.warnings).not.toContain('未配置提炼建筑，提炼税按 0 算')
   })
 })

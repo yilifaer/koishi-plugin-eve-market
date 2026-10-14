@@ -470,7 +470,7 @@ export const SCRAP_BASE = 0.5
 export const SCRAP_PER_LEVEL = 0.02
 /** 废料处理技能默认等级 */
 export const DEFAULT_SCRAPMETAL_LEVEL = 5
-/** 提炼取整方式：每个单位先向下取整再乘个数（2026-10-14 已在游戏里核对） */
-export const REPROCESS_ROUNDING = 'per-unit' as const
+/** 提炼取整方式：整批只向下取整一次（2026-10-14 已在游戏里核对：10 个出 401，不是 400） */
+export const REPROCESS_ROUNDING = 'batch' as const
 /** 提炼税的算法：按 ISK 收（2026-10-14 已在游戏里核对；废料处理 5 级的产出率是 55%） */
 export const REPROCESS_TAX_MODE = 'isk' as const

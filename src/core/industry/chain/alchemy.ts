@@ -1,11 +1,12 @@
 // 炼金术：低级反应产物走「粗糙配方 → 废料提炼」的另一条路线，和正常路线比成本、时间（§7.5）。
-// 每单位粗糙产物提炼出主产物 perUnit 个和一些副产品；副产品先抵同种材料，抵不完的算「多出」。
+// 每份粗糙产物提炼出主产物 perUnit 个（整批取整时是精确的小数）和一些副产品；副产品先抵同种材料，抵不完的算「多出」。
 
 import { REPROCESS_ROUNDING } from '../../../constants'
 import { roundHalfAway } from '../../format'
 import type { AlchemyMode, TypeId } from '../../types'
 import { runsForQuantity } from '../formulas'
 import { reprocessOut, scrapYield } from '../reprocess'
+import type { ReprocessRounding } from '../reprocess'
 import { evaluateAt } from './job'
 import type { JobCtx, JobEval } from './job'
 import type { IndustryLocation } from '../locations'
@@ -58,23 +59,35 @@ function worth(ctx: JobCtx, list: ReadonlyArray<{ typeId: TypeId; quantity: numb
   return sum
 }
 
+/** 提炼 U 份刚好够 demand 个主产物的最小 U（按当前取整方式；一份都出不了时 null） */
+export function portionsFor(qtyMain: number, y: number, demand: number, mode: ReprocessRounding): number | null {
+  const each = qtyMain * y
+  if (each <= 0 || (mode === 'per-unit' && reprocessOut(qtyMain, 1, y, mode) < 1)) return null
+  // 先估个下限，再一份一份往上加到够为止（整批取整不能从向下取整后的单份推）
+  let u = Math.max(1, Math.floor(demand / each) - 1)
+  while (reprocessOut(qtyMain, u, y, mode) < demand) u++
+  return u
+}
+
 /** 需求 demand 个主产物走炼金：要几个粗糙产物、几流程、副产品多少、花多少钱；这个产物提炼不出主产物时 null */
-export function alchemyRoute(ctx: JobCtx, node: PlanNode, plan: AlchemyPlan, demand: number): AlchemyRoute | null {
+export function alchemyRoute(ctx: JobCtx, node: PlanNode, plan: AlchemyPlan, demand: number, rounding: ReprocessRounding = REPROCESS_ROUNDING): AlchemyRoute | null {
   const { info } = plan
   const main = info.materials.find((m) => m.typeId === node.item.typeId)
   const y = scrapYield(ctx.host.settings.chain.scrapmetalLevel)
-  const perUnit = main ? reprocessOut(main.quantity, 1, y, REPROCESS_ROUNDING) : 0
-  if (!main || perUnit < 1) return null
+  const need = main ? portionsFor(main.quantity, y, demand, rounding) : null
+  if (!main || need === null) return null
+  // 每份的产出：整批取整时给精确值（最多 2 位小数），逐个取整时给取整后的
+  const perUnit = rounding === 'batch' ? roundHalfAway(main.quantity * y, 2) : reprocessOut(main.quantity, 1, y, rounding)
   // 每个配方流程出 perRun 个粗糙产物，全部拿去提炼；提炼一次要 portion 个
   const perRun = plan.bp.products.find((p) => p.typeId === info.id)?.quantity ?? 1
   const portion = Math.max(1, info.portion)
-  const runs = runsForQuantity(Math.ceil(demand / perUnit) * portion, perRun)
+  const runs = runsForQuantity(need * portion, perRun)
   const units = runs * perRun
   const batches = Math.floor(units / portion)
-  const output = reprocessOut(main.quantity, batches, y, REPROCESS_ROUNDING)
+  const output = reprocessOut(main.quantity, batches, y, rounding)
   const byproducts = info.materials
     .filter((m) => m.typeId !== main.typeId)
-    .map((m) => ({ typeId: m.typeId, quantity: reprocessOut(m.quantity, batches, y, REPROCESS_ROUNDING) }))
+    .map((m) => ({ typeId: m.typeId, quantity: reprocessOut(m.quantity, batches, y, rounding) }))
     .filter((b) => b.quantity > 0)
 
   const ev = evaluateAt(ctx, {
