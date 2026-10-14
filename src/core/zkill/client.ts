@@ -226,7 +226,7 @@ export class ZkillClient {
     const wait = state.lastEnd + this.minIntervalMs - clock.now()
     if (wait > 0) {
       try {
-        await sleep(scheduler, wait, AbortSignal.any([this.life.signal, item.cancel.signal]))
+        await sleep(scheduler, wait, anySignal(this.life.signal, item.cancel.signal))
       } catch {
         return this.stopped ? this.fail('aborted', '客户端已停止') : cancelled()
       }
@@ -337,4 +337,17 @@ export class ZkillClient {
       this.ports.logger.warn(text)
     }
   }
+}
+
+/** 任一信号中止就中止（AbortSignal.any 要 Node 20.3 以上，engines 写的是 18） */
+function anySignal(a: AbortSignal, b: AbortSignal): AbortSignal {
+  const control = new AbortController()
+  for (const signal of [a, b]) {
+    if (signal.aborted) {
+      control.abort()
+      break
+    }
+    signal.addEventListener('abort', () => control.abort(), { once: true })
+  }
+  return control.signal
 }
