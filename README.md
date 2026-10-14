@@ -2,11 +2,11 @@
 
 > 0.0.x 是测试版：功能还在陆续加入，配置项和命令的写法可能还会变。第一个正式版是 0.1.0。
 
-EVE Online market helper for the official QQ bot, as a Koishi plugin (Tranquility server). It answers item price queries for the NPC trade hubs, configured markets and player structure markets (synced with one authorized service character through EVE SSO), appraises pasted lists and EFT fittings, draws price history charts, and searches items by Chinese or English name, pinyin or common slang. It also lists incursions, sends the influence maps, takes screenshots of battle reports, shows the server status and translates names between Chinese and English. It only replies on the official QQ platform (adapter-qq) and leaves other platforms such as OneBot alone. All replies are in Chinese.
+EVE Online market helper for the official QQ bot, as a Koishi plugin (Tranquility server). It answers item price queries for the NPC trade hubs, configured markets and player structure markets (synced with one authorized service character through EVE SSO), appraises pasted lists and EFT fittings, draws price history charts, and searches items by Chinese or English name, pinyin or common slang. It also lists incursions, sends the influence maps, takes screenshots of battle reports and other whitelisted websites, turns zKillboard kills into battle reports, reads existing Janice appraisals, draws zKillboard pilot cards, shows the server status and translates names between Chinese and English. It only replies on the official QQ platform (adapter-qq) and leaves other platforms such as OneBot alone. All replies are in Chinese.
 
 EVE Online 欧服（Tranquility）市场助手，Koishi 插件，**只在 QQ 官方机器人上回复**。
 
-## 现在能做什么（0.0.6）
+## 现在能做什么（0.0.7）
 
 | 命令 | 例子 | 说明 |
 |---|---|---|
@@ -192,14 +192,15 @@ QQ 客户端对 Markdown、按钮、图片的显示有些地方没有文档写�
 
 ## 更新记录
 
-- 未发布：
+- 0.0.7（测试版）：
   - 网站截图：新命令「截图 网址」和管理员用的「截图测试 网址」；@机器人 发名单里网站的链接自动截图。自带 BR 工具战报、Warbeacon 战报、Janice 估价结果、DOTLAN 星图，「战报」也认 Warbeacon 战报；控制台新增「截图」分组：每个内置网站的启用、自动截图、最多几张（1–3），和最多 10 行的自定义网站表。
-  - 击杀转战报：新命令「击杀 链接或编号」回击杀卡片，带「BR 战报」「Warbeacon 战报」两个按钮；「战报」也认 `战报 击杀 编号 [warbeacon]` 和 zKill 击杀链接，直接截战报。@机器人 发 zKill 或欧服击杀链接自动回卡片（控制台「截图」里的 `killAuto`，默认开；名单里网站的链接排在它前面）。战报地址：BR 工具取击杀所在的整点，Warbeacon 取击杀前后各 1 小时；深渊里的击杀和星系数据不全的击杀没有战报。回复里不写出链接。
-  - Janice 估价：新命令「估价 链接」，@机器人 发 Janice 估价链接也行。所有者在控制台新分组「Janice 估价」填 API 密钥（密钥只出现在请求头里）、选谁能用（默认授权群和授权私聊）；读出这份估价的卡片、三行价格、物品清单和网页截图。「截图」命令多一种写法「截图 janice 编号」。需要按测试步骤 A99–A105 在生产机上实测。
-  - KB 人物卡：新命令「KB 人物名」（别名「战绩」），回一张「新伊甸日报」样式的人物战绩图；数据来自 zKillboard 和欧服官方接口，不存盘、不记录谁查了谁。@机器人 发 zKill 人物链接自动出卡。控制台新分组「KB 人物卡」：在哪里可用（默认所有群和私聊）、近期大击杀和作息、自动识别（默认开）、不显示的人物。名字不完整时用市场授权模糊搜索。需要按测试步骤 A106–A123 在生产机上实测（含中文字体）。
-  - 安全：只打开名单里的域名、一律 https；跳到名单外的域名就放弃；页面里对本机和内网的请求一律拦下；回复里不写出链接；验证页回复「这个网站不让自动截图」。
+  - 击杀转战报：新命令「击杀 链接或编号」回击杀卡片，带「BR 战报」「Warbeacon 战报」两个按钮；「战报」也认 `战报 击杀 编号 [warbeacon]` 和 zKill 击杀链接。@机器人 发 zKill 或欧服击杀链接自动回卡片（控制台「截图」里的 `killAuto`，默认开）。BR 工具取击杀所在的整点，Warbeacon 取击杀前后各 1 小时；深渊里的击杀和星系数据不全的击杀没有战报。
+  - Janice 估价：新命令「估价 链接」，@机器人 发 Janice 估价链接也行；读出现成估价的三个价格、物品清单和网页截图，不把清单发给 Janice。所有者在控制台新分组「Janice 估价」填 API 密钥（只出现在请求头里）、选谁能用（默认授权群和授权私聊）。「截图」多一种写法「截图 janice 编号」。
+  - KB 人物卡：新命令「KB 人物名」（别名「战绩」），回一张「新伊甸日报」样式的人物战绩图；数据来自 zKillboard 和欧服官方接口，不存盘、不记录谁查了谁。@机器人 发 zKill 人物链接自动出卡。控制台新分组「KB 人物卡」：在哪里可用（默认所有群和私聊）、近期大击杀和作息、自动识别（默认开）、不显示的人物。
+  - 安全：截图只打开名单里的域名、一律 https，跳到名单外的域名就放弃，页面里对本机和内网的请求一律拦下；Janice、zKill 的请求不跟随重定向；带令牌的 ESI 请求和 SSO token 请求不跟随跳转，3xx 当失败；回复里不写出链接，日志和回复里的密钥一律脱敏。
   - 旧开关：`render.brAuto` 标为旧设置，关着时 BR 工具战报一律不自动截图。
-  - 升级：升级前看一眼控制台「图片与截图」里的旧开关；开着（默认）就什么都不用做。各网站的页面参数（等待时间、视口）要按测试步骤 A73–A85、击杀转战报要按 A86–A98 在生产机上实测，不对的在「截图」里把那个网站关掉，不用降级。
+  - 新增访问的网站：zkillboard.com、janice.e-351.com、warbeacon.net、evemaps.dotlan.net、images.evetech.net（服务器限制出站网络时要放行）。
+  - 升级：控制台里不用重填任何东西，Janice 密钥由所有者自己填。升级重启后看 puppeteer 是不是「已加载」，再看一眼控制台「图片与截图」里的旧开关；开着（默认）就什么都不用做。各网站的页面参数要按测试步骤 A73–A98、Janice 按 A99–A105、KB 人物卡按 A106–A123 在生产机上实测（含中文字体），不对的在「截图」里把那个网站关掉，不用降级。
   - 已知限制：页面脚本理论上能连本机的 WebSocket，域名解析到内网地址也挡不住（名单里都是公开网站，风险低）。
 
 - 0.0.6（测试版）：
