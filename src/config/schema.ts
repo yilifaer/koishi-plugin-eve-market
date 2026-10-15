@@ -3,6 +3,7 @@ import { FORMULA_DEFAULTS } from '../core/industry'
 import type {
   Clickable, JaniceWho, KbScope, KbToneMode, Lang, ListPriceDisplayMode, MarketType, NumberStyle, OutputMode, PriceDisplayMode, PriceSide, Visibility,
 } from '../core/types'
+import { SHOT_WAIT_DEFAULT_SEC, SHOT_WAIT_WARBEACON_SEC } from '../constants'
 import { INVALID_ROW_KEY } from './normalize'
 import {
   DEFAULT_BASE_MARKET, DEFAULT_CALLBACK_URL, DEFAULT_COALITION_MAP_URL, DEFAULT_EXTRA_FEE_LABEL, DEFAULT_GLOSSARY_URL,
@@ -105,8 +106,8 @@ export interface IndustryConfig {
   structures: IndustryStructureRow[]
 }
 
-export interface ShotSiteConfig { enabled: boolean; auto: boolean; maxImages: number }
-export interface ShotCustomRow { name: string; host: string; pathPrefix: string; auto: boolean; maxImages: number }
+export interface ShotSiteConfig { enabled: boolean; auto: boolean; maxImages: number; maxWaitSec: number }
+export interface ShotCustomRow { name: string; host: string; pathPrefix: string; auto: boolean; maxImages: number; maxWaitSec: number }
 
 export interface Config {
   general: { requireAt: boolean; allowSandbox: boolean; qqWatchdog: boolean }
@@ -160,10 +161,11 @@ function table<T>(row: Schema<any, T>, fallback: T[] = []) {
   return Schema.array(row.default(INVALID_ROW as T).loose()).role('table').default(fallback).loose()
 }
 
-const shotSite = (max: number) => Schema.object({
+const shotSite = (max: number, wait = SHOT_WAIT_DEFAULT_SEC) => Schema.object({
   enabled: bool(true).description('启用'),
   auto: bool(true).description('自动截图'),
   maxImages: num(max).description('最多几张（1–3）'),
+  maxWaitSec: num(wait).description('最长等待（秒，30–180）：打开页面、等内容出来、截图一共最多等这么久，超过就算超时'),
 }).default({} as ShotSiteConfig).loose()
 
 const priceSide = () => choice<PriceSide>([['sell', '出售价'], ['mid', '中间价'], ['buy', '收购价']])
@@ -430,7 +432,7 @@ export const Config: Schema<Config> = Schema.intersect([
       killAuto: bool(true)
         .description('@机器人 的消息里带 zKill 击杀链接时，自动回复击杀卡片（战报网站用下面的 BR 工具和 Warbeacon 设置）'),
       br: shotSite(2).description('BR 工具战报（br.evetools.org）'),
-      warbeacon: shotSite(2).description('Warbeacon 战报（warbeacon.net）'),
+      warbeacon: shotSite(2, SHOT_WAIT_WARBEACON_SEC).description('Warbeacon 战报（warbeacon.net）'),
       janice: shotSite(2).description('Janice 估价结果（janice.e-351.com/a/…）'),
       dotlan: shotSite(1).description('DOTLAN 星图（evemaps.dotlan.net 的星域、星系、联盟、军团页和星图）'),
       custom: table(Schema.object({
@@ -439,10 +441,11 @@ export const Config: Schema<Config> = Schema.intersect([
         pathPrefix: str().description('网址开头'),
         auto: strictBool(true).description('自动截图'),
         maxImages: num(1).description('最多几张'),
+        maxWaitSec: num(SHOT_WAIT_DEFAULT_SEC).description('最长等待（秒）'),
       }))
         .description([
           '**自定义网站**：一行一个，最多 10 行。**名称**是回复里显示的名字，不能写成网址的样子；**域名**只写域名，例如 kb.example.com，它下面的子域名也算，粘贴整个网址会自动只取域名。',
-          '**网址开头**可选：只截这个开头的页面，例如 /kill/，留空 = 这个域名下的所有页面。**自动截图**关掉 = 要写「截图 网址」才截。**最多几张**1–3，每张最多 4000 像素高。',
+          '**网址开头**可选：只截这个开头的页面，例如 /kill/，留空 = 这个域名下的所有页面。**自动截图**关掉 = 要写「截图 网址」才截。**最多几张**1–3，每张最多 4000 像素高。**最长等待**30–180 秒，默认 60，页面很慢的网站可以调大（QQ 被动回复要在 5 分钟内发完，所以不能超过 180）。',
           'IP 地址、localhost、内网域名、带端口或用户名的域名、内置网站已有的域名和 zKillboard 会被跳过，并在「市场状态」里写明。',
         ].join('\n')),
     }).default({} as Config['screenshot']).loose(),

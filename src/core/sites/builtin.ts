@@ -2,7 +2,9 @@
 // DOTLAN 的路径（/map/<星域>[/<星系>|/sov…]、/region/…、/system/…[/kills]、/alliance/…、/corp/…）2026-10-14 核对过能打开；
 // 页面参数（等待时间、视口）还要在生产机上用「截图测试」调。需要改时只改这个文件里对应的一行。BR 工具委托 universe/br-link。
 
-import { BR_SETTLE_MS, BR_VIEWPORT_HEIGHT, BR_VIEWPORT_WIDTH, JANICE_CODE_PATTERN, JANICE_HOST } from '../../constants'
+import {
+  BR_SETTLE_MS, BR_VIEWPORT_HEIGHT, BR_VIEWPORT_WIDTH, JANICE_CODE_PATTERN, JANICE_HOST, SHOT_WAIT_DEFAULT_SEC, SHOT_WAIT_WARBEACON_SEC,
+} from '../../constants'
 import { BR_HOST } from '../universe'
 import type { BuiltinSiteId, ShotProfile, SiteKind } from './types'
 
@@ -13,7 +15,9 @@ export interface BuiltinSite {
   name: string
   host: string
   badLinkHint: string
-  profile: Omit<ShotProfile, 'maxImages'>
+  profile: Omit<ShotProfile, 'maxImages' | 'maxWaitSec'>
+  /** 默认最长等待（秒） */
+  waitSec: number
   /** 路径（已去掉参数和锚点）合格时给出规范化后的路径，否则 null；BR 不用这个，走 br-link */
   path?: (path: string) => string | null
 }
@@ -28,6 +32,13 @@ const JANICE = new RegExp(`^\\/a\\/(${JANICE_CODE_PATTERN})(?:\\/([a-z]{1,20}))?
 // DOTLAN：第一段是这五种之一，后面 1–3 段
 const DOTLAN = /^\/(map|region|system|alliance|corp)((?:\/[A-Za-z0-9_.'%()-]{1,80}){1,3})\/?$/i
 
+// DOTLAN 的广告：页面里是 .ad-block（含 .ad-block-left / -right）包着 ins.adsbygoogle；谷歌脚本还会插 iframe、
+// aswift_* 容器和自动广告 .google-auto-placed。藏掉以后留下的空列由选择器里的整块容器一起收掉
+const DOTLAN_HIDE = [
+  '.ad-block', 'ins.adsbygoogle', '.adsbygoogle', '.google-auto-placed', 'div[id^="aswift_"]', 'iframe[id^="aswift_"]',
+  'iframe[id^="google_ads_iframe"]', 'iframe[src*="googlesyndication.com"]', 'iframe[src*="doubleclick.net"]',
+] as const
+
 export const BUILTIN_SITES: readonly BuiltinSite[] = [
   {
     id: 'br',
@@ -36,6 +47,7 @@ export const BUILTIN_SITES: readonly BuiltinSite[] = [
     host: BR_HOST,
     badLinkHint: '只支持战报页',
     profile: { ...VIEWPORT, idleMs: 6000, settleMs: BR_SETTLE_MS },
+    waitSec: SHOT_WAIT_DEFAULT_SEC,
   },
   {
     id: 'warbeacon',
@@ -44,7 +56,9 @@ export const BUILTIN_SITES: readonly BuiltinSite[] = [
     host: 'warbeacon.net',
     badLinkHint: '只支持关联战报和单场战报页',
     // 右上的拖放提示框是 naive-ui 的气泡，挂在 body 下的 .v-binder-follower-container 里，截图前整个藏起来
-    profile: { ...VIEWPORT, idleMs: 6000, settleMs: 8000, growViewport: true, hideSelectors: ['.v-binder-follower-container'] },
+    profile: { ...VIEWPORT, idleMs: 6000, settleMs: 8000, readyScroll: true, growViewport: true, hideSelectors: ['.v-binder-follower-container'] },
+    // 页面脚本很重（慢机器上要 50 秒才出内容）
+    waitSec: SHOT_WAIT_WARBEACON_SEC,
     path: (path) => {
       const r = WARBEACON_RELATED.exec(path)
       if (r) return `/br/related/${r[1]}/${r[2]}/${r[3] ? `${r[3]}/` : ''}`
@@ -59,6 +73,7 @@ export const BUILTIN_SITES: readonly BuiltinSite[] = [
     host: JANICE_HOST,
     badLinkHint: '只支持估价结果页',
     profile: { ...VIEWPORT, idleMs: 4000, settleMs: 5000 },
+    waitSec: SHOT_WAIT_DEFAULT_SEC,
     path: (path) => {
       const m = JANICE.exec(path)
       return m ? `/a/${m[1]}${m[2] ? `/${m[2]}` : ''}` : null
@@ -70,8 +85,13 @@ export const BUILTIN_SITES: readonly BuiltinSite[] = [
     name: 'DOTLAN 星图',
     host: 'evemaps.dotlan.net',
     badLinkHint: '只支持星域、星系、联盟、军团页和星图',
-    // cookie 同意框盖住星图还把页面压暗：点「I decline」
-    profile: { ...VIEWPORT, idleMs: 5000, settleMs: 5000, dismissTexts: ['I decline'] },
+    // cookie 同意框盖住星图还把页面压暗：点「I decline」；谷歌广告（右侧一列）和右下角的订阅浮动条（会盖住图例）藏起来
+    profile: {
+      ...VIEWPORT, idleMs: 5000, settleMs: 5000, dismissTexts: ['I decline'],
+      hideSelectors: DOTLAN_HIDE,
+      hideFixedTexts: ['EveMaps subscription'],
+    },
+    waitSec: SHOT_WAIT_DEFAULT_SEC,
     path: (path) => {
       const m = DOTLAN.exec(path)
       if (!m) return null
@@ -83,7 +103,7 @@ export const BUILTIN_SITES: readonly BuiltinSite[] = [
 ]
 
 /** 自定义网站的页面参数 */
-export const CUSTOM_PROFILE: Omit<ShotProfile, 'maxImages'> = { ...VIEWPORT, idleMs: 5000, settleMs: 5000 }
+export const CUSTOM_PROFILE: Omit<ShotProfile, 'maxImages' | 'maxWaitSec'> = { ...VIEWPORT, idleMs: 5000, settleMs: 5000 }
 
 /** 最长的规范化地址 */
 export const MAX_URL_LENGTH = 500

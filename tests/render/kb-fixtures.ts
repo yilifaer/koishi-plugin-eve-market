@@ -80,7 +80,7 @@ export function rookie(): PilotProfile {
     months: Array.from({ length: 12 }, (_, i) => ({ ym: `2025-${String(i + 1).padStart(2, '0')}`, kills: i === 11 ? 3 : 0, losses: i === 11 ? 4 : 0 })),
     ships: [{ typeId: 1004, zh: '', en: 'Rookie Ship', kills: 3, share: 100 }],
     places: [{ systemId: 30000009, system: sys(30000009, 'Newbie', 0.9, 'Starter'), kills: 3 }],
-    activity: { source: 'labels', samples: 0, hoursUtc: Array(24).fill(0), hoursBeijing: Array(24).fill(0), peak: null, zones: ['eu', 'use'], text: '主要活跃时段：欧洲时段 / 美东时段' },
+    activity: { source: 'labels', samples: 0, hoursUtc: Array(24).fill(0), hoursBeijing: Array(24).fill(0), peak: null, zones: ['eu', 'use'], text: '欧洲时段 / 美东时段' },
     recentKill: null,
     recentLoss: null,
     persona: 'rookie',

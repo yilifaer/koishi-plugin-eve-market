@@ -8,7 +8,7 @@ import type { PriceQuote, QuoteStatus, TypeId } from '../../../src/core/types'
 import { fakeItems, HOBGOBLIN2, item, LSE2, MTU, NANITE, RAVEN, TRITANIUM } from './helpers'
 
 function quote(typeId: TypeId, sell: number | null, buy: number | null, status: QuoteStatus = 'ok', dataTime: number | null = 1000): PriceQuote {
-  const side = (best: number | null) => (best === null ? null : { best, volumeAtBest: 1, orders: 1, totalVolume: 1 })
+  const side = (best: number | null) => (best === null ? null : { best, volumeAtBest: 1, orders: 1, totalVolume: 1, volumeNear: 1 })
   return {
     marketKey: 'm', typeId, sell: side(sell), buy: side(buy), mid: sell !== null && buy !== null ? (sell + buy) / 2 : null,
     status, dataTime, ageSec: 0, source: 'region',

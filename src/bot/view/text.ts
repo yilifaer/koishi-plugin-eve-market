@@ -23,7 +23,7 @@ export function priceText(price: FormattedPrice): string {
 
 export function lineText(line: Line): string {
   if ('text' in line) return stripMarkdown(line.text)
-  return [stripMarkdown(line.label), line.price ? priceText(line.price) : '', line.extra ? stripMarkdown(line.extra) : '']
+  return [stripMarkdown(line.label), line.price ? priceText(line.price) : '', line.extra ? stripMarkdown(line.extra) : '', line.count ? `· ${stripMarkdown(line.count)}` : '']
     .filter(Boolean)
     .join(' ')
 }

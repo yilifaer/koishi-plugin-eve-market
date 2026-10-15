@@ -170,7 +170,7 @@ describe('EVE 授权 → 建筑市场 → 查价', () => {
     await until(() => synced(e))
     const sent = await e.h.group('查价 乌鸦级')
     expect(sent).toHaveLength(1)
-    expect(sent[0].markdown).toContain('**联盟市场A**\n\n- 出售 `270,000,000 ISK`（270.00M）▲4.5%\n- 中间 `255,000,000 ISK`（255.00M）\n- 收购 `240,000,000 ISK`（240.00M）▼3.6%')
+    expect(sent[0].markdown).toContain('**联盟市场A**\n\n- 出售 `270,000,000 ISK`（270.00M）▲4.5% · 在售 6 个\n- 中间 `255,000,000 ISK`（255.00M）\n- 收购 `240,000,000 ISK`（240.00M）▼3.6% · 求购 3 个')
     expect(card(await e.h.group('查价 前线 乌鸦级'))).toContain('**联盟市场A')
 
     // 别的群：和这个市场不存在一样

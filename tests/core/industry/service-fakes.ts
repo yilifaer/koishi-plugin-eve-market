@@ -30,6 +30,8 @@ export class FakePrices implements Pick<MarketService, 'getQuotes' | 'available'
   readonly status = new Map<string, MarketAvailability>()
   readonly calls: Array<{ market: string; typeIds: TypeId[] }> = []
   readonly touched: string[] = []
+  /** 这些市场的报价都是「超时，没取到」（维护 / ESI 不通时的样子） */
+  readonly timedOut = new Set<string>()
 
   set(market: string, prices: Record<number, number | FakeBookEntry>): this {
     const book = this.books.get(market) ?? new Map<TypeId, FakeBookEntry>()
@@ -41,6 +43,7 @@ export class FakePrices implements Pick<MarketService, 'getQuotes' | 'available'
   async getQuotes(marketKey: string, items: Array<{ typeId: TypeId; qty: number }>): Promise<Map<TypeId, PriceQuote>> {
     this.calls.push({ market: marketKey, typeIds: items.map((i) => i.typeId) })
     const book = this.books.get(marketKey) ?? new Map<TypeId, FakeBookEntry>()
+    if (this.timedOut.has(marketKey)) return new Map(items.map(({ typeId }) => [typeId, timeoutQuote(marketKey, typeId)]))
     return new Map(items.map(({ typeId }) => [typeId, quoteOf(marketKey, typeId, book.get(typeId))]))
   }
 
@@ -54,7 +57,11 @@ export class FakePrices implements Pick<MarketService, 'getQuotes' | 'available'
 }
 
 function side(best: number | undefined) {
-  return best === undefined ? null : { best, volumeAtBest: 10, orders: 1, totalVolume: 10 }
+  return best === undefined ? null : { best, volumeAtBest: 10, orders: 1, totalVolume: 10, volumeNear: 10 }
+}
+
+function timeoutQuote(marketKey: string, typeId: TypeId): PriceQuote {
+  return { marketKey, typeId, sell: null, buy: null, mid: null, status: 'timeout', dataTime: null, ageSec: null, source: 'region' }
 }
 
 function quoteOf(marketKey: string, typeId: TypeId, entry: FakeBookEntry | undefined): PriceQuote {

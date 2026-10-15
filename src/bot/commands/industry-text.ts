@@ -15,6 +15,12 @@ export const SIDE_SHORT: Record<PriceSide, string> = { sell: '出售', mid: '中
 /** 某一边没有价格时 */
 export const SIDE_NONE: Record<PriceSide, string> = { sell: '暂无卖单', mid: '—', buy: '暂无买单' }
 
+/** 成品没有价格时的说法：这次没取到报价（维护、超时）≠ 市场真的没有这一侧的挂单，和查价的「暂时取不到价格」一致 */
+export const PRICE_UNAVAILABLE = '暂时取不到价格'
+export function sideNone(v: { side: PriceSide; unavailable?: boolean }): string {
+  return v.unavailable ? PRICE_UNAVAILABLE : SIDE_NONE[v.side]
+}
+
 /** 参数写错（BAD_ARGUMENT 的 reason） */
 export const BAD_ARG: Partial<Record<FailureReason, string>> = {
   'quantity': '数量要是正整数',

@@ -214,6 +214,16 @@ describe('编出来的结果', () => {
     expect(out).not.toContain('利润率')
   })
 
+  it('a product price that could not be fetched says 暂时取不到价格; only a real empty market says 暂无卖单', () => {
+    const none = { marketKey: 'jita', side: 'sell' as const, unit: null, total: null }
+    const down = md(overviewCard(env0, result({ productValue: { ...none, unavailable: true }, profit: null }), [], false))
+    expect(down).toContain('成品 jita 暂时取不到价格')
+    expect(down).not.toContain('暂无卖单')
+    const empty = md(overviewCard(env0, result({ productValue: none, profit: null }), [], false))
+    expect(empty).toContain('成品 jita 暂无卖单')
+    expect(empty).not.toContain('暂时取不到价格')
+  })
+
   it('the head line shows the security class of the location; none without a location', () => {
     expect(md(overviewCard(env0, result({ secClass: 'null' }), [], false))).toContain('XX-1 · 00 · 蓝图 ME 10 / TE 20')
     expect(md(overviewCard(env0, result({ secClass: 'low' }), [], false))).toContain('XX-1 · 低安 · ')

@@ -27,8 +27,17 @@ export function keepBoldSpacing(line: string): string {
   return m ? `${m[1]}**${m[2]}${m[3]}${m[4]}**` : line
 }
 
+// 数量说明（Line.count）前面放一个不可见分隔符：粗体合并只处理它前面的部分，数量永远留在粗体外面，最后再去掉
+const COUNT_MARK = '\u2063'
+
+function fixLine(line: string): string {
+  const at = line.indexOf(COUNT_MARK)
+  if (at < 0) return keepBoldSpacing(line)
+  return `${keepBoldSpacing(line.slice(0, at))}${line.slice(at + 1)}`
+}
+
 function fixLines(text: string): string {
-  return text.split('\n').map(keepBoldSpacing).join('\n')
+  return text.split('\n').map(fixLine).join('\n')
 }
 
 export function styledNumber(text: string, style: NumberStyle): string {
@@ -48,9 +57,10 @@ export function priceMarkdown(price: FormattedPrice, style: NumberStyle): string
 export function lineMarkdown(line: Line, style: NumberStyle): string {
   if ('text' in line) return line.text
   const head = [line.label, line.price ? priceMarkdown(line.price, style) : ''].filter(Boolean).join(' ')
-  if (!line.extra) return head
   // 全角括号后面直接接（`…`（258.40M）▲4.5%），其他情况空一格
-  return head && !head.endsWith('）') ? `${head} ${line.extra}` : `${head}${line.extra}`
+  const main = !line.extra ? head : head && !head.endsWith('）') ? `${head} ${line.extra}` : `${head}${line.extra}`
+  if (!line.count) return main
+  return `${main}${COUNT_MARK}${main.endsWith('）') ? '' : ' '}· ${line.count}`
 }
 
 // QQ 会把前后几个有序列表连成一个（编号接着上一个往下数），所以一张卡片里有不止一个有序列表时，

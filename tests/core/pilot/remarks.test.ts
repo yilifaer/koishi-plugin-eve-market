@@ -33,7 +33,8 @@ describe('remark rules: every id has a positive and a negative case', () => {
     ['ganker', { stats: { kills: 100, labels: { ganked: label(40) } } }, { stats: { kills: 100, labels: { ganked: label(39) } } }],
     ['podded', { stats: { losses: 40, groups: [group(29, 20)] } }, { stats: { losses: 40, groups: [group(29, 19)] } }],
     ['npcDeaths', { stats: { labels: { npc: label(0, 3) } } }, { stats: { labels: { npc: label(0, 2) } } }],
-    ['awox', { stats: { labels: { awox: label(0, 1) } } }, { stats: { labels: {} } }],
+    ['awoxKills', { stats: { labels: { awox: label(1, 0) } } }, { stats: { labels: { awox: label(0, 4) } } }],
+    ['awoxLosses', { stats: { labels: { awox: label(0, 1) } } }, { stats: { labels: { awox: label(4, 0) } } }],
     ['soloLosses', { stats: { losses: 50, soloLosses: 10 } }, { stats: { losses: 50, soloLosses: 9 } }],
     ['highsecLosses', { stats: { losses: 50, labels: { 'loc:highsec': label(0, 20) } } }, { stats: { losses: 50, labels: { 'loc:highsec': label(0, 19) } } }],
     ['cheapShips', { topShipGroup: 25, stats: { kills: 50 } }, { topShipGroup: 25, stats: { kills: 49 } }],
@@ -69,6 +70,85 @@ describe('remark rules: every id has a positive and a negative case', () => {
   })
 })
 
+describe('awox: kills and losses are separate topics', () => {
+  const ctx = (seed: string, tone: 'gentle' | 'snarky' | 'mixed') => ({ values: VALUES, tone, seed, used: new Set<string>() })
+  const render = (pool: { gentle: readonly string[]; snarky: readonly string[] }) => [...pool.gentle, ...pool.snarky].map((t) => fillTemplate(t, VALUES) ?? '')
+  const kills = render(REMARK_LINES.awoxKills)
+  const losses = render(REMARK_LINES.awoxLosses)
+
+  it('a pilot with only awox losses never gets a line that implies treachery', () => {
+    const f = facts({ stats: { labels: { awox: label(0, 3) } } })
+    expect(matched(f)).toEqual(['awoxLosses'])
+    for (const tone of ['gentle', 'snarky', 'mixed'] as const) {
+      for (let d = 1; d <= 40; d++) {
+        const out = pickRemarks(f, [], ctx(`9:2026-10-${d}`, tone))
+        expect(out).toHaveLength(1)
+        expect(losses, out[0]).toContain(out[0])
+        expect(kills, out[0]).not.toContain(out[0])
+      }
+    }
+  })
+
+  it('a pilot with awox kills only gets lines from the reworded pool', () => {
+    const f = facts({ stats: { labels: { awox: label(2, 0) } } })
+    expect(matched(f)).toEqual(['awoxKills'])
+    const seen = new Set<string>()
+    for (let d = 1; d <= 60; d++) seen.add(pickRemarks(f, [], ctx(`9:2026-10-${d}`, 'snarky'))[0])
+    expect(seen.size).toBeGreaterThan(3)
+    for (const l of seen) {
+      expect(kills).toContain(l)
+      expect(losses).not.toContain(l)
+    }
+  })
+
+  it('the pools do not overlap, and the loss pool has no traitor wording', () => {
+    expect(kills.filter((l) => losses.includes(l))).toEqual([])
+    for (const l of losses) {
+      expect(l, l).not.toMatch(/内鬼|卧底|背刺|开火|炮口|对队友|对友军|打到过友军/)
+      expect(l, l).toMatch(/被|遭|挨|毁于|倒在|成了|失去|误伤|之手|下手|友军事故|友军火力|自己人|自家|队友/)
+    }
+    for (const l of kills) expect(l, l).not.toMatch(/被队友|被自己人|被自家|遭队友|遭遇|受害/)
+  })
+
+  it('the loss pool is big enough: >= 6 gentle, >= 15 snarky', () => {
+    expect(REMARK_LINES.awoxLosses.gentle.length).toBeGreaterThanOrEqual(6)
+    expect(REMARK_LINES.awoxLosses.snarky.length).toBeGreaterThanOrEqual(15)
+  })
+
+  it('the kill pool and the title are big enough', () => {
+    expect(REMARK_LINES.awoxKills.gentle.length).toBeGreaterThanOrEqual(6)
+    expect(REMARK_LINES.awoxKills.snarky.length).toBeGreaterThanOrEqual(15)
+    expect(TITLE_COPY.awoxSuspect.remarks.gentle.length).toBeGreaterThanOrEqual(8)
+    expect(TITLE_COPY.awoxSuspect.remarks.snarky.length).toBeGreaterThanOrEqual(16)
+  })
+
+  it('the title is the pod ferry one', () => {
+    expect(TITLE_COPY.awoxSuspect.label).toBe('蛋舱摆渡人')
+  })
+
+  it('no copy anywhere accuses anyone of treachery', () => {
+    const banned = /内鬼|卧底|背刺|叛徒|间谍|不分敌我/
+    const pools: Array<[string, readonly string[]]> = []
+    for (const [id, v] of Object.entries(REMARK_LINES)) pools.push([id, [...v.gentle, ...v.snarky]])
+    for (const [id, v] of Object.entries(TITLE_COPY)) pools.push([`title ${id}`, [v.label, v.when, ...v.remarks.gentle, ...v.remarks.snarky]])
+    for (const [id, lines] of pools) for (const l of lines) expect(l, id).not.toMatch(banned)
+  })
+
+  it('the friendly-fire pools are also free of doubt and betrayal wording', () => {
+    const banned = /怀疑|信任|换阵营|背叛|嫌疑/
+    const lines = [...REMARK_LINES.awoxKills.gentle, ...REMARK_LINES.awoxKills.snarky, ...REMARK_LINES.awoxLosses.gentle, ...REMARK_LINES.awoxLosses.snarky,
+      ...TITLE_COPY.awoxSuspect.remarks.gentle, ...TITLE_COPY.awoxSuspect.remarks.snarky]
+    for (const l of lines) expect(l).not.toMatch(banned)
+  })
+})
+
+describe('remarks: old accounts with few records are not newbies', () => {
+  it('newbie is gated on account age', () => {
+    expect(matched(facts({ ageDays: 6 * 365, stats: { kills: 3, losses: 3 } }))).not.toContain('newbie')
+    expect(matched(facts({ ageDays: 30, stats: { kills: 3, losses: 3 } }))).toContain('newbie')
+  })
+})
+
 describe('pickRemarks', () => {
   const ctx = (over: Partial<Parameters<typeof pickRemarks>[2]> = {}) => ({ values: VALUES, tone: 'mixed' as const, seed: '2119876543:2026-10-14', used: new Set<string>(), ...over })
   const busy = facts({
@@ -91,7 +171,7 @@ describe('pickRemarks', () => {
   it('the one line comes from the most specific matching rule', () => {
     // 有近期大损失（第 0 档），泛泛的「损失多于击毁」（第 3 档）不该上
     const f = facts({ stats: { kills: 5, losses: 40 }, recentLossValue: 2e9 })
-    const generic = tonePool('mixed', REMARK_LINES.lossesGtKills).map((t) => fillTemplate(t, VALUES))
+    const generic = tonePool('mixed', REMARK_LINES.lossesGtKills).map((t) => fillTemplate(t, VALUES) ?? '')
     for (let d = 1; d <= 10; d++) expect(generic).not.toContain(pickRemarks(f, [], ctx({ seed: `3:2026-10-${d}` }))[0])
   })
 
@@ -131,7 +211,7 @@ describe('pickRemarks', () => {
     const f = facts({ recentKillValue: 12e9, recentLossValue: 2e9 })
     for (let d = 1; d <= 10; d++) {
       const out = pickRemarks(f, [], ctx({ seed: `1:2026-10-${d}` }))
-      const small = REMARK_LINES.bigKillRecent.gentle.concat(REMARK_LINES.bigKillRecent.snarky).map((t) => fillTemplate(t, VALUES))
+      const small = REMARK_LINES.bigKillRecent.gentle.concat(REMARK_LINES.bigKillRecent.snarky).map((t) => fillTemplate(t, VALUES) ?? '')
       expect(out.some((l) => small.includes(l))).toBe(false)
     }
   })
@@ -161,7 +241,7 @@ describe('pickRemarks', () => {
       const seed = `5:2026-10-${d}`
       const g = pickRemarks(busy, [], ctx({ tone: 'gentle', seed }))
       const s = pickRemarks(busy, [], ctx({ tone: 'snarky', seed }))
-      const fill = (xs: readonly string[]) => xs.map((t) => fillTemplate(t, VALUES))
+      const fill = (xs: readonly string[]) => xs.map((t) => fillTemplate(t, VALUES) ?? '')
       const gentle = Object.values(REMARK_LINES).flatMap((v) => fill(v.gentle))
       const snarky = Object.values(REMARK_LINES).flatMap((v) => fill(v.snarky))
       for (const line of g) expect(gentle).toContain(line)

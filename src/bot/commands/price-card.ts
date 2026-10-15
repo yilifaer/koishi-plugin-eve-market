@@ -2,8 +2,9 @@
 // PLEX 这类全局市场物品只显示一次；植入体套装第一个市场逐件列出，其他市场只写一行合计。
 
 import { SHOW_MID } from '../../constants'
+import { formatCount } from '../../core/format'
 import type {
-  DisplaySettings, EveCore, FormattedPrice, ImplantSet, ItemInfo, MarketDef, PriceQuote, TypeId,
+  DisplaySettings, EveCore, FormattedPrice, ImplantSet, ItemInfo, MarketDef, PriceQuote, Side, TypeId,
 } from '../../core/types'
 import type { Action, Card, Line, Section } from '../view/card'
 import { escapeMarkdown } from '../view/escape'
@@ -49,8 +50,17 @@ function totalOf(env: CardEnv, unit: number, quantity: number | null): string | 
   return `· 合计 ${amountText(env.core.format, unit * quantity, env.display.priceDisplayMode)}`
 }
 
-function priceLine(label: string, price: FormattedPrice, extra: string): Line {
-  return extra ? { label, price, extra } : { label, price }
+/** 在售约 120 万个：这个市场这一侧靠近最优价的订单的剩余数量（没有时不写） */
+function countText(label: string, side: Side | null | undefined): string | undefined {
+  if (!side || !(side.volumeNear > 0)) return undefined
+  const { approx, text } = formatCount(side.volumeNear)
+  return `${label}${approx ? '约' : ''} ${text}`
+}
+
+function priceLine(label: string, price: FormattedPrice, extra: string, count?: string): Line {
+  const line: Line = extra ? { label, price, extra } : { label, price }
+  if (count) line.count = count
+  return line
 }
 
 /** 出售 / 中间 / 收购三行；某一边没有订单时写「暂无卖单」，中间价写 —，绝不写 0 */
@@ -61,7 +71,7 @@ function sideLines(env: CardEnv, quote: PriceQuote, quantity: number | null, bas
   const buy = quote.buy?.best
   lines.push(sell === undefined
     ? { label: `出售 ${QUOTE.noSell}` }
-    : priceLine('出售', format.isk(sell), join(diffMark(sell, base?.sell?.best), totalOf(env, sell, quantity))))
+    : priceLine('出售', format.isk(sell), join(diffMark(sell, base?.sell?.best), totalOf(env, sell, quantity)), countText(QUOTE.sellCount, quote.sell)))
   if (SHOW_MID) {
     lines.push(quote.mid === null
       ? { label: '中间', price: { na: true } }
@@ -69,7 +79,7 @@ function sideLines(env: CardEnv, quote: PriceQuote, quantity: number | null, bas
   }
   lines.push(buy === undefined
     ? { label: `收购 ${QUOTE.noBuy}` }
-    : priceLine('收购', format.isk(buy), join(diffMark(buy, base?.buy?.best), totalOf(env, buy, quantity))))
+    : priceLine('收购', format.isk(buy), join(diffMark(buy, base?.buy?.best), totalOf(env, buy, quantity)), countText(QUOTE.buyCount, quote.buy)))
   return lines
 }
 

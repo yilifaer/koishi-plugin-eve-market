@@ -12,7 +12,7 @@ import {
 } from '../../constants'
 import type { KbToneMode } from '../types'
 import { REMARK_LINES, TITLE_COPY } from './copy'
-import { groupLosses, labelLosses } from './facts'
+import { groupLosses, labelKills, labelLosses } from './facts'
 import type { CardFacts } from './facts'
 import { PERSONA_RULES, chooseLine, hash32, tonePool } from './persona'
 import type { CopyValues } from './persona'
@@ -35,7 +35,9 @@ export const REMARK_RULES: readonly RemarkRule[] = [
   { id: 'bigIsk10b', tier: 0, test: (f) => (f.recentKillValue ?? 0) >= R.bigKill10b },
   { id: 'bigIskLoss', tier: 0, test: (f) => f.stats.iskLost >= R.bigIskLoss },
   { id: 'capitalLoss', tier: 0, test: (f) => groupLosses(f.stats, SHIP_GROUPS_CAPITAL_LOSS) >= 1 },
-  { id: 'awox', tier: 0, test: (f) => (f.stats.labels.awox?.kills ?? 0) + (f.stats.labels.awox?.losses ?? 0) > 0 },
+  // 友军开火话题分开：zKill 只要攻守双方同军团 / 联盟就标 awox，所以 kills = 本人开的火，losses = 本人被自己人打爆
+  { id: 'awoxKills', tier: 0, test: (f) => labelKills(f.stats, 'awox') > 0 },
+  { id: 'awoxLosses', tier: 0, test: (f) => labelLosses(f.stats, 'awox') > 0 },
   { id: 'npcDeaths', tier: 0, test: (f) => labelLosses(f.stats, 'npc') >= R.npcDeathsMin },
   { id: 'bigLossRecent', tier: 0, test: (f) => (f.recentLossValue ?? 0) >= R.bigRecent },
   { id: 'bigKillRecent', tier: 0, test: (f) => (f.recentKillValue ?? 0) >= R.bigRecent },

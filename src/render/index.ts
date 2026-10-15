@@ -13,7 +13,7 @@ export type { ChartImages, ChartPageOptions, ChartShotOptions } from './chart-pa
 export * from './br'
 export { SiteScreenshotter } from './site-shot'
 export type {
-  ShotDiag, ShotFailureReason, ShotOutcome, ShotRequestOptions, ShotTarget, ShotTicket, SiteScreenshotterOptions, SiteShot,
+  ShotDiag, ShotStage, ShotFailureReason, ShotOutcome, ShotRequestOptions, ShotTarget, ShotTicket, SiteScreenshotterOptions, SiteShot,
 } from './site-shot'
 export { installNetGuard } from './net-guard'
 export type { NetGuard, NetGuardOptions, NetGuardStats } from './net-guard'

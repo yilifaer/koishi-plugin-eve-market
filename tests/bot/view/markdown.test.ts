@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Card } from '../../../src/bot/view/card'
 import { keyboardRows, textActions } from '../../../src/bot/view/clickable'
 import { keepBoldSpacing, priceMarkdown, toQQMarkdown } from '../../../src/bot/view/markdown'
+import { toText } from '../../../src/bot/view/text'
 import {
   BATCH_MARKDOWN, CANDIDATE_MARKDOWN, PRICE_MARKDOWN, batchCard, candidateCard, compact, price, priceCard, renderOptions,
 } from './cards'
@@ -216,5 +217,36 @@ describe('keepBoldSpacing', () => {
     for (const line of ['1. **乌鸦级** ×2 · `513.00M`', '**合计** `524,400,000 ISK`（524.40M）', '**Jita**', '***', '- 出售 `258,400,000 ISK`', '**a** <qqbot-cmd-input text="x" />']) {
       expect(keepBoldSpacing(line)).toBe(line)
     }
+  })
+})
+
+// 数量说明（Line.count）永远是普通文字，不论价格有没有简写、数字用哪种样式
+describe('Line.count stays outside the number styling', () => {
+  const lineOf = (p: ReturnType<typeof price>, extra?: string) =>
+    bare({ sections: [{ lines: [{ label: '出售', price: p, ...extra ? { extra } : {}, count: '在售约 69.3 亿个' }] }] })
+  const render = (card: Card, numberStyle: 'code' | 'bold' | 'plain') => toQQMarkdown(card, renderOptions({ numberStyle })).md
+
+  it('cheap price without a compact form: the count is not pulled into the bold', () => {
+    const card = lineOf(price('3.90 ISK'))
+    expect(render(card, 'bold')).toBe('- 出售 **3.90 ISK** · 在售约 69.3 亿个')
+    expect(render(card, 'code')).toBe('- 出售 `3.90 ISK` · 在售约 69.3 亿个')
+    expect(render(card, 'plain')).toBe('- 出售 3.90 ISK · 在售约 69.3 亿个')
+  })
+
+  it('expensive price with a compact form', () => {
+    const card = bare({ sections: [{ lines: [{ label: '出售', price: price('147,900,000 ISK', '147.90M'), count: '在售 678 个' }] }] })
+    expect(render(card, 'bold')).toBe('- 出售 **147,900,000 ISK**（147.90M）· 在售 678 个')
+    expect(render(card, 'code')).toBe('- 出售 `147,900,000 ISK`（147.90M）· 在售 678 个')
+    expect(render(card, 'plain')).toBe('- 出售 147,900,000 ISK（147.90M）· 在售 678 个')
+  })
+
+  it('an extra before the count still follows the bold rule, the count does not', () => {
+    expect(render(lineOf(price('3.90 ISK'), '▲4.5%'), 'bold')).toBe('- 出售 **3.90 ISK ▲4.5%** · 在售约 69.3 亿个')
+    expect(render(lineOf(price('3.90 ISK'), '▲4.5%'), 'code')).toBe('- 出售 `3.90 ISK` ▲4.5% · 在售约 69.3 亿个')
+  })
+
+  it('plain text output has the same words and no stray marks', () => {
+    expect(toText(lineOf(price('3.90 ISK')), renderOptions())).toBe('出售 3.90 ISK · 在售约 69.3 亿个')
+    expect(toText(lineOf(price('147,900,000 ISK', '147.90M')), renderOptions())).toContain('出售 147,900,000 ISK (147.90M) · 在售约 69.3 亿个')
   })
 })

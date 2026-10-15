@@ -621,6 +621,23 @@ describe('normalizeConfig: screenshot', () => {
     }
   })
 
+  it('max wait: defaults 60 / Warbeacon 120 / custom 60; old configs without the field are quiet', () => {
+    const { settings, issues } = run(custom(row()))
+    expect(issues).toEqual([])
+    expect(settings.screenshot.sites.map((x) => [x.id, x.maxWaitSec])).toEqual([
+      ['br', 60], ['warbeacon', 120], ['janice', 60], ['dotlan', 60], ['custom-1', 60],
+    ])
+  })
+
+  it('max wait: set values are kept, out-of-range ones are clamped to 30-180 with a note, non-numbers fall back', () => {
+    const { settings, issues } = run({
+      screenshot: { warbeacon: { maxWaitSec: 150 }, br: { maxWaitSec: 5 }, janice: { maxWaitSec: 600 }, dotlan: { maxWaitSec: 'abc' }, custom: [row({ maxWaitSec: 200 })] },
+    })
+    expect(settings.screenshot.sites.map((x) => x.maxWaitSec)).toEqual([30, 150, 180, 60, 180])
+    expect(issues.length).toBe(4)
+    expect(run({ screenshot: { janice: { maxWaitSec: 600 } } }).lines.join('\n')).toContain('最长等待')
+  })
+
   it('a missing screenshot group (old config) is quiet', () => {
     const { settings, issues } = run({ render: { brAuto: true } })
     expect(issues).toEqual([])
@@ -681,8 +698,8 @@ describe('normalizeConfig: screenshot', () => {
     ))
     const sites = settings.screenshot.sites.filter((x) => !x.builtin)
     expect(sites).toEqual([
-      { id: 'custom-1', name: '示例站', builtin: false, host: 'kb.example.com', pathPrefix: '/kill/', auto: false, maxImages: 3, row: 1 },
-      { id: 'custom-2', name: '另一个', builtin: false, host: 'other.example.org', pathPrefix: '', auto: true, maxImages: 1, row: 2 },
+      { id: 'custom-1', name: '示例站', builtin: false, host: 'kb.example.com', pathPrefix: '/kill/', auto: false, maxImages: 3, maxWaitSec: 60, row: 1 },
+      { id: 'custom-2', name: '另一个', builtin: false, host: 'other.example.org', pathPrefix: '', auto: true, maxImages: 1, maxWaitSec: 60, row: 2 },
     ])
     expect(lines).toHaveLength(1)
     expect(lines[0]).toContain('已只取域名')

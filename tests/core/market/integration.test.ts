@@ -28,7 +28,7 @@ describe('market service over the ESI client', () => {
     const quote = await service.getQuote('jita 4-4', RAVEN)
     expect(quote).toMatchObject({
       status: 'ok', source: 'region',
-      sell: { best: 258, volumeAtBest: 5, orders: 3, totalVolume: 8 },
+      sell: { best: 258, volumeAtBest: 5, orders: 3, totalVolume: 8, volumeNear: 8 },
       buy: { best: 249, orders: 1 },
       mid: 253.5,
     })

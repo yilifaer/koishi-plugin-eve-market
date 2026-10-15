@@ -297,6 +297,18 @@ describe('IndustryService: advanced result', () => {
     expect(r2.profit).toBeNull()
   })
 
+  it('product price: a quote that timed out is unavailable, a quote without sell orders is not', async () => {
+    const down = setup()
+    down.prices.timedOut.add(JITA_KEY)
+    const r = result(await down.run('乌鸦级 XX-1'))
+    expect(r.productValue).toEqual({ marketKey: JITA_KEY, side: 'sell', unit: null, total: null, unavailable: true })
+    expect(r.profit).toBeNull()
+
+    const none = setup()
+    none.prices.books.get(JITA_KEY)!.delete(RAVEN)
+    expect(result(await none.run('乌鸦级 XX-1')).productValue?.unavailable).toBeUndefined()
+  })
+
   it('index and adjusted prices: missing system, missing adjusted price, unavailable lists', async () => {
     const notListed = setup({}, new FakeIndices({ systems: {}, adjusted: ADJUSTED }))
     const r = result(await notListed.run('乌鸦级 XX-1'))

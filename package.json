@@ -1,6 +1,6 @@
 {
   "name": "koishi-plugin-eve-market",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "EVE Online 欧服市场助手（QQ 官方机器人）：查价、批量估价、装配估价、价格走势、联盟建筑市场、入侵、势力图、战报截图、工业成本计算",
   "main": "lib/index.js",
   "typings": "lib/index.d.ts",

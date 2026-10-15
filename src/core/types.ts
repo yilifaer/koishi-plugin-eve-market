@@ -366,6 +366,8 @@ export interface ShotSiteSetting {
   pathPrefix: string
   auto: boolean
   maxImages: number
+  /** 最长等待（秒，30–180） */
+  maxWaitSec: number
   /** 自定义网站在表格里的行号 */
   row?: number
 }
@@ -799,7 +801,10 @@ export interface Side {
   best: number
   volumeAtBest: number
   orders: number
+  /** 这一侧全部订单的剩余数量 */
   totalVolume: number
+  /** 只算价格靠近最优价的订单（NEAR_BEST_PCT 以内）的剩余数量，查价卡片显示这个 */
+  volumeNear: number
 }
 
 export type QuoteStatus = 'ok' | 'stale' | 'unavailable' | 'auth_error' | 'not_ready' | 'timeout'
@@ -1097,7 +1102,8 @@ export interface IndustryResult {
   jobCost?: { eiv: number; grossSci: number; bonuses: number; facility: number; scc: number; extra: number; extraLabel?: string; total: number; missingAdjusted: number }
   timeSeconds: number
   timeSecondsMaxSkill?: number
-  productValue?: { marketKey: string; side: PriceSide; unit: number | null; total: number | null; fallback?: boolean }
+  /** unavailable：没有价格是因为这次没取到报价（超时、维护、市场不可用），不是市场真的没有挂单 */
+  productValue?: { marketKey: string; side: PriceSide; unit: number | null; total: number | null; fallback?: boolean; unavailable?: boolean }
   profit?: { value: number; marginPct: number } | null
   formulaRevision: string
   warnings: string[]
@@ -1686,7 +1692,7 @@ export interface JaniceService {
 
 /** 人设：规则表按顺序命中第一条；unknown 是 zKill 取不到时的占位，不在规则表里 */
 export type PersonaId =
-  | 'ghost' | 'pacifist' | 'rookie' | 'capital' | 'industrial' | 'wormhole' | 'ganker' | 'solo' | 'fleet' | 'reaper' | 'underdog' | 'pilot'
+  | 'ghost' | 'pacifist' | 'sleeper' | 'rookie' | 'capital' | 'industrial' | 'wormhole' | 'ganker' | 'solo' | 'fleet' | 'reaper' | 'underdog' | 'pilot'
   | 'unknown'
 
 export interface PilotRef {

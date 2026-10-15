@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compactPrice, createPriceFormatter, formatPercent, formatVolume, fullPrice, listPriceMode } from '../../../src/core/format'
+import { compactPrice, createPriceFormatter, formatCount, formatPercent, formatVolume, fullPrice, listPriceMode } from '../../../src/core/format'
 import type { FormatterDisplay } from '../../../src/core/format'
 import type { PriceDisplayMode } from '../../../src/core/types'
 import { FakeTime } from '../../fakes/fake-time'
@@ -211,5 +211,39 @@ describe('quantity, percent, volume', () => {
     expect(formatVolume(50.5)).toBe('50.5 m³')
     expect(formatVolume(0)).toBe('0 m³')
     expect(formatter({ thousandSeparator: false }).volume(115_000)).toBe('115000 m³')
+  })
+})
+
+describe('formatCount: order quantities in Chinese units', () => {
+  const show = (n: number) => {
+    const { approx, text } = formatCount(n)
+    return `${approx ? '约 ' : ''}${text}`
+  }
+
+  it('under 10,000 is the exact number, no approximation', () => {
+    expect(show(0)).toBe('0 个')
+    expect(show(37)).toBe('37 个')
+    expect(show(9_999)).toBe('9999 个')
+  })
+
+  it('from 10,000 uses 万 with up to 3 significant digits', () => {
+    expect(show(10_000)).toBe('约 1 万个')
+    expect(show(12_345)).toBe('约 1.23 万个')
+    expect(show(35_000)).toBe('约 3.5 万个')
+    expect(show(999_900)).toBe('约 100 万个')
+    expect(show(1_200_000)).toBe('约 120 万个')
+    expect(show(12_345_678)).toBe('约 1230 万个')
+  })
+
+  it('from 1 亿 uses 亿; a value that rounds up to 1 亿 is written in 亿', () => {
+    expect(show(100_000_000)).toBe('约 1 亿个')
+    expect(show(120_000_000)).toBe('约 1.2 亿个')
+    expect(show(1_234_000_000)).toBe('约 12.3 亿个')
+    expect(show(99_999_999)).toBe('约 1 亿个')
+  })
+
+  it('bad input never makes a negative or NaN count', () => {
+    expect(show(-5)).toBe('0 个')
+    expect(show(Number.NaN)).toBe('0 个')
   })
 })

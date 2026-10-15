@@ -2,7 +2,7 @@
 // 地点、建筑名是编造的；价格数字都是示例值，只保证同一个例子里前后一致。
 
 import { describe, expect, it } from 'vitest'
-import { compareCard, materialsCard, resultCard } from '../../../src/bot/commands/industry-card'
+import { baseCard, compareCard, materialsCard, resultCard } from '../../../src/bot/commands/industry-card'
 import type { IndustryEnv } from '../../../src/bot/commands/industry-card'
 import type { DisplaySettings, IndustryResult, ItemInfo, LocationComparison } from '../../../src/core/types'
 import { item, md, testCore, text } from '../commands/helpers'
@@ -111,6 +111,33 @@ describe('result card (§2.6.4)', () => {
     expect(out).toContain('成品 Jita 4-4 暂无卖单')
     expect(out).not.toContain('预计利润')
     expect(md(resultCard(env({}, 2), example(), 'manufacturing', []))).toContain('（已扣销售税和经纪费 2%）')
+  })
+})
+
+describe('product price that is not there', () => {
+  const none = { marketKey: 'jita 4-4', side: 'sell' as const, unit: null, total: null }
+  const down = { ...none, unavailable: true }
+
+  it('manufacturing result: 暂时取不到价格 when the quote failed, 暂无卖单 only for an empty market', () => {
+    const a = md(resultCard(env(), example({ productValue: down, profit: null }), 'manufacturing', []))
+    expect(a).toContain('成品 Jita 4-4 暂时取不到价格')
+    expect(a).not.toContain('暂无卖单')
+    expect(md(resultCard(env(), example({ productValue: none, profit: null }), 'manufacturing', []))).toContain('成品 Jita 4-4 暂无卖单')
+  })
+
+  it('reaction result and base card, manufacturing base card, compare card follow the same rule', () => {
+    const r = (v: IndustryResult['productValue']) => example({ productValue: v, profit: null })
+    expect(md(resultCard(env(), r(down), 'reaction', []))).toContain('Jita 4-4 出售 暂时取不到价格')
+    expect(md(resultCard(env(), r(none), 'reaction', []))).toContain('Jita 4-4 出售 暂无卖单')
+    expect(md(baseCard(env(), r(down), 'reaction', []))).toContain('— · Jita 4-4 暂时取不到价格')
+    expect(md(baseCard(env(), r(none), 'reaction', []))).toContain('— · Jita 4-4 暂无卖单')
+    expect(md(baseCard(env(), r(down), 'manufacturing', []))).toContain('成品 Jita 4-4 暂时取不到价格')
+    const c = (v: IndustryResult['productValue']): LocationComparison => ({
+      product: RAVEN, runs: 1, me: 10, te: 20, materialMarketKey: 'jita 4-4', materialSide: 'sell',
+      rows: [{ location: 'XX-1', structure: '索迪约', noRigs: false, result: r(v), cheapest: true, fastest: true }],
+    })
+    expect(md(compareCard(env(), c(down), []))).toContain('成品参考 Jita 4-4 出售 暂时取不到价格')
+    expect(md(compareCard(env(), c(none), []))).toContain('成品参考 Jita 4-4 出售 暂无卖单')
   })
 })
 

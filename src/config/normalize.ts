@@ -2,7 +2,7 @@
 // 星系名、空间站、别名目标、改装件、对市场的引用这些要等数据加载后由 core 再检查一遍。
 // 原则：写错一行只影响那一行；坏行跳过并报告，插件照常加载。
 
-import { DEFAULT_SCRAPMETAL_LEVEL, MAX_ME, MAX_QUANTITY, MAX_TE, NOTICE_MAX_CHARS, PILOT_ID_MAX_DIGITS, PRICE_TYPE_WORDS, SHOT_CUSTOM_MAX, SHOT_MAX_IMAGES, SSO_CALLBACK_PATH } from '../constants'
+import { DEFAULT_SCRAPMETAL_LEVEL, MAX_ME, MAX_QUANTITY, MAX_TE, NOTICE_MAX_CHARS, PILOT_ID_MAX_DIGITS, PRICE_TYPE_WORDS, SHOT_CUSTOM_MAX, SHOT_MAX_IMAGES, SHOT_WAIT_DEFAULT_SEC, SHOT_WAIT_MAX_SEC, SHOT_WAIT_MIN_SEC, SSO_CALLBACK_PATH } from '../constants'
 import { FORMULA_DEFAULTS } from '../core/industry'
 import { BUILTIN_SITES, checkConfigHost, hostMatches } from '../core/sites'
 import type {
@@ -761,6 +761,7 @@ function normalizeScreenshot(raw: Raw, issues: IssueList): ScreenshotSettings {
       id: b.id, name: b.name, builtin: true, host: b.host, pathPrefix: '',
       auto: bool(r.auto, true),
       maxImages: clampNumber(issues, s, `${b.name}的「最多几张」`, r.maxImages, SHOT_BUILTIN_MAX_IMAGES[b.id] ?? 1, 1, SHOT_MAX_IMAGES, { integer: true, field: `${b.id}.maxImages` }),
+      maxWaitSec: clampNumber(issues, s, `${b.name}的「最长等待」`, r.maxWaitSec, b.waitSec, SHOT_WAIT_MIN_SEC, SHOT_WAIT_MAX_SEC, { integer: true, field: `${b.id}.maxWaitSec` }),
     })
   }
   const rows = tableRows(issues, s, o.custom, [], SHOT_TABLE)
@@ -792,6 +793,7 @@ function normalizeScreenshot(raw: Raw, issues: IssueList): ScreenshotSettings {
       id: `custom-${row}`, name, builtin: false, host, pathPrefix,
       auto: bool(r.auto, true),
       maxImages: clampNumber(issues, s, '最多几张', r.maxImages, 1, 1, SHOT_MAX_IMAGES, { ...at, integer: true, field: 'maxImages' }),
+      maxWaitSec: clampNumber(issues, s, '最长等待', r.maxWaitSec, SHOT_WAIT_DEFAULT_SEC, SHOT_WAIT_MIN_SEC, SHOT_WAIT_MAX_SEC, { ...at, integer: true, field: 'maxWaitSec' }),
       row,
     })
   })

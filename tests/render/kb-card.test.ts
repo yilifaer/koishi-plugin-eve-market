@@ -213,12 +213,26 @@ describe('createKbCards', () => {
     expect(browser.pages).toHaveLength(1)
     const newer = soloHunter()
     newer.updatedAt += 1
-    expect(kbCardKey(newer)).not.toBe(kbCardKey(soloHunter()))
+    expect(kbCardKey(view(newer))).not.toBe(kbCardKey(view()))
     await cards.get(view(newer))
     expect(browser.pages).toHaveLength(2)
     advance(61 * 60_000)
     expect(cards.cached(view())).toBeUndefined()
     cards.clear()
+  })
+
+  it('cache key includes the UTC date: a new UTC day never reuses yesterday card', async () => {
+    const { browser, cards } = setup()
+    const day = 86_400_000
+    const midnight = Math.floor(NOW_MS / day) * day + day
+    const before: KbCardView = { ...view(), now: midnight - 1000 }
+    const after: KbCardView = { ...view(), now: midnight + 1000 }
+    expect(kbCardKey(before)).not.toBe(kbCardKey(after))
+    expect(kbCardKey(before)).toBe(kbCardKey({ ...before, now: midnight - 2000 }))
+    await cards.get(before)
+    await cards.get(after)
+    expect(browser.pages).toHaveLength(2)
+    expect(cards.cached(after)).toBeDefined()
   })
 
   it('shares one render between simultaneous requests', async () => {

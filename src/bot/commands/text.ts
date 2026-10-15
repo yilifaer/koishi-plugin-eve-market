@@ -43,6 +43,9 @@ export const QUOTE = {
   timeout: '⚠ 查询超时，暂时取不到价格',
   noSell: '暂无卖单',
   noBuy: '暂无买单',
+  /** 订单合计：在售 37 个 / 在售约 3.5 万个 */
+  sellCount: '在售',
+  buyCount: '求购',
 } as const
 
 /** 走势（§2.4） */
@@ -132,7 +135,7 @@ export const BR = {
   hint: '⏳ 正在截取战报，一般要 10–30 秒…',
   ahead: (n: number) => `（前面还有 ${n} 个）`,
   truncated: (px: number) => `页面过长，已截取前 ${px} 像素`,
-  timeout: '战报页面 60 秒内没有打开，链接可能失效，或者网站暂时访问不了。',
+  timeout: '战报页面等了很久还没有打开，链接可能失效，或者网站暂时访问不了。',
   http: (status: number) => `战报页面打不开（网站返回 ${status}），链接可能失效。`,
   unreachable: '战报网站暂时访问不了，请稍后再试。',
   failed: '战报截图失败，请稍后再试。',
@@ -165,7 +168,7 @@ export const KILL = {
   reportHint: '⏳ 正在查询击杀并截取战报，一般要 10–30 秒…',
   badArg: '击杀编号不对：请写 zKill 击杀链接，或者纯数字的击杀编号。',
   unknown: '未知',
-  flags: { npc: 'NPC', solo: '单杀', awox: '间谍击杀' },
+  flags: { npc: 'NPC', solo: '单杀', awox: '友军击杀' },
   notFound: 'zKill 上没有这个击杀（编号不对，或者刚发生还没收录，过几分钟再试）。',
   notFoundEsi: '欧服接口里没有这个击杀（链接不对，或者击杀还没收录）。',
   zkillDown: 'zKill 暂时连不上，请稍后再试。',
@@ -209,8 +212,8 @@ export const KB = {
   denied: 'KB 人物卡只对授权的群和私聊开放。',
   tooFast: '查得太快了，稍等一会',
   hidden: '这个人物的战绩不在这里显示。',
-  notFound: (name: string) => `欧服没有叫 “${name}” 的人物。名字要写完整（大小写无所谓），也可以发人物 ID。`,
-  noMatch: (name: string) => `没有找到名字和 “${name}” 相近的人物。`,
+  notFound: (name: string) => `欧服没有叫「${name}」的人物。名字要写完整（大小写无所谓），也可以发人物 ID。`,
+  noMatch: (name: string) => `没有找到名字和「${name}」相近的人物。`,
   cjk: '欧服人物名都是英文，请写游戏里的英文名。',
   badName: '人物名不对：请写 3–37 个字的英文名，或者人物 ID。',
   notCharacter: '这个 ID 不是人物（可能是军团、联盟或 NPC）。',

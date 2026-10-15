@@ -266,6 +266,20 @@ describe('chain: prices', () => {
     expect(r.profit!.marginPct).toBeCloseTo(r.profit!.value / 9_000_000 * 100, 6)
   })
 
+  it('product price: timed-out quote is unavailable, a product without sell orders is not', async () => {
+    const down = new ChainPrices()
+    down.timedOut.add(JITA_KEY)
+    const r = chainResult(await setup({ prices: down }).run(HOUND))
+    expect(r.productValue).toMatchObject({ unit: null, total: null, unavailable: true })
+    expect(r.profit).toBeNull()
+
+    const none = new ChainPrices()
+    none.omit.add(HOUND)
+    const r2 = chainResult(await setup({ prices: none }).run(HOUND))
+    expect(r2.productValue).toMatchObject({ unit: null, total: null })
+    expect(r2.productValue?.unavailable).toBeUndefined()
+  })
+
   it('too many different items: BAD_ARGUMENT chain-size, nothing is priced', async () => {
     const ids = [...loadFixtureData().industry.manufacturing.keys(), ...Array.from({ length: 400 }, (_, i) => 100000 + i)].slice(0, 260)
     const data = withRecipes(loadFixtureData(), { manufacturing: { [RAVEN]: ids.map((id) => [id, 1] as [number, number]) } })

@@ -59,7 +59,7 @@ export function marketOf(core: TestCore, key: string): MarketDef {
 }
 
 export function quote(marketKey: string, typeId: number, sell: number | null, buy: number | null, extra: Partial<PriceQuote> = {}): PriceQuote {
-  const side = (best: number) => ({ best, volumeAtBest: 1, orders: 1, totalVolume: 1 })
+  const side = (best: number) => ({ best, volumeAtBest: 1, orders: 1, totalVolume: 1, volumeNear: 1 })
   return {
     marketKey,
     typeId,

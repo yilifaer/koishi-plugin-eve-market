@@ -30,6 +30,9 @@ export const REPLY_CUTOFF_SEC = 290
 /** 数据还没准备好时，命令最多等多久 */
 export const READY_WAIT_MS = 8000
 
+/** 查价「在售 / 求购约 X 个」只算价格离最优价这么近的订单（卖单 ≤ 最低价 +10%，买单 ≥ 最高价 −10%），挂得很离谱的单不算 */
+export const NEAR_BEST_PCT = 10
+
 /** 单条消息上限，按最终序列化后的 Markdown 计（含标签和转义字符） */
 export const MAX_MESSAGE_CHARS = 3500
 /** 任何情况下都不能超过 */
@@ -419,10 +422,15 @@ export const BR_SEGMENT_HEIGHT = 4000
 export const BR_MAX_HEIGHT = 8000
 export const BR_JPEG_QUALITY = 85
 export const BR_RENDER_TIMEOUT_MS = 60000
+/** 单个网站的最长等待（秒）：控制台里可调，范围 30–180（QQ 被动回复要在 5 分钟内发完，不能更长）；默认 60，Warbeacon 页面脚本很重默认 120 */
+export const SHOT_WAIT_MIN_SEC = 30
+export const SHOT_WAIT_MAX_SEC = 180
+export const SHOT_WAIT_DEFAULT_SEC = 60
+export const SHOT_WAIT_WARBEACON_SEC = 120
 /** 页面稳定前最多等多久（只是上限，签名稳定了就提前结束；BR 数据到得晚，要留够） */
 export const BR_SETTLE_MS = 8000
 // 单次截图 60 秒仍够用：goto + 网络安静（≤ idleMs）+ 稳定（≤ settleMs）+ 撑高视口（≤ 3 × 2 秒），慢网络最坏约 30 秒
-/** 入队时估算（已过去的时间 + 前面任务数 × 60 秒）超过 240 秒就直接回复「截图繁忙」 */
+/** 入队时估算（已过去的时间 + 前面每个任务的最长等待，没有记录按 60 秒 + 自己的最长等待）超过 240 秒就直接回复「截图繁忙」 */
 export const BR_QUEUE_TASK_SEC = 60
 export const BR_QUEUE_REJECT_SEC = 240
 /** 战报页面的视口高度（截图高度按页面实际高度，比这个矮的页面截出来就是这么高） */
@@ -648,6 +656,8 @@ export const KB_ARCHETYPE_RULES = {
   /** 建号不到这么多天，或记录不到 rookieMinRecords 条 */
   rookieDays: 90,
   rookieMinRecords: 10,
+  /** 沉睡老号：建号满这么多年，且记录不到 rookieMinRecords 条（先于 rookie 判断） */
+  sleeperMinYears: 3,
   /** 损失 ≥ 5 条，其中工业船占一半以上，且击毁比损失少 */
   industrialMinLosses: 5,
   industrialLossShare: 0.5,
@@ -713,7 +723,7 @@ export const KB_TITLE_RULES = {
   whaleRecentValue: 10_000_000_000,
   /** 势力战老兵：所有 fw:* 标签的击毁数之和 */
   fwMinKills: 50,
-  /** 内鬼嫌疑人：标签 awox 的击毁数，且占全部击毁 1% 以上；没有占比，给一个较低的固定分数让船型 / 身份称号先上 */
+  /** 蛋舱摆渡人：标签 awox 的击毁数，且占全部击毁 1% 以上；没有占比，给一个较低的固定分数让船型 / 身份称号先上 */
   awoxMinKills: 3,
   awoxMinShare: 0.01,
   awoxScore: 0.2,

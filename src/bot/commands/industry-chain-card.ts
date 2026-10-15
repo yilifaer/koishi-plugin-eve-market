@@ -12,7 +12,7 @@ import { downtimeWarnings } from './downtime'
 import { priceSource, productTitle } from './industry-card'
 import type { IndustryEnv } from './industry-card'
 import { ALCHEMY_NAME, CH, LAYER_NAME, MODE_NAME } from './industry-chain-text'
-import { IND, SIDE_NONE, SIDE_SHORT } from './industry-text'
+import { IND, SIDE_SHORT, sideNone } from './industry-text'
 import { amountText, itemName } from './names'
 import { SEC_CLASS, SIDE_LABEL } from './text'
 
@@ -191,7 +191,7 @@ function valueLines(env: IndustryEnv, r: ChainResult): Line[] {
   const v = r.productValue
   if (!v) return []
   const market = marketName(env, v.marketKey)
-  if (v.total === null) return [{ text: IND.productNone(market, SIDE_NONE[v.side]) }]
+  if (v.total === null) return [{ text: IND.productNone(market, sideNone(v)) }]
   const label = IND.product(market, SIDE_SHORT[v.side])
   const lines: Line[] = [v.fallback ? { label, price: isk(env, v.total), extra: IND.fallbackMark } : { label, price: isk(env, v.total) }]
   if (r.totals.missingPrices) {

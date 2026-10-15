@@ -235,6 +235,7 @@ function addProduct(host: ChainHost, side: JobCtx['prices']['product'], top: Cha
     total: price ? price.unit * result.outputQuantity : null,
   }
   if (price?.fallback) value.fallback = true
+  if (!price && side.failed.has(top.item.typeId)) value.unavailable = true
   result.productValue = value
   if (value.total === null || !(value.total > 0)) {
     result.profit = null

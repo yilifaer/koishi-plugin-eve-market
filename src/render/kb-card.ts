@@ -8,6 +8,7 @@ import {
   KB_CACHE_MAX, KB_CARD_CACHE_MIN, KB_HEADLINE_FONT_MAX, KB_HEADLINE_FONT_MIN,
 } from '../constants'
 import { displaySec } from '../core/format'
+import { ACTIVITY_TEXT } from '../core/pilot'
 import type { PilotImageSet, PilotKill, PilotProfile } from '../core/types'
 import { LruCache, SingleFlight } from '../core/util'
 import { escapeXml, textWidth } from './chart-svg'
@@ -220,7 +221,7 @@ function activityColumn(p: PilotProfile): string {
   if (strip || text) {
     html += `<h2><span>作息</span>${strip ? '<small>北京时间</small>' : ''}</h2>`
     if (strip) html += `<div class="hours">${strip}</div><div class="ax"><span>0</span><span>6</span><span>12</span><span>18</span><span>24</span></div>`
-    if (text) html += `<div class="best">${strip ? '最活跃：' : ''}${esc(text)}</div>`
+    if (text) html += `<div class="best">${strip ? '最活跃：' : ACTIVITY_TEXT.zonesPrefix}${esc(text)}</div>`
   }
   if (months) html += `<h2><span>近 12 个月</span><small>上击毁 下损失</small></h2>${months}`
   return `<div>${html}</div>`
@@ -335,9 +336,10 @@ export interface KbCardsOptions {
   now?: () => number
 }
 
-/** 缓存键：人物 ID + 资料时间 + 文案语气 */
-export function kbCardKey(profile: PilotProfile): string {
-  return `${profile.id}:${profile.updatedAt}:${profile.tone}`
+/** 缓存键：人物 ID + 资料时间 + 文案语气 + UTC 日期（整活儿文案按日期挑，过了 UTC 零点要换） */
+export function kbCardKey(view: Pick<KbCardView, 'profile' | 'now'>): string {
+  const { profile } = view
+  return `${profile.id}:${profile.updatedAt}:${profile.tone}:${utcDate(view.now)}`
 }
 
 export function createKbCards(renderer: Renderer, options: KbCardsOptions = {}): KbCards {
@@ -350,7 +352,7 @@ export function createKbCards(renderer: Renderer, options: KbCardsOptions = {}):
   const flights = new SingleFlight<string, RenderedImage>()
   return {
     get(view, shot = {}) {
-      const key = kbCardKey(view.profile)
+      const key = kbCardKey(view)
       const hit = cache.get(key)
       if (hit) return Promise.resolve(hit)
       return flights.run(key, async () => {
@@ -369,7 +371,7 @@ export function createKbCards(renderer: Renderer, options: KbCardsOptions = {}):
         return out
       })
     },
-    cached: (view) => cache.get(kbCardKey(view.profile)),
+    cached: (view) => cache.get(kbCardKey(view)),
     clear: () => cache.clear(),
   }
 }

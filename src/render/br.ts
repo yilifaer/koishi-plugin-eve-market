@@ -20,7 +20,7 @@ export type BrRequestOptions = Pick<ShotRequestOptions, 'receivedAt'>
 export type BrScreenshotterOptions = SiteScreenshotterOptions
 
 const BR_SITE = BUILTIN_SITES.find((site) => site.id === 'br')!
-const BR_PROFILE: ShotProfile = { ...BR_SITE.profile, maxImages: Math.round(BR_MAX_HEIGHT / BR_SEGMENT_HEIGHT) }
+const BR_PROFILE: ShotProfile = { ...BR_SITE.profile, maxImages: Math.round(BR_MAX_HEIGHT / BR_SEGMENT_HEIGHT), maxWaitSec: BR_SITE.waitSec }
 
 export class BrScreenshotter {
   private readonly inner: SiteScreenshotter

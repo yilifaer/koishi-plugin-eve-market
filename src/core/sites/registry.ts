@@ -1,5 +1,6 @@
 // 网站名单：把控制台整理过的设置变成「找链接 / 复查链接 / 提到了哪个网站」的函数。
 
+import { SHOT_WAIT_DEFAULT_SEC, SHOT_WAIT_MAX_SEC, SHOT_WAIT_MIN_SEC } from '../../constants'
 import { findBrLink, parseBrLink } from '../universe'
 import { BUILTIN_SITES, CUSTOM_PROFILE, MAX_URL_LENGTH } from './builtin'
 import type { BuiltinSite } from './builtin'
@@ -16,6 +17,9 @@ interface Rule {
 }
 
 const clampImages = (n: number) => (Number.isFinite(n) ? Math.min(3, Math.max(1, Math.trunc(n))) : 1)
+/** 最长等待（秒）：没写或不是数字用默认值，超出 30–180 夹回去 */
+const clampWait = (n: number | undefined, fallback: number) =>
+  typeof n === 'number' && Number.isFinite(n) ? Math.min(SHOT_WAIT_MAX_SEC, Math.max(SHOT_WAIT_MIN_SEC, Math.round(n))) : fallback
 
 function buildRules(input: SiteRegistryInput): Rule[] {
   const rules: Rule[] = []
@@ -23,13 +27,13 @@ function buildRules(input: SiteRegistryInput): Rule[] {
   for (const builtin of BUILTIN_SITES) {
     const setting = byId.get(builtin.id)
     if (!setting) continue
-    rules.push({ builtin, prefix: '', site: infoOf(setting, builtin.host, builtin.kind, { ...builtin.profile, maxImages: clampImages(setting.maxImages) }, builtin) })
+    rules.push({ builtin, prefix: '', site: infoOf(setting, builtin.host, builtin.kind, { ...builtin.profile, maxImages: clampImages(setting.maxImages), maxWaitSec: clampWait(setting.maxWaitSec, builtin.waitSec) }, builtin) })
   }
   for (const setting of input.sites) {
     if (setting.builtin) continue
     const host = setting.host.trim().toLowerCase()
     if (!host) continue
-    rules.push({ prefix: setting.pathPrefix, site: infoOf(setting, host, 'custom', { ...CUSTOM_PROFILE, maxImages: clampImages(setting.maxImages) }) })
+    rules.push({ prefix: setting.pathPrefix, site: infoOf(setting, host, 'custom', { ...CUSTOM_PROFILE, maxImages: clampImages(setting.maxImages), maxWaitSec: clampWait(setting.maxWaitSec, SHOT_WAIT_DEFAULT_SEC) }) })
   }
   return rules
 }

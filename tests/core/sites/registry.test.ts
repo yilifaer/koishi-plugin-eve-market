@@ -213,12 +213,27 @@ describe('registry', () => {
     expect(reg.sites.map((s) => s.id)).toEqual(['br', 'dotlan', 'custom-2', 'custom-1'])
     const [br, dotlan, c2] = reg.sites
     expect(br).toMatchObject({ name: 'br', host: 'br.evetools.org', auto: true, legacyText: true, kind: 'battle-report' })
-    expect(br.profile).toEqual({ viewportWidth: 1440, viewportHeight: 900, idleMs: 6000, settleMs: 8000, maxImages: 2 })
+    expect(br.profile).toEqual({ viewportWidth: 1440, viewportHeight: 900, idleMs: 6000, settleMs: 8000, maxImages: 2, maxWaitSec: 60 })
     expect(dotlan.profile).toMatchObject({ viewportWidth: 1440, viewportHeight: 900, idleMs: 5000, settleMs: 5000, maxImages: 1 })
     expect(c2.profile).toMatchObject({ idleMs: 5000, settleMs: 5000, maxImages: 3 })
     expect(c2.profile.readySelector).toBeUndefined()
     expect(c2.profile.hideSelectors).toBeUndefined()
     expect(reg.hosts).toEqual(['br.evetools.org', 'evemaps.dotlan.net', 'b.example.com', 'a.example.com'])
+  })
+  it('max wait: defaults per site (Warbeacon 120, others 60), explicit values clamp into 30-180', () => {
+    const reg = all(custom(1, 'a.example.com'))
+    expect(reg.sites.map((s) => [s.id, s.profile.maxWaitSec])).toEqual([['br', 60], ['warbeacon', 120], ['janice', 60], ['dotlan', 60], ['custom-1', 60]])
+    const set = only(
+      builtin('warbeacon', 'warbeacon.net', { maxWaitSec: 90 }), builtin('janice', 'janice.e-351.com', { maxWaitSec: 999 }),
+      builtin('dotlan', 'evemaps.dotlan.net', { maxWaitSec: 1 }), custom(1, 'a.example.com', '', { maxWaitSec: 150 }),
+    )
+    expect(set.sites.map((s) => s.profile.maxWaitSec)).toEqual([90, 180, 30, 150])
+  })
+  it('DOTLAN hides the ad column and the subscription bar; the map itself is not in any list', () => {
+    const dotlan = all().sites.find((s) => s.id === 'dotlan')!
+    expect(dotlan.profile.hideSelectors).toEqual(expect.arrayContaining(['ins.adsbygoogle', '.ad-block']))
+    expect(dotlan.profile.hideFixedTexts).toEqual(['EveMaps subscription'])
+    for (const sel of dotlan.profile.hideSelectors!) expect(sel).not.toMatch(/map|svg|canvas|body|#outer/i)
   })
   it('clamps maxImages into 1-3', () => {
     const reg = only(builtin('janice', 'janice.e-351.com', { maxImages: 9 }), custom(1, 'a.example.com', '', { maxImages: 0 }))

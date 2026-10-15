@@ -62,7 +62,7 @@ describe('copy tables: scan everything', () => {
   })
 
   it('no forbidden words, no banned words (gender, region, swearing, links)', () => {
-    const fixed = [...Object.values(PERSONA_LABEL), FOOTER_TEXT, BIRTHPLACE_TEXT.at('X'), BIRTHPLACE_TEXT.fallback, ACTIVITY_TEXT.peak('20:00', '23:00', 12, 15), ACTIVITY_TEXT.zones(['A']), ...Object.values(ZONE_NAMES)]
+    const fixed = [...Object.values(PERSONA_LABEL), FOOTER_TEXT, BIRTHPLACE_TEXT.at('X'), BIRTHPLACE_TEXT.fallback, ACTIVITY_TEXT.peak(20, 23, 12, 15), ACTIVITY_TEXT.zones(['A']), ...Object.values(ZONE_NAMES)]
     for (const text of [...lines.map((l) => l.text), ...fixed]) {
       for (const w of FORBIDDEN) expect(text.includes(w), `${w} in ${text}`).toBe(false)
       expect(text, text).not.toMatch(BANNED)
@@ -137,6 +137,30 @@ describe('copy tables: scan everything', () => {
       expect(FORTUNE_LINES[t].comments.length).toBeGreaterThanOrEqual(5)
       expect(AD_LINES[t].length).toBeGreaterThanOrEqual(5)
     }
+  })
+
+  it('no curly quotes anywhere in the copy (use corner quotes)', () => {
+    const fixed = [...Object.values(PERSONA_LABEL), FOOTER_TEXT, ACTIVITY_TEXT.zonesPrefix, ...Object.values(ZONE_NAMES)]
+    for (const text of [...lines.map((l) => l.text), ...fixed]) expect(text, text).not.toMatch(/[\u201c\u201d\u2018\u2019]/)
+  })
+
+  it('dormant months are written as counts of months, never a bare 月', () => {
+    for (const l of lines) expect(l.text, l.text).not.toMatch(/\{dormant\}月/)
+    for (const t of TONES) {
+      const text = MOOD_LINES.dormant[t].map((x) => fillTemplate(x, { dormant: '5个月' }))
+      for (const x of text) expect(x, String(x)).toMatch(/5 个月/)
+      // 一整年没记录写「一年多」，句子要读得通（不能出现「一年多个月」）
+      for (const x of MOOD_LINES.dormant[t].map((y) => fillTemplate(y, { dormant: '一年多' }))) expect(x, String(x)).not.toMatch(/一年多个?月/)
+    }
+    // 占位符自带单位，句子里不能再写「个月」
+    for (const l of lines) expect(l.text, l.text).not.toMatch(/\{dormant\}个?月/)
+  })
+
+  it('activity wording: peak ends at 24 instead of 0, zones have no prefix of their own', () => {
+    expect(ACTIVITY_TEXT.peak(21, 0, 13, 16)).toBe('北京 21:00–24:00（EVE 13–16）')
+    expect(ACTIVITY_TEXT.peak(2, 5, 18, 21)).toBe('北京 02:00–05:00（EVE 18–21）')
+    expect(ACTIVITY_TEXT.peak(5, 8, 21, 0)).toBe('北京 05:00–08:00（EVE 21–24）')
+    expect(ACTIVITY_TEXT.zones(['美东时段', '澳洲时段'])).toBe('美东时段 / 澳洲时段')
   })
 
   it('no real-looking ids or links in the copy', () => {

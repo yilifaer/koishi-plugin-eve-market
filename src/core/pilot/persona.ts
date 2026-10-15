@@ -26,6 +26,8 @@ const label = (s: ZkillStats, key: string) => s.labels[key]?.kills ?? 0
 export const PERSONA_RULES: readonly Rule[] = [
   { id: 'ghost', test: ({ stats: s }) => s.kills + s.losses === 0 },
   { id: 'pacifist', test: ({ stats: s, ageDays }) => s.kills === 0 && s.losses >= 1 && ageDays !== null && ageDays >= R.pacifistMinYears * 365 },
+  // 老号但记录很少：不是新手，先于 rookie
+  { id: 'sleeper', test: ({ stats: s, ageDays }) => ageDays !== null && ageDays >= R.sleeperMinYears * 365 && s.kills + s.losses < R.rookieMinRecords },
   { id: 'rookie', test: ({ stats: s, ageDays }) => (ageDays !== null && ageDays < R.rookieDays) || s.kills + s.losses < R.rookieMinRecords },
   {
     id: 'capital',

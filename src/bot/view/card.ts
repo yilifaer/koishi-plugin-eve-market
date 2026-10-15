@@ -42,9 +42,9 @@ export interface Section {
   lines: Line[]
 }
 
-/** indent 1 = 嵌套一层（Markdown 里缩进 4 个空格） */
+/** indent 1 = 嵌套一层（Markdown 里缩进 4 个空格）；count = 价格后面的数量说明（在售约 5 个），永远是普通文字，不进粗体 */
 export type Line =
-  | { label: string; price?: FormattedPrice; extra?: string; indent?: 0 | 1 }
+  | { label: string; price?: FormattedPrice; extra?: string; count?: string; indent?: 0 | 1 }
   | { text: string; indent?: 0 | 1 }
 
 export interface Choice {

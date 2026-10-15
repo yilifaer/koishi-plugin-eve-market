@@ -112,6 +112,8 @@ interface SidePrices {
   unavailable: boolean
   /** 用到的回退市场 */
   fallback?: MarketDef
+  /** 配置的市场这次没取到报价的物品（超时、维护、市场不可用）；和「报价回来了但没有挂单」区分开 */
+  failed: Set<TypeId>
 }
 
 interface PriceBook {
@@ -161,6 +163,11 @@ function rigStateOf(setup: Pick<Setup, 'structure' | 'rigs'>, applied: number): 
 
 /** 系数 → 百分比（0.95 → -5） */
 const bonusPct = (mult: number) => (mult - 1) * 100
+
+/** 报价回来了（价格能用，哪怕那一侧没有挂单） */
+function usableStatus(quote: PriceQuote | undefined): boolean {
+  return quote?.status === 'ok' || quote?.status === 'stale'
+}
 
 /** 这一侧的价格；没有、不是正数的都算没有（任何情况下都不当成 0） */
 function sideValue(quote: PriceQuote, side: PriceSide): number | null {
@@ -793,6 +800,7 @@ class Service implements IndustryService {
         total: price ? price.unit * result.outputQuantity : null,
       }
       if (price?.fallback) value.fallback = true
+      if (!price && product.failed.has(result.product.typeId)) value.unavailable = true
       result.productValue = value
     }
     if (withProfit) {
@@ -853,12 +861,18 @@ class Service implements IndustryService {
     market: MarketDef | undefined, fallbackMarket: MarketDef | undefined, side: PriceSide,
     wanted: Array<{ typeId: TypeId; qty: number }>, deadlineAt: number,
   ): Promise<SidePrices> {
-    const out: SidePrices = { side, units: new Map(), unavailable: false }
+    const out: SidePrices = { side, units: new Map(), unavailable: false, failed: new Set() }
     if (market) out.market = market
     if (!wanted.length) return out
     const main = market && (await this.usable(market, deadlineAt)) ? market : undefined
     if (!main) out.unavailable = true
-    if (main) this.take(out, await this.quotes(main, wanted, deadlineAt), side, false)
+    if (main) {
+      const got = await this.quotes(main, wanted, deadlineAt)
+      this.take(out, got, side, false)
+      for (const w of wanted) if (!usableStatus(got.get(w.typeId))) out.failed.add(w.typeId)
+    } else {
+      for (const w of wanted) out.failed.add(w.typeId)
+    }
     const missing = wanted.filter((w) => !out.units.has(w.typeId))
     const fallback = fallbackMarket && fallbackMarket.key !== market?.key ? fallbackMarket : undefined
     if (missing.length && fallback && (await this.usable(fallback, deadlineAt))) {

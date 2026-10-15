@@ -20,6 +20,22 @@ export function formatChange(pct: number): string | undefined {
   return `${roundHalfAway(Math.abs(pct), 1).toFixed(1)}%`
 }
 
+/** 取 3 位有效数字（35,000 → 3.5，1,234 → 1230） */
+const sig3 = (value: number) => Number(value.toPrecision(3))
+
+/**
+ * 订单数量的中文写法。不到 1 万写整数（37 个）；1 万起用「万」，1 亿起用「亿」，最多 3 位有效数字，是约数（approx）。
+ * 调用方按 approx 决定写「约」：「在售 37 个」「在售约 3.5 万个」
+ */
+export function formatCount(n: number): { approx: boolean; text: string } {
+  const value = Math.max(0, Math.round(Number.isFinite(n) ? n : 0))
+  if (value < 10_000) return { approx: false, text: `${value} 个` }
+  const wan = sig3(value / 1e4)
+  // 四舍五入后凑满 1 亿（9999.9 万）按亿写
+  if (wan < 10_000) return { approx: true, text: `${wan} 万个` }
+  return { approx: true, text: `${sig3(value / 1e8)} 亿个` }
+}
+
 export function groupThousands(digits: string): string {
   return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 }

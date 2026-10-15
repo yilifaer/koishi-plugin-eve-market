@@ -36,10 +36,13 @@ const withoutActivity = (): object => {
   return rest
 }
 
-const ship = (typeId: number, en: string, zh: string, groupId = 25) => ({ typeId, en, zh, groupId }) as ItemInfo
+const ship = (typeId: number, en: string, zh: string, groupId = 25) => ({ typeId, en, zh, groupId, categoryId: 6 }) as ItemInfo
 const SHIPS = new Map([
   [17738, ship(17738, 'Machariel', '马其顿级')], [11978, ship(11978, 'Scimitar', '弯刀级', 832)], [638, ship(638, 'Raven', '乌鸦级', 27)],
   [587, ship(587, 'Rifter', '裂谷级')], [23919, ship(23919, 'Aeon', '永恒级', 659)],
+  // 建筑、设施：不是船（SDE 分类 65 / 23），不能进王牌座驾
+  [35834, { ...ship(35834, 'Keepstar', '星城', 1657), categoryId: 65 }], [35832, { ...ship(35832, 'Astrahus', '要塞', 1657), categoryId: 65 }],
+  [16213, { ...ship(16213, 'Control Tower', '控制塔', 365), categoryId: 23 }],
 ])
 const view = (id: number, en: string, zh: string, region = '绝地之域'): SystemView => ({
   id, en, zh, security: -0.38, secClass: 'null', constellation: { id: 1, en: 'C', zh: 'C' }, region: { id: 10000060, en: 'Delve', zh: region },
@@ -165,6 +168,17 @@ describe('PilotProfiles: a complete card', () => {
     expect(env.fake.requests.length).toBeGreaterThan(0)
   })
 
+  it('top ships only count ships: structures and starbases from structure kills are skipped', async () => {
+    const stats = fixture('zkill-stats-full.json') as { topAllTime: Array<{ type: string; data: Array<Record<string, number>> }> }
+    const ships = stats.topAllTime.find((t) => t.type === 'ship')!
+    ships.data.unshift({ kills: 500, shipTypeID: 35834 }, { kills: 300, shipTypeID: 35832 }, { kills: 200, shipTypeID: 16213 })
+    const { profiles } = await make({ stats })
+    const p = ok(await profiles.profile(HANAKO, { recent: false }))
+    expect(p.ships.map((s) => s.typeId)).toEqual([17738, 11978, 638, 587])
+    // 占比的分母也只算船，不会被建筑拉低
+    expect(p.ships[0].share).toBeGreaterThan(30)
+  })
+
   it('never carries the zKill description or raw html anywhere', async () => {
     const { profiles } = await full()
     const text = JSON.stringify(ok(await profiles.profile(HANAKO)))
@@ -266,6 +280,19 @@ describe('PilotProfiles: a complete card', () => {
     expect(zkill.requests.length).toBeGreaterThan(sent[0])
   })
 
+  it('cache key carries the UTC date: after UTC midnight the card is rebuilt even within the cache time', async () => {
+    const { profiles, env } = await full()
+    env.clock.t = Date.UTC(2026, 9, 7, 23, 50)
+    const first = ok(await profiles.profile(HANAKO))
+    env.clock.advance(5 * MIN)
+    expect(ok(await profiles.profile(HANAKO))).toBe(first)
+    // 过了 UTC 零点，才 15 分钟，也不能还昨天的成品
+    env.clock.advance(10 * MIN)
+    const next = ok(await profiles.profile(HANAKO))
+    expect(next).not.toBe(first)
+    expect(ok(await profiles.profile(HANAKO))).toBe(next)
+  })
+
   it('merges concurrent calls for the same character', async () => {
     const { profiles, zkill, env } = await full()
     const results = await Promise.all([profiles.profile(HANAKO), profiles.profile(HANAKO), profiles.profile(HANAKO)])
@@ -288,6 +315,14 @@ describe('PilotProfiles: active hours from the stats activity', () => {
     expect(p.activity?.hoursBeijing[3]).toBe(33)
   })
 
+  it('a window ending exactly at midnight reads 24:00, not 00:00', async () => {
+    const stats = { ...(full() as object), activity: { '1': { '13': 20, '14': 20, '15': 20 } } }
+    const { profiles } = await make({ stats })
+    const a = ok(await profiles.profile(HANAKO, { recent: false })).activity!
+    expect(a.peak).toMatchObject({ beijingStart: 21, beijingEnd: 0 })
+    expect(a.text).toBe('北京 21:00–24:00（EVE 13–16）')
+  })
+
   it('stats.activity wins over the kill lists', async () => {
     const made = await make({ stats: full() })
     made.zkill.charKills.set(HANAKO, busy(made.env))
@@ -303,7 +338,7 @@ describe('PilotProfiles: active hours from the stats activity', () => {
   it('too few of both: the recent time-zone labels when they have tz data, else the all-time ones', async () => {
     const tiny = { ...(full() as object), activity: { '1': { '5': 4 } } }
     const a = ok(await (await make({ stats: tiny })).profiles.profile(HANAKO)).activity
-    expect(a).toMatchObject({ source: 'labels', zones: ['use'], text: '主要活跃时段：美东时段' })
+    expect(a).toMatchObject({ source: 'labels', zones: ['use'], text: '美东时段' })
     const noRecentTz = { ...tiny, recentLabels: { solo: { shipsDestroyed: 2, shipsLost: 0 } } }
     const b = ok(await (await make({ stats: noRecentTz })).profiles.profile(HANAKO)).activity
     expect(b).toMatchObject({ source: 'labels', zones: ['eu', 'use', 'au'] })
@@ -315,7 +350,7 @@ describe('PilotProfiles: activity fallbacks', () => {
     const made = await make()
     made.zkill.charKills.set(HANAKO, [mail(made.env, 1, 12, 1e8), mail(made.env, 2, 13, 1e8)])
     const a = ok(await made.profiles.profile(HANAKO)).activity!
-    expect(a).toMatchObject({ source: 'labels', samples: 2, peak: null, zones: ['eu', 'use', 'au'], text: '主要活跃时段：欧洲时段 / 美东时段 / 澳洲时段' })
+    expect(a).toMatchObject({ source: 'labels', samples: 2, peak: null, zones: ['eu', 'use', 'au'], text: '欧洲时段 / 美东时段 / 澳洲时段' })
   })
 
   it('recent: false makes no list requests and uses the labels', async () => {
@@ -509,8 +544,9 @@ describe('PilotProfiles: no record, rookies and special personas', () => {
     const stats = { shipsDestroyed: 60, shipsLost: 40, iskDestroyed: 5e9, iskLost: 2e9, months: { '202401': { year: 2024, month: 1, shipsDestroyed: 60, shipsLost: 40 } } }
     const { profiles } = await make({ stats })
     const p = ok(await profiles.profile(HANAKO))
-    // 窗口里 12 个月都没有记录
-    expect(p.mood).toMatch(/12/)
+    // 窗口里 12 个月都没有记录：写「一年多」，不写「12 个月」
+    expect(p.mood).toMatch(/一年多/)
+    expect(p.mood).not.toMatch(/12/)
     expect(p.mood).toMatch(/潜水|休息|暂别|消失|冬眠|蒸发/)
     expect(p.months.every((m) => m.kills === 0)).toBe(true)
   })

@@ -41,9 +41,9 @@ describe('priceCard', () => {
     ], { notices: ['联盟市场A 矿石收购按 Jita 收购价 92%，详见群公告'] }))
     expect(md(card)).toBe([
       '**乌鸦级 Raven · 战列舰**',
-      '**Jita 4-4**\n\n- 出售 `258,400,000 ISK`（258.40M）\n- 中间 `253,700,000 ISK`（253.70M）\n- 收购 `249,000,000 ISK`（249.00M）',
-      '**联盟市场A · 18 分钟前**\n\n- 出售 `270,000,000 ISK`（270.00M）▲4.5%\n- 中间 `255,000,000 ISK`（255.00M）\n- 收购 `240,000,000 ISK`（240.00M）▼3.6%',
-      '**Amarr**\n\n- 出售 `275,000,000 ISK`（275.00M）▲6.4%\n- 中间 —\n- 收购 暂无买单',
+      '**Jita 4-4**\n\n- 出售 `258,400,000 ISK`（258.40M）· 在售 1 个\n- 中间 `253,700,000 ISK`（253.70M）\n- 收购 `249,000,000 ISK`（249.00M）· 求购 1 个',
+      '**联盟市场A · 18 分钟前**\n\n- 出售 `270,000,000 ISK`（270.00M）▲4.5% · 在售 1 个\n- 中间 `255,000,000 ISK`（255.00M）\n- 收购 `240,000,000 ISK`（240.00M）▼3.6% · 求购 1 个',
+      '**Amarr**\n\n- 出售 `275,000,000 ISK`（275.00M）▲6.4% · 在售 1 个\n- 中间 —\n- 收购 暂无买单',
       '***\n欧服 · 更新于 14:20 · ▲▼ 与 Jita 4-4 比较\n> 📢 联盟市场A 矿石收购按 Jita 收购价 92%，详见群公告',
     ].join('\n\n'))
   })
@@ -57,7 +57,7 @@ describe('priceCard', () => {
     }))
     expect(md(card)).toBe([
       '**乌鸦级 Raven ×10 · 战列舰**',
-      '**联盟市场A**\n\n- 出售 `270,000,000 ISK`（270.00M）▲4.5% · 合计 2.70B\n- 中间 `255,000,000 ISK`（255.00M）· 合计 2.55B\n- 收购 `240,000,000 ISK`（240.00M）▼3.6% · 合计 2.40B',
+      '**联盟市场A**\n\n- 出售 `270,000,000 ISK`（270.00M）▲4.5% · 合计 2.70B · 在售 1 个\n- 中间 `255,000,000 ISK`（255.00M）· 合计 2.55B\n- 收购 `240,000,000 ISK`（240.00M）▼3.6% · 合计 2.40B · 求购 1 个',
       '***\n欧服 · 联盟市场A 更新于 14:16 · ▲▼ 与 Jita 4-4 比较',
     ].join('\n\n'))
   })
@@ -88,7 +88,7 @@ describe('priceCard', () => {
     })
     expect(md(card)).toBe([
       '**PLEX ×500 · 伊甸币**',
-      '**PLEX 全局市场**\n\n- 出售 `5,012,000 ISK`（5.01M）· 合计 2.51B\n- 中间 `4,936,500 ISK`（4.94M）· 合计 2.47B\n- 收购 `4,861,000 ISK`（4.86M）· 合计 2.43B',
+      '**PLEX 全局市场**\n\n- 出售 `5,012,000 ISK`（5.01M）· 合计 2.51B · 在售 1 个\n- 中间 `4,936,500 ISK`（4.94M）· 合计 2.47B\n- 收购 `4,861,000 ISK`（4.86M）· 合计 2.43B · 求购 1 个',
       '***\n欧服 · 更新于 14:20 · PLEX 全宇宙统一交易，不分市场',
     ].join('\n\n'))
   })
@@ -106,6 +106,39 @@ describe('priceCard', () => {
     expect(out).toContain('**Jita 4-4**\n\n- 出售 `258,400,000 ISK`')
   })
 
+  it('order counts follow the price: Chinese units, exact under 万, nothing for a side without orders', () => {
+    const core = testCore(config)
+    const big = quote('jita 4-4', 638, 258_400_000, 249_000_000)
+    big.sell!.volumeNear = 1_200_000
+    big.buy!.volumeNear = 35_000
+    const small = quote('amarr', 638, 275_000_000, null)
+    small.sell!.volumeNear = 37
+    const out = md(priceCard(envOf(core), input(core, [big, small])))
+    expect(out).toContain('- 出售 `258,400,000 ISK`（258.40M）· 在售约 120 万个\n')
+    expect(out).toContain('- 收购 `249,000,000 ISK`（249.00M）· 求购约 3.5 万个')
+    expect(out).toContain('▲6.4% · 在售 37 个\n- 中间 —\n- 收购 暂无买单\n')
+    expect(out).not.toContain('求购 0')
+    expect(text(priceCard(envOf(core), input(core, [big])))).toContain('出售 258,400,000 ISK (258.40M) · 在售约 120 万个')
+  })
+
+  it('a cached or old quote still shows its count, under the market badge; a failed quote shows none', () => {
+    const core = testCore(config)
+    const cached = quote('amarr', 638, 260_000_000, 250_000_000, { status: 'stale', reason: 'cache', dataTime: NOW - 23 * MINUTE })
+    cached.sell!.volumeNear = 25_000
+    const failed = quote('联盟市场a', 638, null, null, { status: 'timeout', dataTime: null })
+    const out = md(priceCard(envOf(core), input(core, [quote('jita 4-4', 638, 258_400_000, 249_000_000), cached, failed])))
+    expect(out).toContain('**Amarr · 23 分钟前（缓存）**\n\n- 出售 `260,000,000 ISK`（260.00M）▲0.6% · 在售约 2.5 万个')
+    expect(out).toContain('**联盟市场A**\n⚠ 查询超时，暂时取不到价格')
+  })
+
+  it('counts and the total for a quantity sit on the same line', () => {
+    const core = testCore(config)
+    const q = quote('联盟市场a', 638, 270_000_000, 240_000_000)
+    q.sell!.volumeNear = 1_500_000_000
+    const out = md(priceCard(envOf(core), input(core, [q], { quantity: 10, single: true, base: undefined })))
+    expect(out).toContain('- 出售 `270,000,000 ISK`（270.00M）· 合计 2.70B · 在售约 15 亿个')
+  })
+
   it('the meta line says which name matched or that the item is new', () => {
     const core = testCore(config)
     const card = priceCard(envOf(core), input(core, [quote('jita 4-4', 638, 1, 1)], { meta: ['按「乌鸦级」查询'] }))
@@ -113,9 +146,9 @@ describe('priceCard', () => {
   })
 
   it.each<[DisplaySettings['priceDisplayMode'], string]>([
-    ['full_and_compact', '- 出售 `270,000,000 ISK`（270.00M）· 合计 2.70B'],
-    ['full_only', '- 出售 `270,000,000 ISK` · 合计 2,700,000,000 ISK'],
-    ['compact_only', '- 出售 `270.00M` · 合计 2.70B'],
+    ['full_and_compact', '- 出售 `270,000,000 ISK`（270.00M）· 合计 2.70B · 在售 1 个'],
+    ['full_only', '- 出售 `270,000,000 ISK` · 合计 2,700,000,000 ISK · 在售 1 个'],
+    ['compact_only', '- 出售 `270.00M` · 合计 2.70B · 在售 1 个'],
   ])('priceDisplayMode %s', (mode, line) => {
     const core = testCore(config, { priceDisplayMode: mode })
     const card = priceCard(envOf(core), input(core, [quote('联盟市场a', 638, 270_000_000, 240_000_000)], { quantity: 10, single: true, base: undefined }))
@@ -141,13 +174,13 @@ describe('priceCard', () => {
     expect(text(card)).toBe([
       '乌鸦级 Raven · 战列舰',
       '【Jita 4-4】',
-      '出售 258,400,000 ISK (258.40M)',
+      '出售 258,400,000 ISK (258.40M) · 在售 1 个',
       '中间 253,700,000 ISK (253.70M)',
-      '收购 249,000,000 ISK (249.00M)',
+      '收购 249,000,000 ISK (249.00M) · 求购 1 个',
       '【联盟市场A】',
-      '出售 270,000,000 ISK (270.00M) ▲4.5%',
+      '出售 270,000,000 ISK (270.00M) ▲4.5% · 在售 1 个',
       '中间 255,000,000 ISK (255.00M)',
-      '收购 240,000,000 ISK (240.00M) ▼3.6%',
+      '收购 240,000,000 ISK (240.00M) ▼3.6% · 求购 1 个',
       '———',
       '欧服 · 更新于 14:20 · ▲▼ 与 Jita 4-4 比较',
       '📢 联盟市场A 矿石收购按 Jita 收购价 92%，详见群公告',

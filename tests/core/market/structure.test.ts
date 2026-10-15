@@ -291,8 +291,8 @@ describe('structure sync: the order book', () => {
 
     expect(await service.getQuote('联盟市场a', RAVEN)).toEqual({
       marketKey: '联盟市场a', typeId: RAVEN, source: 'structure', status: 'ok',
-      sell: { best: 260, volumeAtBest: 2, orders: 2, totalVolume: 5 },
-      buy: { best: 240, volumeAtBest: 3, orders: 1, totalVolume: 3 },
+      sell: { best: 260, volumeAtBest: 2, orders: 2, totalVolume: 5, volumeNear: 5 },
+      buy: { best: 240, volumeAtBest: 3, orders: 1, totalVolume: 3, volumeNear: 3 },
       mid: 250,
       dataTime: Math.floor((w.time.now() - 2 * MIN) / 1000) * 1000,
       ageSec: 120,

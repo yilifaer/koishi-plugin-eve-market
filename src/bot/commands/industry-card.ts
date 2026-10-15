@@ -14,7 +14,7 @@ import type { Action, Card, Choice, CommandRef, Line } from '../view/card'
 import { escapeMarkdown, scrubUrls } from '../view/escape'
 import { emptyCard } from './context'
 import { downtimeWarnings } from './downtime'
-import { IND, SIDE_NONE, SIDE_SHORT } from './industry-text'
+import { IND, SIDE_SHORT, sideNone } from './industry-text'
 import { amountText, itemName } from './names'
 import { SEC_CLASS, SIDE_LABEL } from './text'
 
@@ -223,7 +223,7 @@ function productLine(env: IndustryEnv, r: IndustryResult): Line | undefined {
   const v = r.productValue
   if (!v) return undefined
   const label = IND.product(marketName(env, v.marketKey), SIDE_SHORT[v.side])
-  if (v.total === null) return { text: IND.productNone(marketName(env, v.marketKey), SIDE_NONE[v.side]) }
+  if (v.total === null) return { text: IND.productNone(marketName(env, v.marketKey), sideNone(v)) }
   const mark = v.fallback ? IND.fallbackMark : ''
   const each = r.outputQuantity > 1 && v.unit !== null ? IND.productEach(qty(env, r.outputQuantity), unitOf(r.product), amount(env, v.unit)) : ''
   const extra = `${mark}${each}`
@@ -306,7 +306,7 @@ function reactionBaseCard(env: IndustryEnv, r: IndustryResult, actions: Action[]
   if (v) {
     const market = marketName(env, v.marketKey)
     if (v.total === null || v.unit === null) {
-      lines.push({ text: `${IND.outputValue(r.runs)} — · ${market} ${SIDE_NONE[v.side]}` })
+      lines.push({ text: `${IND.outputValue(r.runs)} — · ${market} ${sideNone(v)}` })
     } else {
       const each = IND.perUnit(market, SIDE_SHORT[v.side], env.core.format.compact(v.unit))
       lines.push({ label: IND.outputValue(r.runs), price: isk(env, v.total), extra: `· ${each}${v.fallback ? IND.fallbackMark : ''}` })
@@ -368,7 +368,7 @@ function reactionOutputLine(env: IndustryEnv, r: IndustryResult): Line | undefin
   const v = r.productValue
   if (!v) return undefined
   const label = IND.output(qty(env, r.outputQuantity), marketName(env, v.marketKey), SIDE_SHORT[v.side])
-  if (v.total === null) return { text: `${label} ${SIDE_NONE[v.side]}` }
+  if (v.total === null) return { text: `${label} ${sideNone(v)}` }
   return v.fallback ? { label, price: isk(env, v.total), extra: IND.fallbackMark } : { label, price: isk(env, v.total) }
 }
 
@@ -478,7 +478,7 @@ export function compareCard(env: IndustryEnv, c: LocationComparison, actions: Ac
   const tail: Line[] = []
   const v = first?.productValue
   if (v) {
-    const value = v.total === null ? SIDE_NONE[v.side] : amount(env, v.total)
+    const value = v.total === null ? sideNone(v) : amount(env, v.total)
     const fees = env.industry.sellFeesPct > 0 ? IND.compareFees(pctTrim(env.industry.sellFeesPct)) : IND.compareNoFees
     tail.push({ text: `${IND.compareProduct(marketName(env, v.marketKey), SIDE_SHORT[v.side], value)} · ${fees}` })
   }

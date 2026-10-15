@@ -5,7 +5,7 @@
 
 import type { Session } from 'koishi'
 import type { SiteInfo } from '../../core/sites'
-import type { ShotDiag, ShotOutcome } from '../../render'
+import type { ShotDiag, ShotOutcome, ShotStage } from '../../render'
 import { buildAccess } from '../scope'
 import type { Card, Line } from '../view/card'
 import { safeEcho } from '../view/escape'
@@ -17,6 +17,11 @@ import { SHOT } from './text'
 
 const HAS_LINK = /https?:\/\//i
 const yesNo = (v: boolean) => (v ? '是' : '否')
+const seconds = (ms: number) => `${(ms / 1000).toFixed(1)} 秒`
+/** 截图的步骤名（和 site-shot.ts 的 ShotStage 对应） */
+const STAGE_NAMES: Record<ShotStage, string> = {
+  goto: '打开页面(goto)', idle: '等网络安静', settle: '等页面稳定', grow: '撑高视口', shoot: '截图',
+}
 
 export function registerShotProbe(commands: CommandContext): void {
   const only = (session: Session) => buildAccess(session, commands.settings.access).isAdmin
@@ -52,7 +57,7 @@ function probeCard(site: SiteInfo, outcome: ShotOutcome): Card {
   const lines: Line[] = [
     { text: `网站：${site.name}（自动截图${site.auto ? '开' : '关'}）` },
     { text: `HTTP 状态：${diag.status ? diag.status : '没有'}` },
-    { text: `打开用时：${diag.elapsedMs === undefined ? '未知' : `${(diag.elapsedMs / 1000).toFixed(1)} 秒`}` },
+    { text: `打开用时：${diag.openMs === undefined ? '未知' : seconds(diag.openMs)}` },
     { text: `页面标题：${diag.title ? safeEcho(diag.title) : '（没有）'}` },
   ]
   if (outcome.ok) {
@@ -60,6 +65,9 @@ function probeCard(site: SiteInfo, outcome: ShotOutcome): Card {
     lines.push({ text: `页面高度：${shot.pageHeight} 像素` })
     lines.push({ text: `截图：${shot.images.length} 张（最多 ${site.profile.maxImages} 张）${shot.truncated ? '，页面过长，后面截掉了' : ''}` })
   }
+  if (diag.elapsedMs !== undefined) lines.push({ text: `总用时：${seconds(diag.elapsedMs)}（最长等 ${site.profile.maxWaitSec} 秒）` })
+  if (diag.steps?.length) lines.push({ text: `各步用时：${diag.steps.map((s) => `${STAGE_NAMES[s.stage]} ${seconds(s.ms)}`).join('、')}` })
+  if (!outcome.ok && diag.stage) lines.push({ text: `卡在：${STAGE_NAMES[diag.stage]}` })
   lines.push({ text: `验证页：${yesNo(diag.challenge === true)}` })
   lines.push({ text: `拦下的跳转：${diag.blockedRedirects ?? 0} 个，拦下的内网请求：${diag.blockedPrivate ?? 0} 个，关掉的弹窗：${diag.closedPopups ?? 0} 个` })
   if (!outcome.ok) {

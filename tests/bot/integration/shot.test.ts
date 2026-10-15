@@ -348,6 +348,27 @@ describe('截图测试', () => {
     noLinks(sent)
   })
 
+  it('a successful check lists the open time and every step', async () => {
+    const e = await start({ puppeteer: browserWith({ [JANICE]: { height: 1000 } }), config: admins })
+    const text = card(await e.h.group(`截图测试 ${JANICE}`))
+    expect(text).toMatch(/打开用时：\d+\.\d 秒/)
+    expect(text).toContain('各步用时：打开页面(goto)')
+    expect(text).toContain('等网络安静')
+    expect(text).toContain('等页面稳定')
+    expect(text).toMatch(/截图 \d+\.\d 秒/)
+    expect(text).not.toContain('卡在')
+  })
+
+  it('a timeout in goto says which step it was stuck in', async () => {
+    const e = await start({ puppeteer: browserWith({ [JANICE]: { timeout: true } }), config: admins })
+    const sent = await e.h.group(`截图测试 ${JANICE}`)
+    const text = card(sent)
+    expect(text).toContain('卡在：打开页面(goto)')
+    expect(text).toContain('打开用时：未知')
+    expect(text).toContain('timeout')
+    noLinks(sent)
+  })
+
   it('a blocked redirect shows in the card; an unlisted site is refused like 「截图」', async () => {
     const e = await start({ puppeteer: browserWith({ [JANICE]: { redirect: 'https://elsewhere.example.net/' } }), config: admins })
     expect(card(await e.h.group(`截图测试 ${JANICE}`))).toContain('redirect')

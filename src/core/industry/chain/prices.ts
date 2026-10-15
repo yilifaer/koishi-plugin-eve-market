@@ -13,6 +13,8 @@ export interface ChainSide {
   /** 配置的市场整个不能用（或者根本没有可用的市场） */
   unavailable: boolean
   fallback?: MarketDef
+  /** 配置的市场这次没取到报价的物品（和 service.ts 的 SidePrices.failed 同义） */
+  failed: Set<TypeId>
 }
 
 export interface ChainPriceBook { material: ChainSide; product: ChainSide }

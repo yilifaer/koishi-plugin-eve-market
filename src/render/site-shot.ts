@@ -1,15 +1,15 @@
 // 网站截图（DECISIONS 的截图一条）：从原来的战报截图器参数化而来，BR 只是名单里的一个网站（br.ts 是兼容层）。
 // 只打开 ShotTarget.url（识别规则从各部分重新拼出来的 https 地址），页面参数（视口、等待方式、稳定时间、张数）来自网站的 profile。
 // 排队：所有网站共用一个队列和 Renderer 的外部页面名额（PageKind 'br'）；按「从收到消息算起」估算完成时间
-// （已过去的时间 +（前面的任务数 + 1）× 60 秒），超过 240 秒直接回答繁忙。同一地址 10 分钟内用缓存；正在截的同一地址共用一次结果。
+// （已过去的时间 + 前面每个任务的最长等待（至少 60 秒）+ 自己的最长等待），超过 240 秒直接回答繁忙。同一地址 10 分钟内用缓存；正在截的同一地址共用一次结果。
 // 截图：视口 → goto（只等 domcontentloaded，先拿到状态码）→ 隐藏元素 → 等网络安静（软等待，最多 idleMs，一直有长连接也照样往下）
 // → 等元素 → 点掉同意框 → 等高度稳定 → 按页面高度用 clip 分段截 JPEG，
 // 每段不超过 4000 像素，最多 maxImages 段，再长的部分截掉并标出。
 // 安全：截图前装网络守卫（net-guard.ts），主框架跳出名单的跳转和打内网的请求都拦下；页面像验证页（Cloudflare 一类）就放弃。
-// 页面的事都交给 Renderer.withPage：单次渲染最多 60 秒（拿到名额才开始算）、无论成败都关闭页面。不 import puppeteer。
+// 页面的事都交给 Renderer.withPage：单次渲染最多 profile.maxWaitSec 秒（默认 60，Warbeacon 120，控制台可调，拿到名额才开始算）、无论成败都关闭页面。不 import puppeteer。
 
 import {
-  BR_CACHE_MAX, BR_CACHE_MIN, BR_JPEG_QUALITY, BR_QUEUE_REJECT_SEC, BR_QUEUE_TASK_SEC, BR_RENDER_TIMEOUT_MS, BR_PAGES,
+  BR_CACHE_MAX, BR_CACHE_MIN, BR_JPEG_QUALITY, BR_QUEUE_REJECT_SEC, BR_QUEUE_TASK_SEC, BR_PAGES,
   SHOT_NET_GUARD, SHOT_SEGMENT_HEIGHT,
 } from '../constants'
 import type { Logger, Scheduler } from '../core/ports'
@@ -46,7 +46,16 @@ export interface ShotDiag {
   blockedRedirects: number
   blockedPrivate: number
   closedPopups: number
+  /** goto 返回时已用的毫秒（还没返回 = 没有这一项） */
+  openMs?: number
+  /** 失败或超时时正卡在哪一步（成功时没有） */
+  stage?: ShotStage
+  /** 已经做完的步骤和各自用了多少毫秒 */
+  steps?: Array<{ stage: ShotStage; ms: number }>
 }
+
+/** 截图的几个步骤（给「截图测试」说卡在哪一步） */
+export type ShotStage = 'goto' | 'idle' | 'settle' | 'grow' | 'shoot'
 
 export interface SiteShot {
   /** 规范化后的链接 */
@@ -112,6 +121,7 @@ export interface SiteScreenshotterOptions {
   /** false = 不装网络守卫（只给测试用）；默认看 SHOT_NET_GUARD */
   guard?: false
   // 下面几项默认取 constants 或网站的 profile，测试里调小
+  /** 给了就覆盖 profile.maxWaitSec（单次渲染的时限） */
   renderTimeoutMs?: number
   /** 给了就覆盖 profile.settleMs */
   settleMs?: number
@@ -156,6 +166,10 @@ const HIDDEN_OVERFLOW = `(() => {
   }
   return max
 })()`
+/** 内部滚动框里藏着的高度超过这个值，才算内容已经出来 */
+const SCROLL_CONTENT_PX = 200
+/** 等内容出来时给稳定、撑高视口和截图留的时间 */
+const SETTLE_RESERVE_MS = 25000
 /** 撑高视口的最多轮数（页面按 100dvh 排版，视口高了容器才跟着高） */
 const GROW_ROUNDS = 3
 
@@ -192,13 +206,46 @@ interface Probe {
   sig: string
 }
 
+/** 一次截图走到哪了（Renderer 超时抛错以后，shoot 里的局部变量就读不到了，所以放在这里） */
+interface Trace {
+  stage?: ShotStage
+  steps: Array<{ stage: ShotStage; ms: number }>
+  status?: number
+  openMs?: number
+  guard?: NetGuard
+  /** 这次渲染开始的时间（拿到页面名额以后） */
+  started: number
+}
+
+/**
+ * 藏掉 position 为 fixed / sticky、文字里含 texts 之一（不分大小写）的浮动条（订阅提示一类）。
+ * 保险：面积超过视口的 30%、文字超过 300 个字、里面有 svg / canvas / video 的都不碰，所以藏不到页面主体和地图。
+ */
+export function hideFixedScript(texts: readonly string[]): string {
+  return `((texts) => {
+    const area = innerWidth * innerHeight * 0.3
+    let n = 0
+    for (const e of document.querySelectorAll('body *')) {
+      const cs = getComputedStyle(e)
+      if (cs.position !== 'fixed' && cs.position !== 'sticky') continue
+      const box = e.getBoundingClientRect()
+      if (box.width * box.height > area || e.querySelector('svg, canvas, video')) continue
+      const text = (e.innerText || '').toLowerCase()
+      if (!text || text.length > 300 || !texts.some((t) => text.includes(t))) continue
+      e.style.setProperty('display', 'none', 'important')
+      n++
+    }
+    return n
+  })(${JSON.stringify(texts.map((t) => t.toLowerCase()))})`
+}
+
 export class SiteScreenshotter {
   private readonly renderer: Pick<Renderer, 'withPage'>
   private readonly logger?: Logger
   private readonly now: () => number
   private readonly scheduler: Scheduler
   private readonly guardOn: boolean
-  private readonly renderTimeoutMs: number
+  private readonly renderTimeoutMs?: number
   private readonly settleMs?: number
   private readonly settlePollMs: number
   private readonly segmentHeight: number
@@ -207,6 +254,8 @@ export class SiteScreenshotter {
   /** 排队和正在截的地址，按先后顺序（同一地址只有一个任务；真正的排队在 Renderer 的页面队列里，也是先来先得） */
   private readonly queue: string[] = []
   private readonly flights = new Map<string, Promise<ShotOutcome>>()
+  /** 排队和正在截的地址各自占多少秒（估算完成时间用） */
+  private readonly taskSec = new Map<string, number>()
   private readonly stop = new AbortController()
 
   constructor(options: SiteScreenshotterOptions) {
@@ -215,7 +264,7 @@ export class SiteScreenshotter {
     this.now = options.now ?? Date.now
     this.scheduler = options.scheduler ?? realScheduler
     this.guardOn = options.guard !== false && SHOT_NET_GUARD
-    this.renderTimeoutMs = options.renderTimeoutMs ?? BR_RENDER_TIMEOUT_MS
+    this.renderTimeoutMs = options.renderTimeoutMs
     this.settleMs = options.settleMs
     this.settlePollMs = options.settlePollMs ?? SETTLE_POLL_MS
     this.segmentHeight = options.segmentHeight ?? SHOT_SEGMENT_HEIGHT
@@ -249,10 +298,13 @@ export class SiteScreenshotter {
     const flight = this.flights.get(key)
     const ahead = this.ahead(flight ? key : undefined)
     const elapsedSec = options.receivedAt === undefined ? 0 : Math.max(0, (this.now() - options.receivedAt) / 1000)
-    if (elapsedSec + (ahead + 1) * BR_QUEUE_TASK_SEC > BR_QUEUE_REJECT_SEC) return { status: 'busy', queued: this.queue.length }
+    // 前面每个任务按它自己的最长等待算，加上自己的（慢网站占得多，别的网站不受影响）
+    const own = flight ? (this.taskSec.get(key) ?? BR_QUEUE_TASK_SEC) : Math.max(BR_QUEUE_TASK_SEC, target.profile.maxWaitSec)
+    if (elapsedSec + this.aheadSec(flight ? key : undefined) + own > BR_QUEUE_REJECT_SEC) return { status: 'busy', queued: this.queue.length }
     if (flight) return { status: 'queued', joined: true, ahead: () => this.ahead(key), done: flight }
 
     this.queue.push(key)
+    this.taskSec.set(key, own)
     const done = this.capture(target)
       .then((outcome) => {
         if (outcome.ok) this.cache.set(key, outcome.shot)
@@ -263,6 +315,7 @@ export class SiteScreenshotter {
         const index = this.queue.indexOf(key)
         if (index >= 0) this.queue.splice(index, 1)
         this.flights.delete(key)
+        this.taskSec.delete(key)
       })
     this.flights.set(key, done)
     return { status: 'queued', joined: false, ahead: () => this.ahead(key), done }
@@ -301,37 +354,74 @@ export class SiteScreenshotter {
     return Math.max(0, index - (BR_PAGES - 1))
   }
 
+  /** 前面的任务共占多少秒（每个按自己的最长等待，没有记录按 BR_QUEUE_TASK_SEC） */
+  private aheadSec(key?: string): number {
+    const index = key === undefined ? this.queue.length : this.queue.indexOf(key)
+    if (index < 0) return 0
+    return this.queue.slice(Math.min(index, BR_PAGES - 1), index).reduce((sum, k) => sum + (this.taskSec.get(k) ?? BR_QUEUE_TASK_SEC), 0)
+  }
+
+  /** 单次渲染的时限（毫秒） */
+  private limitMs(profile: ShotProfile): number {
+    return this.renderTimeoutMs ?? profile.maxWaitSec * 1000
+  }
+
   /** 单次渲染（Renderer 负责排队、时限和关闭页面）；失败也返回结果，不抛出 */
   private async capture(target: ShotTarget): Promise<ShotOutcome> {
+    const trace: Trace = { steps: [], started: this.now() }
     try {
-      return await this.renderer.withPage((page, signal) => this.shoot(page, target, signal), {
+      return await this.renderer.withPage((page, signal) => this.shoot(page, target, signal, trace), {
         kind: 'br',
-        timeoutMs: this.renderTimeoutMs,
+        timeoutMs: this.limitMs(target.profile),
         signal: this.stop.signal,
       })
     } catch (error) {
-      return failureOf(error)
+      // 超时、出错时带上走到哪一步（Renderer 抛出以后 shoot 里的状态就丢了，所以放在 trace 里）
+      const outcome = failureOf(error)
+      return outcome.ok || outcome.reason === 'closed' || outcome.reason === 'no-browser' ? outcome : { ...outcome, diag: this.traceDiag(trace) }
     }
   }
 
-  private async shoot(page: RenderPage, target: ShotTarget, signal: AbortSignal): Promise<ShotOutcome> {
+  /** 到现在为止的检查信息（失败、超时时用） */
+  private traceDiag(trace: Trace, extra: Partial<ShotDiag> = {}): Partial<ShotDiag> {
+    return {
+      elapsedMs: this.now() - trace.started,
+      blockedRedirects: trace.guard?.stats.blockedRedirects ?? 0,
+      blockedPrivate: trace.guard?.stats.blockedPrivate ?? 0,
+      closedPopups: trace.guard?.stats.closedPopups ?? 0,
+      ...(trace.status === undefined ? {} : { status: trace.status }),
+      ...(trace.openMs === undefined ? {} : { openMs: trace.openMs }),
+      ...(trace.stage === undefined ? {} : { stage: trace.stage }),
+      ...(trace.steps.length ? { steps: [...trace.steps] } : {}),
+      ...extra,
+    }
+  }
+
+  /** 做一步：开始时记下步骤名（卡住时能说出来），做完记用时；出错不清掉步骤名 */
+  private async step<T>(trace: Trace, stage: ShotStage, fn: () => Promise<T>): Promise<T> {
+    trace.stage = stage
+    const at = this.now()
+    const value = await fn()
+    trace.steps.push({ stage, ms: this.now() - at })
+    trace.stage = undefined
+    return value
+  }
+
+  private async shoot(page: RenderPage, target: ShotTarget, signal: AbortSignal, trace: Trace): Promise<ShotOutcome> {
     const started = this.now()
+    trace.started = started
     const { profile, url } = target
     const guard: NetGuard | undefined = this.guardOn ? await installNetGuard(page, { allowHosts: target.allowHosts }) : undefined
-    const diagOf = (extra: Partial<ShotDiag> = {}): Partial<ShotDiag> => ({
-      elapsedMs: this.now() - started,
-      blockedRedirects: guard?.stats.blockedRedirects ?? 0,
-      blockedPrivate: guard?.stats.blockedPrivate ?? 0,
-      closedPopups: guard?.stats.closedPopups ?? 0,
-      ...extra,
-    })
+    trace.guard = guard
+    const diagOf = (extra: Partial<ShotDiag> = {}): Partial<ShotDiag> => this.traceDiag(trace, extra)
     const redirected = (): ShotOutcome | undefined =>
       guard && guard.stats.blockedRedirects > 0 ? { ok: false, reason: 'redirect', diag: diagOf() } : undefined
 
     const width = profile.viewportWidth
     await page.setViewport({ width, height: profile.viewportHeight, deviceScaleFactor: 1 })
-    const timeout = Math.max(1, this.renderTimeoutMs - (this.now() - started))
+    const timeout = Math.max(1, this.limitMs(profile) - (this.now() - started))
     let response: Awaited<ReturnType<RenderPage['goto']>>
+    trace.stage = 'goto'
     try {
       // 只等 domcontentloaded：单页应用常有长连接，networkidle 永远等不到，goto 会拖到超时而且拿不到状态码
       response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout })
@@ -342,6 +432,11 @@ export class SiteScreenshotter {
       throw error
     }
     const status = response ? response.status() : 0
+    // goto 一返回就记下状态码和用时：后面超时了「截图测试」也能看到
+    trace.status = status
+    trace.openMs = this.now() - started
+    trace.steps.push({ stage: 'goto', ms: trace.openMs })
+    trace.stage = undefined
     if (status >= 400) {
       if (CHALLENGE_STATUS.has(status)) {
         const probe = await this.probe(page)
@@ -350,26 +445,37 @@ export class SiteScreenshotter {
       return { ok: false, reason: 'http', status, diag: diagOf({ status }) }
     }
 
-    if (profile.hideSelectors?.length) await page.evaluate(this.hideScript(profile.hideSelectors))
-    await this.waitIdle(page, profile.idleMs)
-    if (profile.readySelector) await this.waitReady(page, profile.readySelector, profile.readyTimeoutMs ?? 0, signal)
-
-    if (profile.dismissTexts?.length) await this.dismiss(page, profile.dismissTexts, signal)
-
+    await this.step(trace, 'idle', async () => {
+      if (profile.hideSelectors?.length) await page.evaluate(this.hideScript(profile.hideSelectors))
+      await this.waitIdle(page, profile.idleMs)
+    })
     // 先等页面稳定（内部滚动容器里的内容也要等出来）
-    let last = await this.settle(page, signal, this.settleMs ?? profile.settleMs, profile.viewportHeight)
+    let last = await this.step(trace, 'settle', async () => {
+      if (profile.readySelector) await this.waitReady(page, profile.readySelector, profile.readyTimeoutMs ?? 0, signal)
+      // 内容在内部滚动框里：框里内容超过框高才算出来；等待时间按总时限放宽，留出稳定和截图的余量
+      if (profile.readyScroll) {
+        const left = this.limitMs(profile) - (this.now() - started) - SETTLE_RESERVE_MS
+        await this.waitScroll(page, Math.min(profile.readyTimeoutMs ?? left, left), signal)
+      }
+      if (profile.dismissTexts?.length) await this.dismiss(page, profile.dismissTexts, signal)
+      return this.settle(page, signal, this.settleMs ?? profile.settleMs, profile.viewportHeight)
+    })
     // 「100dvh + 内部滚动」的应用壳：内部容器藏着的高度加到视口上，重排后再读（内联 height:...!important 改不动，只能撑视口）
     if (profile.growViewport && !last.challenge) {
-      const cap = this.maxHeight ?? profile.maxImages * this.segmentHeight
-      let vh = profile.viewportHeight
-      for (let i = 0; i < GROW_ROUNDS && vh < cap; i++) {
-        const hidden = Number(await page.evaluate(HIDDEN_OVERFLOW))
-        if (!(hidden > 1)) break
-        vh = Math.min(cap, vh + Math.ceil(hidden))
-        await page.setViewport({ width, height: vh, deviceScaleFactor: 1 })
-        last = await this.settle(page, signal, 2000, 0)
-      }
+      await this.step(trace, 'grow', async () => {
+        const cap = this.maxHeight ?? profile.maxImages * this.segmentHeight
+        let vh = profile.viewportHeight
+        for (let i = 0; i < GROW_ROUNDS && vh < cap; i++) {
+          const hidden = Number(await page.evaluate(HIDDEN_OVERFLOW))
+          if (!(hidden > 1)) break
+          vh = Math.min(cap, vh + Math.ceil(hidden))
+          await page.setViewport({ width, height: vh, deviceScaleFactor: 1 })
+          last = await this.settle(page, signal, 2000, 0)
+        }
+      })
     }
+    // 浮动条常在脚本跑完以后才出来：稳定以后、截图以前再找一次
+    if (profile.hideFixedTexts?.length) await page.evaluate(hideFixedScript(profile.hideFixedTexts))
     if (last.challenge) return { ok: false, reason: 'blocked', status, diag: diagOf({ status, title: last.title, challenge: true }) }
     const blocked = redirected()
     if (blocked) return blocked
@@ -377,6 +483,8 @@ export class SiteScreenshotter {
     if (!(pageHeight > 0)) return { ok: false, reason: 'failed', message: '页面是空的', diag: diagOf({ status, title: last.title }) }
     const keptHeight = Math.min(pageHeight, this.maxHeight ?? profile.maxImages * this.segmentHeight)
     const images: RenderedImage[] = []
+    trace.stage = 'shoot'
+    const shootAt = this.now()
     for (const part of splitHeight(keptHeight, this.segmentHeight)) {
       // clip 超出视口的部分也要截（不改视口高度，免得按视口高度排版的页面变形）
       const raw = await page.screenshot({
@@ -391,6 +499,8 @@ export class SiteScreenshotter {
       if (!size) return { ok: false, reason: 'failed', message: '截图结果不是图片', diag: diagOf({ status, title: last.title }) }
       images.push({ data, mime: 'image/jpeg', ...size })
     }
+    trace.steps.push({ stage: 'shoot', ms: this.now() - shootAt })
+    trace.stage = undefined
     const diag = diagOf({ status, title: last.title, challenge: false }) as ShotDiag
     return { ok: true, shot: { url, images, pageHeight, keptHeight, truncated: pageHeight > keptHeight, capturedAt: this.now(), diag } }
   }
@@ -423,6 +533,17 @@ export class SiteScreenshotter {
     for (let i = 0; i <= rounds; i++) {
       if ((await page.evaluate(script)) === true) return
       if (i < rounds) await sleep(this.scheduler, this.settlePollMs, signal)
+    }
+  }
+
+  /** 每隔一会儿查一次内部滚动框里有没有内容（内容比框高），最多等 timeoutMs（按轮数和墙钟时间各算一次，页面卡住时以墙钟为准）；到时候没出现也照样截 */
+  private async waitScroll(page: RenderPage, timeoutMs: number, signal: AbortSignal) {
+    const until = this.now() + timeoutMs
+    const rounds = Math.ceil(timeoutMs / this.settlePollMs)
+    for (let i = 0; i <= rounds; i++) {
+      if (Number(await page.evaluate(HIDDEN_OVERFLOW)) > SCROLL_CONTENT_PX) return
+      if (i >= rounds || this.now() >= until) return
+      await sleep(this.scheduler, this.settlePollMs, signal)
     }
   }
 

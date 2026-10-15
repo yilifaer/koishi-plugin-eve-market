@@ -154,7 +154,7 @@ describe('KB: failures', () => {
   it('an incomplete name without market authorization asks for the full name', async () => {
     const e = await start()
     const sent = await e.h.group('KB Hanako')
-    expect(texts(sent)).toEqual(['欧服没有叫 “Hanako” 的人物。名字要写完整（大小写无所谓），也可以发人物 ID。'])
+    expect(texts(sent)).toEqual(['欧服没有叫「Hanako」的人物。名字要写完整（大小写无所谓），也可以发人物 ID。'])
     expect(pics(sent)).toHaveLength(0)
     noLinks(sent)
   })

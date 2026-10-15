@@ -28,6 +28,31 @@ describe('pickPersona: rule table, first match wins', () => {
     expect(pickPersona(input({ kills: 0, losses: 11 }, { ageDays: null }))).not.toBe('pacifist')
   })
 
+  it('sleeper: account >= 3 years with under 10 records; wins over rookie, rookie keeps young accounts', () => {
+    const year = 365
+    // 2005 年建号只有 6 条记录
+    expect(pickPersona(input({ kills: 4, losses: 2 }, { ageDays: 20 * year }))).toBe('sleeper')
+    expect(pickPersona(input({ kills: 4, losses: 2 }, { ageDays: R.sleeperMinYears * year }))).toBe('sleeper')
+    expect(pickPersona(input({ kills: 4, losses: 2 }, { ageDays: R.sleeperMinYears * year - 1 }))).toBe('rookie')
+    expect(pickPersona(input({ kills: 4, losses: 2 }, { ageDays: 30 }))).toBe('rookie')
+    // 记录够多就不是沉睡老号；不知道建号时间也不是
+    expect(pickPersona(input({ kills: 5, losses: R.rookieMinRecords - 5 }, { ageDays: 20 * year }))).not.toBe('sleeper')
+    expect(pickPersona(input({ kills: 4, losses: 2 }, { ageDays: null }))).toBe('rookie')
+    // 没有击毁的老号仍是和平主义者，没有记录仍是神秘人物
+    expect(pickPersona(input({ kills: 0, losses: 2 }, { ageDays: 8 * year }))).toBe('pacifist')
+    expect(pickPersona(input({ kills: 0, losses: 0 }, { ageDays: 8 * year }))).toBe('ghost')
+  })
+
+  it('sleeper copy: label, and at least 15 headlines and ledes in each tone', () => {
+    expect(PERSONA_LABEL.sleeper).toBe('沉睡老号')
+    for (const t of ['gentle', 'snarky'] as const) {
+      expect(PERSONA_LINES.sleeper[t].headlines.length).toBeGreaterThanOrEqual(15)
+      expect(PERSONA_LINES.sleeper[t].ledes.length).toBeGreaterThanOrEqual(15)
+    }
+    const all = (['gentle', 'snarky'] as const).flatMap((t) => [...PERSONA_LINES.sleeper[t].headlines, ...PERSONA_LINES.sleeper[t].ledes])
+    for (const l of all) expect(l, l).not.toMatch(/新手|萌新|新人|第一艘|保护期/)
+  })
+
   it('rookie: under 90 days or under 10 records (boundaries)', () => {
     expect(pickPersona(input({}, { ageDays: R.rookieDays - 1 }))).toBe('rookie')
     expect(pickPersona(input({}, { ageDays: R.rookieDays }))).not.toBe('rookie')
@@ -109,7 +134,7 @@ describe('copy templates', () => {
   const names = { name: 'Hanako Kisaragi' }
 
   it('every persona has a name, a label, and copy in both tones', () => {
-    expect(ALL).toHaveLength(13)
+    expect(ALL).toHaveLength(14)
     for (const p of ALL) {
       expect(PERSONA_LABEL[p], p).toBeTruthy()
       const { headline, lede } = composeCopy(p, 2119876543, '2026-10-14', names)
@@ -205,7 +230,7 @@ describe('pickMood', () => {
   })
 
   it('fills the line with the values and skips lines whose data is missing', () => {
-    const values = { name: 'A', dormant: '5', bigKillIsk: '12.0B' }
+    const values = { name: 'A', dormant: '5个月', bigKillIsk: '12.0B' }
     for (const tone of ['gentle', 'snarky', 'mixed'] as const) {
       expect(pickMood({ ...base, months: idle(5) }, values, tone, '1:2026-10-14', new Set())).toMatch(/5/)
       expect(pickMood({ ...base, recentKillValue: 12e9 }, values, tone, '1:2026-10-14', new Set())).toContain('12.0B')

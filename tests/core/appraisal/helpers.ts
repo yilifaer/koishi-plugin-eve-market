@@ -185,7 +185,7 @@ export interface QuoteCall {
 }
 
 function side(best: number | undefined) {
-  return best === undefined ? null : { best, volumeAtBest: 10, orders: 1, totalVolume: 10 }
+  return best === undefined ? null : { best, volumeAtBest: 10, orders: 1, totalVolume: 10, volumeNear: 10 }
 }
 
 /** 按 (市场, 物品) 编排报价；没写的物品 = 市场正常、没有挂单。按时限返回，赶不上的物品标超时 */

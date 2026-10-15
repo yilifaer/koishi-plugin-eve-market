@@ -29,6 +29,7 @@ import {
 } from '../../constants'
 import { isEsiError } from '../esi'
 import type { EsiApi, EsiCharacter, EsiStation } from '../esi'
+import { CATEGORY_SHIP } from '../items'
 import { parseZkillKillList } from '../killmail'
 import type { ZkillListKill } from '../killmail'
 import type { Clock, Logger, Scheduler } from '../ports'
@@ -88,6 +89,9 @@ function fromZkill(f: ZkillFailure): CoreFailure {
   }
 }
 
+/** UTC 日期 YYYY-MM-DD：整活儿文案的挑选种子，也是成品缓存键的一部分 */
+const utcDay = (ms: number) => new Date(ms).toISOString().slice(0, 10)
+
 const pad2 = (n: number) => String(n).padStart(2, '0')
 
 /** 最近 KB_MONTHS 个月（含本月）的 YYYY-MM，从早到晚 */
@@ -123,7 +127,7 @@ function hoursActivity(source: 'stats' | 'killmails', hoursUtc: number[], sample
     hoursBeijing: toBeijing(hoursUtc),
     peak: { beijingStart, beijingEnd, utcStart: best, utcEnd },
     zones: [],
-    text: ACTIVITY_TEXT.peak(`${pad2(beijingStart)}:00`, `${pad2(beijingEnd)}:00`, best, utcEnd),
+    text: ACTIVITY_TEXT.peak(beijingStart, beijingEnd, best, utcEnd),
   }
 }
 
@@ -212,9 +216,11 @@ export class PilotProfiles {
     // 文案语气不同，成品不能混用
     const tone = opts.tone ?? KB_TONE_DEFAULT
     // 带近期数据的资料也满足不要近期数据的请求
-    const hit = this.cache.get(`${id}:1:${tone}`) ?? (recent ? undefined : this.cache.get(`${id}:0:${tone}`))
+    // 键里带 UTC 日期：文案按日期挑，过了 UTC 零点不能还给昨天的成品
+    const day = utcDay(this.deps.clock.now())
+    const hit = this.cache.get(`${id}:1:${tone}:${day}`) ?? (recent ? undefined : this.cache.get(`${id}:0:${tone}:${day}`))
     if (hit) return hit
-    const flight = this.flights.run(`${id}:${recent ? 1 : 0}:${tone}`, () => this.build(id, recent, tone))
+    const flight = this.flights.run(`${id}:${recent ? 1 : 0}:${tone}:${day}`, () => this.build(id, recent, tone))
     const waited = await withDeadline(flight, opts.deadlineMs ?? KB_DEADLINE_MS, this.deps.scheduler)
     return waited.done ? waited.value : failure('DEADLINE', '时限到了，后台继续取')
   }
@@ -427,9 +433,14 @@ export class PilotProfiles {
     const { format } = this.deps
     const stats = zk.stats
     const known = !zk.failure
-    const totalKills = Math.max(stats.kills, stats.topShips.reduce((n, s) => n + s.kills, 0))
+    // 王牌座驾只算船（SDE 分类 6）：参与击毁建筑、设施、无人机之类也会出现在 zKill 的列表里。查不到资料的原样保留
+    const topShips = stats.topShips.filter((s) => {
+      const item = this.deps.items.byId(s.typeId)
+      return !item || item.categoryId === CATEGORY_SHIP
+    })
+    const totalKills = Math.max(stats.kills, topShips.reduce((n, s) => n + s.kills, 0))
 
-    const ships: PilotShip[] = stats.topShips.slice(0, KB_SHIPS_MAX).map((s) => ({
+    const ships: PilotShip[] = topShips.slice(0, KB_SHIPS_MAX).map((s) => ({
       ...this.shipRef(s.typeId),
       kills: s.kills,
       share: totalKills > 0 ? Math.round((s.kills / totalKills) * 100) : 0,
@@ -481,15 +492,16 @@ export class PilotProfiles {
         values.bigLossIsk = format.compact(recentLoss.value)
         if (recentLoss.ship) values.bigLoss = recentLoss.ship.zh || recentLoss.ship.en
       }
-      if (dormantMonths > 0) values.dormant = String(dormantMonths)
+      // 一整年都没记录（统计窗口全空）时写「一年多」，否则「N 个月」
+      if (dormantMonths > 0) values.dormant = dormantMonths >= KB_MONTHS ? '一年多' : `${dormantMonths}个月`
       // 北京时间最活跃时段，如「21–24 点」（跨零点写「22–次日1 点」）
       if (activity?.peak) values.peak = formatPeak(activity.peak.beijingStart, activity.peak.beijingEnd)
     }
-    const dayKey = new Date(now).toISOString().slice(0, 10)
+    const dayKey = utcDay(now)
 
     // 王牌座驾按船组合并（称号用）
     const groupKills = new Map<number, number>()
-    for (const s of stats.topShips) {
+    for (const s of topShips) {
       const groupId = this.deps.items.byId(s.typeId)?.groupId
       if (groupId !== undefined) groupKills.set(groupId, (groupKills.get(groupId) ?? 0) + s.kills)
     }
@@ -562,9 +574,9 @@ export class PilotProfiles {
       zkillFailure: zk.failure,
     }
     if (!partial.length) {
-      this.cache.set(`${id}:${lists ? 1 : 0}:${tone}`, profile)
+      this.cache.set(`${id}:${lists ? 1 : 0}:${tone}:${dayKey}`, profile)
       // 没有记录的人不需要列表，带不带近期数据的请求都能用这一份
-      if (!lists && known && stats.kills + stats.losses === 0) this.cache.set(`${id}:1:${tone}`, profile)
+      if (!lists && known && stats.kills + stats.losses === 0) this.cache.set(`${id}:1:${tone}:${dayKey}`, profile)
     }
     return profile
   }

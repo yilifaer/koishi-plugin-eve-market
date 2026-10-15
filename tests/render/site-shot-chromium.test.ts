@@ -11,13 +11,13 @@ import type { Logger } from '../../src/core/ports'
 import type { ShotProfile } from '../../src/core/sites'
 import { createRenderer, puppeteerPages } from '../../src/render/renderer'
 import type { PageFactory } from '../../src/render/renderer'
-import { SiteScreenshotter } from '../../src/render/site-shot'
+import { SiteScreenshotter, hideFixedScript } from '../../src/render/site-shot'
 import type { ShotTarget } from '../../src/render/site-shot'
 
 const CHROME = process.env.CHROME_PATH
 const HAS_CHROME = !!CHROME && fs.existsSync(CHROME)
 
-const PROFILE: ShotProfile = { viewportWidth: 800, viewportHeight: 600, idleMs: 3000, settleMs: 600, maxImages: 1 }
+const PROFILE: ShotProfile = { viewportWidth: 800, viewportHeight: 600, idleMs: 3000, settleMs: 600, maxImages: 1, maxWaitSec: 60 }
 const target = (path: string, profile: Partial<ShotProfile> = {}): ShotTarget => ({
   url: `https://kb.example.com${path}`,
   siteId: 'custom-1',
@@ -210,5 +210,26 @@ describe.skipIf(!HAS_CHROME)('SiteScreenshotter net guard with Chromium and loca
     const outcome = await ticket.done
     if (!outcome.ok) throw new Error(`截图失败：${outcome.reason}`)
     expect(outcome.shot.diag.title).toBe('hidden')
+  }, 30000)
+
+  // 真浏览器里跑 hideFixedScript：只藏小的、含文字的浮动条，藏不到页面主体、地图和普通元素
+  it('hideFixedScript hides the small fixed bar only', async () => {
+    const page = await browser.newPage()
+    try {
+      await page.setViewport({ width: 800, height: 600 })
+      await page.setContent(`<body style="margin:0">
+<div id="bar" style="position:fixed;right:0;bottom:0;width:200px;height:40px">EveMaps subscription  — upgrade</div>
+<div id="sticky" style="position:sticky;top:0;height:20px">evemaps SUBSCRIPTION</div>
+<div id="cover" style="position:fixed;left:0;top:0;width:800px;height:600px;z-index:-1">EveMaps subscription (full page wrapper)</div>
+<div id="map" style="position:fixed;left:0;top:100px;width:100px;height:100px"><svg width="50" height="50"></svg>EveMaps subscription</div>
+<div id="static">EveMaps subscription (normal flow)</div>
+<div id="other" style="position:fixed;left:0;top:300px;width:100px;height:20px">Something else</div></body>`)
+      const hidden = await page.evaluate(hideFixedScript(['EveMaps subscription']))
+      const shown = await page.evaluate(() => Object.fromEntries(Array.from(document.querySelectorAll('div')).map((d) => [d.id, getComputedStyle(d).display !== 'none'])))
+      expect(hidden).toBe(2)
+      expect(shown).toEqual({ bar: false, sticky: false, cover: true, map: true, static: true, other: true })
+    } finally {
+      await page.close()
+    }
   }, 30000)
 })

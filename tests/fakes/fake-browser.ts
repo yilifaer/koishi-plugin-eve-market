@@ -137,7 +137,11 @@ export class FakePage implements RenderPage {
     return { status: () => site.status ?? 200 }
   }
 
-  async evaluate() {
+  private hiddenReads = 0
+
+  async evaluate(expression = '') {
+    // 内部滚动框：第一次读有内容（readyScroll 立刻满足），之后没有藏着的高度
+    if (expression.includes('overflowY')) return this.hiddenReads++ === 0 ? 300 : 0
     const site = this.url ? this.browser.sites.get(this.url) : undefined
     if (site?.title !== undefined || site?.challenge) return [site.height ?? 2000, true, site.challenge === true, site.title ?? '']
     return [site?.height ?? 2000, true]

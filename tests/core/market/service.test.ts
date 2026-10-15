@@ -53,8 +53,8 @@ describe('MarketService.getQuote: NPC markets from region orders', () => {
     expect(await service.getQuote('jita 4-4', RAVEN)).toEqual({
       marketKey: 'jita 4-4',
       typeId: RAVEN,
-      sell: { best: 258, volumeAtBest: 2, orders: 1, totalVolume: 2 },
-      buy: { best: 249, volumeAtBest: 1, orders: 1, totalVolume: 1 },
+      sell: { best: 258, volumeAtBest: 2, orders: 1, totalVolume: 2, volumeNear: 2 },
+      buy: { best: 249, volumeAtBest: 1, orders: 1, totalVolume: 1, volumeNear: 1 },
       mid: 253.5,
       status: 'ok',
       dataTime: time.now() - 2 * MIN,
@@ -254,8 +254,8 @@ describe('MarketService: structure markets', () => {
     const { service } = setup({ structures })
 
     expect(await service.getQuote('联盟市场a', RAVEN, { qty: 1 })).toEqual({
-      marketKey: '联盟市场a', typeId: RAVEN, sell: { best: 270, volumeAtBest: 1, orders: 1, totalVolume: 1 },
-      buy: { best: 240, volumeAtBest: 5, orders: 1, totalVolume: 5 }, mid: 255, status: 'ok',
+      marketKey: '联盟市场a', typeId: RAVEN, sell: { best: 270, volumeAtBest: 1, orders: 1, totalVolume: 1, volumeNear: 1 },
+      buy: { best: 240, volumeAtBest: 5, orders: 1, totalVolume: 5, volumeNear: 5 }, mid: 255, status: 'ok',
       dataTime: Date.UTC(2026, 9, 7, 6, 16), ageSec: 240, source: 'structure',
     })
     expect(touched).toEqual([['联盟市场a', 6000]])

@@ -44,6 +44,10 @@ interface Behavior {
   hidden?: number[]
   /** 第几次找同意框按钮才找到（1 = 第一次就有；不写 = 一直没有） */
   dismissOnPoll?: number
+  /** goto 一直不返回 */
+  hangGoto?: boolean
+  /** waitForNetworkIdle 一直不返回 */
+  hangIdle?: boolean
 }
 
 class FakePage implements RenderPage {
@@ -76,6 +80,7 @@ class FakePage implements RenderPage {
     this.calls.push('goto')
     this.url = url
     this.gotoOptions = options
+    if (this.b.hangGoto) await new Promise(() => {})
     if (this.b.gotoMs) await new Promise((resolve) => setTimeout(resolve, this.b.gotoMs))
     return { status: () => this.b.status ?? 200 }
   }
@@ -83,6 +88,7 @@ class FakePage implements RenderPage {
   async waitForNetworkIdle(options: { idleTime?: number; concurrency?: number; timeout?: number }) {
     this.calls.push('idle')
     this.idleOptions = options
+    if (this.b.hangIdle) await new Promise(() => {})
     if (this.b.neverIdle) {
       await new Promise((resolve) => setTimeout(resolve, 10))
       throw new Error('Timeout')
@@ -91,6 +97,10 @@ class FakePage implements RenderPage {
 
   async evaluate(expression: string) {
     this.expressions.push(expression)
+    if (expression.includes("'fixed'")) {
+      this.calls.push('hideFixed')
+      return 0
+    }
     if (expression.includes('el.click()')) {
       this.calls.push('dismiss')
       this.dismissPolls++
@@ -150,7 +160,7 @@ function fakeSource(make: (n: number) => FakePage = () => new FakePage()) {
   return { source, pages, peak: () => peak }
 }
 
-const PROFILE: ShotProfile = { viewportWidth: 1440, viewportHeight: 900, idleMs: 3000, settleMs: 20, maxImages: 2 }
+const PROFILE: ShotProfile = { viewportWidth: 1440, viewportHeight: 900, idleMs: 3000, settleMs: 20, maxImages: 2, maxWaitSec: 60 }
 const target = (name: string, profile: Partial<ShotProfile> = {}): ShotTarget => ({
   url: `https://${name}.example.com/p`,
   siteId: name,
@@ -230,6 +240,24 @@ describe('SiteScreenshotter profiles', () => {
     const c = shooter(none.source)
     shotOf(await outcomeOf(c.shots.request(target('dotlan'))))
     expect(none.pages[0].calls).not.toContain('dismiss')
+  })
+
+  it('readyScroll waits for the inner scroll box to fill, not just settleMs', async () => {
+    // 内部滚动框前 6 次读都是空的（页头空壳），第 7 次才有内容
+    const hidden = [...Array(6).fill(0), 1500, 0]
+    const { source, pages } = fakeSource(() => new FakePage({ hidden }))
+    const { shots } = shooter(source, { scheduler: instant, settlePollMs: 250 })
+    shotOf(await outcomeOf(shots.request(target('janice', { settleMs: 100, readyScroll: true, readyTimeoutMs: 30000 }))))
+    expect(pages[0].calls.filter((c) => c === 'hidden').length).toBe(7)
+    expect(pages[0].calls.filter((c) => c === 'hidden').length).toBeLessThan(40)
+  })
+
+  it('readyScroll gives up at readyTimeoutMs and still shoots', async () => {
+    const { source, pages } = fakeSource(() => new FakePage({ hidden: [0] }))
+    const { shots } = shooter(source, { scheduler: instant, settlePollMs: 250 })
+    shotOf(await outcomeOf(shots.request(target('janice', { settleMs: 100, readyScroll: true, readyTimeoutMs: 1000 }))))
+    expect(pages[0].calls.filter((c) => c === 'hidden').length).toBe(5)
+    expect(pages[0].calls).toContain('screenshot')
   })
 
   it('settles for at most the profile settleMs', async () => {
@@ -474,5 +502,120 @@ describe('SiteScreenshotter queue and cache across sites', () => {
     expect(logger.warnings[0]).toContain('战报截图失败（http 500）')
     await outcomeOf(shots.request(target('janice')))
     expect(logger.warnings[1]).toContain('截图失败（janice 站，http 500）')
+  })
+})
+
+describe('SiteScreenshotter max wait per site', () => {
+  it('uses profile.maxWaitSec as the goto and render limit', async () => {
+    const { source, pages } = fakeSource()
+    const { shots } = shooter(source)
+    shotOf(await outcomeOf(shots.request(target('br', { maxWaitSec: 120 }))))
+    const timeout = pages[0].gotoOptions!.timeout!
+    expect(timeout).toBeLessThanOrEqual(120_000)
+    expect(timeout).toBeGreaterThan(119_000)
+    shotOf(await outcomeOf(shots.request(target('janice', { maxWaitSec: 45 }))))
+    expect(pages[1].gotoOptions!.timeout!).toBeLessThanOrEqual(45_000)
+  })
+
+  it('times out at the limit of the site, not at a global one', async () => {
+    const { source } = fakeSource(() => new FakePage({ hangGoto: true }))
+    const { shots } = shooter(source)
+    const started = Date.now()
+    const outcome = await outcomeOf(shots.request(target('br', { maxWaitSec: 0.1 })))
+    expect(outcome).toMatchObject({ ok: false, reason: 'timeout' })
+    expect(Date.now() - started).toBeLessThan(2000)
+  })
+
+  it('queue estimate: each task counts with its own limit, other sites stay at 60 seconds', async () => {
+    const { source } = fakeSource(() => new FakePage({ gotoMs: 30 }))
+    const { shots } = shooter(source, { now: () => 1_000_000 })
+    const at = (sec: number) => ({ receivedAt: 1_000_000 - sec * 1000 })
+    // 120 秒的网站：已过 130 秒就来不及（130 + 120 > 240）；60 秒的网站同样情况还来得及
+    expect(shots.request(target('br', { maxWaitSec: 120 }), at(130))).toMatchObject({ status: 'busy' })
+    expect(shots.request(target('janice', { maxWaitSec: 60 }), at(130)).status).toBe('queued')
+  })
+
+  it('queue estimate adds the limits of the tasks ahead', async () => {
+    const { source } = fakeSource(() => new FakePage({ gotoMs: 50 }))
+    const { shots } = shooter(source, { now: () => 1_000_000 })
+    const first = shots.request(target('br', { maxWaitSec: 120 }))
+    // 120 + 60 = 180 ≤ 240
+    const second = shots.request(target('janice', { maxWaitSec: 60 }))
+    expect(first.status).toBe('queued')
+    expect(second.status).toBe('queued')
+    // 120 + 60 + 120 > 240
+    expect(shots.request(target('dotlan', { maxWaitSec: 120 })).status).toBe('busy')
+    await Promise.all([outcomeOf(first), outcomeOf(second)])
+  })
+})
+
+describe('SiteScreenshotter step diagnostics', () => {
+  it('records status and open time as soon as goto returns, and says it was stuck waiting for the network', async () => {
+    const { source } = fakeSource(() => new FakePage({ gotoMs: 30, hangIdle: true }))
+    const { shots } = shooter(source)
+    const outcome = await outcomeOf(shots.request(target('br', { maxWaitSec: 0.3 })))
+    if (outcome.ok) throw new Error('应该超时')
+    expect(outcome.reason).toBe('timeout')
+    expect(outcome.diag).toMatchObject({ status: 200, stage: 'idle' })
+    expect(outcome.diag!.openMs).toBeGreaterThanOrEqual(25)
+    expect(outcome.diag!.steps).toEqual([{ stage: 'goto', ms: outcome.diag!.openMs }])
+    expect(outcome.diag!.elapsedMs).toBeGreaterThanOrEqual(outcome.diag!.openMs!)
+  })
+
+  it('stuck in goto: no status, no open time, stage goto', async () => {
+    const { source } = fakeSource(() => new FakePage({ hangGoto: true }))
+    const { shots } = shooter(source)
+    const outcome = await outcomeOf(shots.request(target('br', { maxWaitSec: 0.1 })))
+    if (outcome.ok) throw new Error('应该超时')
+    expect(outcome.diag).toMatchObject({ stage: 'goto' })
+    expect(outcome.diag!.status).toBeUndefined()
+    expect(outcome.diag!.openMs).toBeUndefined()
+    expect(outcome.diag!.steps).toBeUndefined()
+  })
+
+  it('a successful shot lists every finished step in order and has no stage', async () => {
+    const { source } = fakeSource(() => new FakePage({ gotoMs: 5 }))
+    const { shots } = shooter(source)
+    const shot = shotOf(await outcomeOf(shots.request(target('janice'))))
+    expect(shot.diag.stage).toBeUndefined()
+    expect(shot.diag.steps!.map((s) => s.stage)).toEqual(['goto', 'idle', 'settle', 'shoot'])
+    expect(shot.diag.openMs).toBe(shot.diag.steps![0].ms)
+  })
+
+  it('a growing page gets a grow step between settle and shoot', async () => {
+    const { source } = fakeSource(() => new FakePage({ heightOf: (vh) => vh, hidden: [600, 0] }))
+    const { shots } = shooter(source)
+    const shot = shotOf(await outcomeOf(shots.request(target('br', { growViewport: true, settleMs: 3000 }))))
+    expect(shot.diag.steps!.map((s) => s.stage)).toEqual(['goto', 'idle', 'settle', 'grow', 'shoot'])
+  })
+
+  it('an HTTP error keeps the status and open time and is not stuck anywhere', async () => {
+    const { source } = fakeSource(() => new FakePage({ status: 500 }))
+    const { shots } = shooter(source)
+    const outcome = await outcomeOf(shots.request(target('br')))
+    if (outcome.ok) throw new Error('应该失败')
+    expect(outcome.diag).toMatchObject({ status: 500 })
+    expect(outcome.diag!.openMs).toBeGreaterThanOrEqual(0)
+    expect(outcome.diag!.stage).toBeUndefined()
+  })
+})
+
+describe('SiteScreenshotter hideFixedTexts', () => {
+  it('looks for the floating bars after the page settled and before the shot', async () => {
+    const { source, pages } = fakeSource()
+    const { shots } = shooter(source)
+    shotOf(await outcomeOf(shots.request(target('dotlan', { hideFixedTexts: ['EveMaps subscription'] }))))
+    const calls = pages[0].calls
+    expect(calls.filter((c) => c === 'hideFixed')).toHaveLength(1)
+    expect(calls.indexOf('hideFixed')).toBeGreaterThan(calls.lastIndexOf('probe'))
+    expect(calls.indexOf('hideFixed')).toBeLessThan(calls.indexOf('screenshot'))
+    expect(pages[0].expressions.find((e) => e.includes("'fixed'"))).toContain('"evemaps subscription"')
+  })
+
+  it('costs nothing for profiles without it', async () => {
+    const { source, pages } = fakeSource()
+    const { shots } = shooter(source)
+    shotOf(await outcomeOf(shots.request(target('janice'))))
+    expect(pages[0].calls).not.toContain('hideFixed')
   })
 })
