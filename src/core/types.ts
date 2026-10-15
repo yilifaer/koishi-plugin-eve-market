@@ -396,12 +396,17 @@ export interface JaniceSettings {
 /** KB 人物卡在哪里可用：所有群和私聊 / 只在授权群和授权私聊 / 关闭 */
 export type KbScope = 'all' | 'allowed' | 'off'
 
+/** 人物卡文案的语气：snarky = 只用毒舌的，gentle = 只用温和的，mixed = 两份混在一起选 */
+export type KbToneMode = 'snarky' | 'gentle' | 'mixed'
+
 export interface KbSettings {
   scope: KbScope
   /** 显示近期大击杀 / 大损失和作息（多 2 次 zKill 请求，慢 2–3 秒） */
   recent: boolean
   /** @机器人 的消息里带 zKill 人物链接时自动出人物卡 */
   auto: boolean
+  /** 文案的毒舌程度 */
+  tone: KbToneMode
   /** 不显示的人物 ID（控制台表格里启用且合法的行） */
   hidden: number[]
 }
@@ -1610,7 +1615,7 @@ export type JanicePricing = 'buy' | 'split' | 'sell' | 'purchase'
 export type JanicePricingVariant = 'immediate' | 'top5percent'
 export type JaniceDesignation = 'appraisal' | 'wtb' | 'wts'
 
-/** 三个价格，整数 ISK（已乘上这份估价自己的比例，向下取整） */
+/** 三个价格，整数 ISK（接口给的数已是这份估价的比例，只向下取整） */
 export interface JanicePrices {
   sell: number
   buy: number
@@ -1624,7 +1629,7 @@ export interface JaniceItem {
   /** 词库里有中文名时 */
   zh: string | null
   amount: number
-  /** 这一行的小计（比例已乘） */
+  /** 这一行的小计（接口已按比例算好） */
   prices: JanicePrices
 }
 
@@ -1681,7 +1686,7 @@ export interface JaniceService {
 
 /** 人设：规则表按顺序命中第一条；unknown 是 zKill 取不到时的占位，不在规则表里 */
 export type PersonaId =
-  | 'ghost' | 'rookie' | 'capital' | 'industrial' | 'wormhole' | 'ganker' | 'solo' | 'fleet' | 'reaper' | 'underdog' | 'pilot'
+  | 'ghost' | 'pacifist' | 'rookie' | 'capital' | 'industrial' | 'wormhole' | 'ganker' | 'solo' | 'fleet' | 'reaper' | 'underdog' | 'pilot'
   | 'unknown'
 
 export interface PilotRef {
@@ -1726,8 +1731,8 @@ export interface PilotKill {
 export type PilotZone = 'au' | 'eu' | 'ru' | 'use' | 'usw'
 
 export interface PilotActivity {
-  /** killmails = 按列表里的击杀 / 损失时间统计；labels = 样本太少，只有 zKill 的时区标签 */
-  source: 'killmails' | 'labels'
+  /** stats = zKill 统计里按星期 × 小时的活动次数；killmails = 按列表里的击杀 / 损失时间统计；labels = 样本太少，只有 zKill 的时区标签 */
+  source: 'stats' | 'killmails' | 'labels'
   samples: number
   /** 按 UTC 小时 0–23 的次数；labels 时全 0 */
   hoursUtc: number[]
@@ -1739,6 +1744,19 @@ export interface PilotActivity {
   zones: PilotZone[]
   /** 写好的一行，例如「北京 20:00–23:00（EVE 12–15）」或「主要活跃时段：欧洲时段 / 美东时段」 */
   text: string
+}
+
+/** 读者来信：正文 + 署名（署名以「——」开头） */
+export interface PilotLetter {
+  body: string
+  sign: string
+}
+
+/** 今日运势：宜 2 条、忌 2 条（每条 2–8 个字），加一句点评 */
+export interface PilotFortune {
+  yi: string[]
+  ji: string[]
+  comment: string
 }
 
 export interface PilotProfile {
@@ -1781,6 +1799,18 @@ export interface PilotProfile {
   lede: string
   /** 近况一句；没有时 null */
   mood: string | null
+  /** 文案用的语气（出图缓存要带上它） */
+  tone: KbToneMode
+  /** 称号的名字，最多 KB_TITLES_MAX 个；没有或数据不全时 [] */
+  titles: string[]
+  /** 本报锐评，1 条；数据不全时 [] */
+  remarks: string[]
+  /** 读者来信；战绩暂缺（zKill 没取到）时 null */
+  letter: PilotLetter | null
+  /** 今日运势 */
+  fortune: PilotFortune
+  /** 分类广告一条；没有可用的时 null */
+  ad: string | null
   /** 页脚的数据来源和免责声明（时间由出图的一方补） */
   footer: string
   /** 拿到 zKill 统计的时间（毫秒）；没拿到时是组装的时间 */
@@ -1804,6 +1834,8 @@ export interface PilotOptions {
   deadlineMs?: number
   /** 要不要取「近期大击杀 / 大损失 / 作息」（多 2 次 zKill 请求）；默认要 */
   recent?: boolean
+  /** 文案语气，默认 KB_TONE_DEFAULT（混合） */
+  tone?: KbToneMode
 }
 
 /** 一张卡用的图片，都是 data: 地址；下载失败的是 null（出图时用剪影） */

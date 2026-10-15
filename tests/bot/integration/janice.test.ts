@@ -235,12 +235,11 @@ describe('估价: Janice 不在截图名单里时按消息顺序', () => {
 })
 
 describe('估价: percentage', () => {
-  it('0.93 is applied to the three totals (floored) and the card says so', async () => {
+  it('93% shows the API numbers as they are and the card says so', async () => {
     const items: FakeItem[] = [{ eid: 34, name: 'Tritanium', amount: 10, sell: 1111, buy: 999, split: 1055 }]
     const e = await start({ seed: (f) => f.add(CODE, { pricePercentage: 0.93 }, items) })
     const sent = await e.h.group(`估价 ${LINK}`)
-    // 1111 × 0.93 = 1033.23, 999 × 0.93 = 929.07, 1055 × 0.93 = 981.15
-    expect(sent[1].text).toBe('出售 1033\n收购 929\n中间 981')
+    expect(sent[1].text).toBe('出售 1111\n收购 999\n中间 1055')
     expect(card([sent[0]])).toContain('按这份估价设定的 93%')
   })
 

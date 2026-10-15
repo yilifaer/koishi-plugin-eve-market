@@ -10,7 +10,7 @@ import { imageSize } from '../core/util'
 
 // ------------------------------------------------------------------ 页面接口
 
-export type LoadEvent = 'load' | 'domcontentloaded' | 'networkidle0' | 'networkidle2'
+export type LoadEvent = 'load' | 'domcontentloaded'
 
 /** 开了请求拦截以后收到的网络请求 */
 export interface PageRequest {
@@ -50,6 +50,8 @@ export interface RenderPage {
   setContent(html: string, options?: { timeout?: number; waitUntil?: 'load' | 'domcontentloaded' }): Promise<void>
   /** 返回主文档的响应；同文档跳转时是 null */
   goto(url: string, options?: { timeout?: number; waitUntil?: LoadEvent }): Promise<{ status(): number } | null>
+  /** 等网络安静（没有请求，或不超过 concurrency 个请求）idleTime 毫秒；超过 timeout 抛错。假页面可以不写 */
+  waitForNetworkIdle?(options: { idleTime?: number; concurrency?: number; timeout?: number }): Promise<void>
   /** 在页面里求一个表达式的值 */
   evaluate(expression: string): Promise<unknown>
   /** 新版 puppeteer 返回 Uint8Array，旧版返回 Buffer；指定 base64 时是字符串 */

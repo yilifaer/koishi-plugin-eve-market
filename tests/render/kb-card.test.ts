@@ -33,7 +33,11 @@ describe('kbCardHtml content', () => {
     expect(html).toContain('YC128 年 10 月 14 日 星期三')
     expect(html).toContain('图：Hanako Kisaragi，摄于 Testville III - Fictional Academy')
     expect(html).toContain('建号：EVE 2020-05-17（北京 2020-05-18）')
-    expect(html).toContain('军团头衔：Night Shift')
+    // 游戏里的头衔在军团行上面，原样显示
+    expect(html).toContain('<div class="gt">Night Shift</div>')
+    expect(html.indexOf('class="gt"')).toBeLessThan(html.indexOf('[MHL] Moonlit'))
+    expect(html.indexOf('class="gt"')).toBeGreaterThan(html.indexOf('<h1'))
+    expect(html).not.toContain('军团头衔')
     expect(html).toContain('[MHL] Moonlit Harbor Logistics')
     expect(html).toContain('&lt;FICT&gt; Fictional Federation')
     expect(html).toContain('最活跃：北京 02:00–05:00（EVE 18–21）')
@@ -67,8 +71,53 @@ describe('kbCardHtml content', () => {
     expect(html).toContain('[&lt;T&gt;] ')
   })
 
-  it('shrinks long headlines by computed font size and keeps an ellipsis fallback', () => {
+  it('escapes titles, remarks, letter, fortune and ad', () => {
+    const p = soloHunter()
+    const evil = '<script>alert(1)</script>'
+    p.titles = [evil]
+    p.remarks = [evil]
+    p.letter = { body: evil, sign: evil }
+    p.fortune = { yi: [evil, evil], ji: [evil, evil], comment: evil }
+    p.ad = evil
+    const html = kbCardHtml(view(p))
+    expect(html).not.toContain('<script')
+    expect(html.match(/&lt;script&gt;alert\(1\)&lt;\/script&gt;/g)?.length).toBe(10)
+  })
+
+  it('writes the fun sections when present', () => {
+    const html = kbCardHtml(view())
+    expect(html).toContain('<span>本报授予称号：</span><b>泡泡大师</b><b>战列舰老炮</b>')
+    expect(html).toContain('<span>本报锐评</span>')
+    expect(html).toContain('<h3><span>读者来信</span></h3>')
+    expect(html).toContain('——一位热心的读者')
+    expect(html).toContain('<b>宜</b><span>蹲门　买保险</span>')
+    expect(html).toContain('<b>忌</b><span>贪最后一发　关掉预警</span>')
+    expect(html).toContain('<i>广告</i>')
+  })
+
+  it('omits fun sections without content', () => {
+    const p = soloHunter()
+    p.titles = []
+    p.remarks = []
+    p.letter = null
+    p.fortune = { yi: [], ji: [], comment: '' }
+    p.ad = null
+    const html = kbCardHtml(view(p))
+    for (const gone of ['class="titles"', '本报锐评', '读者来信', '今日运势', 'class="ad"', 'class="fun"']) expect(html, gone).not.toContain(gone)
+    // 只有来信时来信独占一行
+    p.letter = { body: '来信', sign: '——读者' }
+    const only = kbCardHtml(view(p))
+    expect(only).toContain('读者来信')
+    expect(only).not.toContain('今日运势')
+  })
+
+  it('lets the headline use two lines: the font shrinks to fit two, the ellipsis only comes past two', () => {
     expect(headlineFontSize('独狼出没！')).toBe(58)
+    // 一行放不下、两行放得下：字号比一行时大
+    const twoLines = '新星升起！Mika Tsukishiro 初入新伊甸'
+    const size2 = headlineFontSize(twoLines)
+    expect(size2).toBeLessThan(58)
+    expect(size2).toBeGreaterThan(30)
     const long = '保护期刚过：' + 'Abcdefghijklmnopqrstuvwxyz'.repeat(3)
     const size = headlineFontSize(long)
     expect(size).toBeLessThan(58)
@@ -77,14 +126,21 @@ describe('kbCardHtml content', () => {
     p.headline = long
     const html = kbCardHtml(view(p))
     expect(html).toContain(`<h1 style="font-size:${size}px">`)
-    expect(html).toMatch(/h1\{[^}]*text-overflow:ellipsis/)
+    expect(html).toMatch(/h1\{[^}]*-webkit-line-clamp:2/)
+    expect(html).not.toMatch(/h1\{[^}]*white-space:nowrap/)
     p.headline = '长'.repeat(80)
     expect(headlineFontSize(p.headline)).toBe(30)
   })
 
+  it('a 27-character Chinese headline fits two lines at a readable size', () => {
+    const size = headlineFontSize('个人英雄主义？不存在的，我们只认真飞船，认认真真地飞')
+    expect(size).toBeGreaterThanOrEqual(30)
+    expect(size).toBeLessThan(58)
+  })
+
   it('omits sections that have no data', () => {
     const html = kbCardHtml(view(ghost(), emptyImages()))
-    for (const gone of ['class="grid"', '王牌座驾', '常出没', '作息', '近 12 个月', '近期大击杀', '近期大损失', 'class="org"', 'class="two"', '<small>']) {
+    for (const gone of ['class="grid"', '王牌座驾', '常出没', '作息', '近 12 个月', '近期大击杀', '近期大损失', 'class="org"', 'class="two"', '<small>北京时间</small>']) {
       expect(html, gone).not.toContain(gone)
     }
     expect(html).toContain('新伊甸查无此人战绩')

@@ -11,7 +11,7 @@ const HANAKO = 2119876543
 describe('EsiApi: characters, corporations, alliances, stations', () => {
   it('character: camelCase fields, birthday in ms, optional title and alliance', async () => {
     const env = await makeEnv({}, (f) => {
-      f.characters.set(HANAKO, rawCharacter({ title: '<b>Quartermaster</b>', description: 'long blurb' }))
+      f.characters.set(HANAKO, rawCharacter({ corporation_title: '<b>Quartermaster</b>', description: 'long blurb' }))
       f.characters.set(2119876544, rawCharacter({ name: 'Mika Tsukishiro', alliance_id: undefined, security_status: undefined }))
     })
     expect((await env.api.character(HANAKO)).value).toEqual({
@@ -19,6 +19,12 @@ describe('EsiApi: characters, corporations, alliances, stations', () => {
       title: '<b>Quartermaster</b>',
     })
     expect((await env.api.character(2119876544)).value).toMatchObject({ name: 'Mika Tsukishiro', allianceId: null, securityStatus: null, title: null })
+  })
+
+  it('character: legacy title field still works, corporation_title wins', () => {
+    const base = { name: 'A', corporation_id: 1, birthday: '2019-03-14T08:30:00Z' }
+    expect(parseCharacter({ ...base, title: 'Old Title' }).title).toBe('Old Title')
+    expect(parseCharacter({ ...base, corporation_title: '#New-Title', title: 'Old Title' }).title).toBe('#New-Title')
   })
 
   it('character: 404 is an http error and results are cached for an hour', async () => {

@@ -4,6 +4,7 @@
 
 import {
   ABYSS_SYSTEM_PREFIX,
+  DEADLINE_GUARD_MS,
   KILL_CACHE_HOURS,
   KILL_BR_WINDOW_MIN,
   KILL_CACHE_MAX,
@@ -39,6 +40,8 @@ const MINUTE_MS = 60_000
 /** 已解析的 zKill 击杀暂存：条数少、时间短 */
 const PARSED_MAX = 20
 const PARSED_MINUTES = 10
+/** 时限快到了也至少给名字这么久 */
+const MIN_NAMES_WAIT_MS = 300
 
 const p2 = (n: number) => String(n).padStart(2, '0')
 
@@ -98,8 +101,10 @@ class Service implements KillService {
       const hit = this.cache.get(killId)
       if (hit) return hit
     }
-    const flight = this.flights.run(`${killId}:${hash ?? ''}`, () => this.build(killId, hash))
-    const waited = await withDeadline(flight, opts.deadlineMs ?? QUERY_DEADLINE_MS, this.deps.scheduler)
+    const deadlineMs = opts.deadlineMs ?? QUERY_DEADLINE_MS
+    const deadlineAt = this.deps.clock.now() + deadlineMs
+    const flight = this.flights.run(`${killId}:${hash ?? ''}`, () => this.build(killId, hash, deadlineAt))
+    const waited = await withDeadline(flight, deadlineMs, this.deps.scheduler)
     return waited.done ? waited.value : failure('DEADLINE', '时限到了，后台继续取')
   }
 
@@ -115,7 +120,7 @@ class Service implements KillService {
 
   // ------------------------------------------------------------------ 取数据
 
-  private async build(killId: number, userHash: string | null): Promise<KillSummary | CoreFailure> {
+  private async build(killId: number, userHash: string | null, deadlineAt: number): Promise<KillSummary | CoreFailure> {
     const { zkill, esi, logger } = this.deps
     let hash = userHash
     let zkb: { value: number | null; npc: boolean; solo: boolean; awox: boolean } | null = null
@@ -155,7 +160,7 @@ class Service implements KillService {
     }
 
     const final = mail.attackers.find((a) => a.finalBlow) ?? null
-    const { names, complete } = await this.names([mail.victim, ...(final ? [final] : [])])
+    const { names, complete } = await this.names([mail.victim, ...(final ? [final] : [])], deadlineAt)
     const summary: KillSummary = {
       killId,
       time: mail.time,
@@ -194,13 +199,15 @@ class Service implements KillService {
 
   // ------------------------------------------------------------------ 名字
 
-  /** 受害者和最后一击的人物、军团、联盟名字；只等一小会儿，失败就都是未知 */
-  private async names(parties: EsiKillParty[]): Promise<{ names: Map<number, string>; complete: boolean }> {
+  /** 受害者和最后一击的人物、军团、联盟名字；最多等 KILL_NAMES_WAIT_MS，但不能拖过整张卡的时限，失败就都是未知 */
+  private async names(parties: EsiKillParty[], deadlineAt: number): Promise<{ names: Map<number, string>; complete: boolean }> {
     const ids = [...new Set(parties.flatMap((p) => [p.characterId, p.corporationId, p.allianceId]).filter((id): id is number => id !== null))]
     const out = new Map<number, string>()
     if (!ids.length) return { names: out, complete: true }
+    const left = deadlineAt - this.deps.clock.now() - DEADLINE_GUARD_MS
+    const deadlineMs = Math.max(MIN_NAMES_WAIT_MS, Math.min(this.deps.namesWaitMs ?? KILL_NAMES_WAIT_MS, left))
     try {
-      const { value } = await this.deps.esi.names(ids, { deadlineMs: this.deps.namesWaitMs ?? KILL_NAMES_WAIT_MS })
+      const { value } = await this.deps.esi.names(ids, { deadlineMs })
       for (const n of value) out.set(n.id, n.name)
     } catch (e) {
       this.deps.logger.debug('击杀名字查不到，写未知：%s', describeError(e))

@@ -30,6 +30,11 @@ const HASH = '0123456789abcdef0123456789abcdef01234567'
 const MIN = 60_000
 const DAY = 86_400_000
 const fixture = (name: string): unknown => JSON.parse(fs.readFileSync(path.join(__dirname, '../../fixtures/pilot', name), 'utf8'))
+/** 统计样本里去掉 activity 和 recentLabels：作息要靠列表或时区标签的测试用 */
+const withoutActivity = (): object => {
+  const { activity: _a, recentLabels: _r, ...rest } = fixture('zkill-stats-full.json') as Record<string, unknown>
+  return rest
+}
 
 const ship = (typeId: number, en: string, zh: string, groupId = 25) => ({ typeId, en, zh, groupId }) as ItemInfo
 const SHIPS = new Map([
@@ -87,7 +92,7 @@ async function make(o: Opts = {}): Promise<Made> {
       f.stations.set(60009999, { name: 'Fictional IV - Moon 2 - Test Assembly Plant', system_id: 30009999, ...(o.station === 'en-only' ? {} : { zhName: '虚构 IV - 卫星 2 - 测试组装厂' }) })
     }
   })
-  if (!o.noStats) zkill.stats.set(HANAKO, o.stats ?? fixture('zkill-stats-full.json'))
+  if (!o.noStats) zkill.stats.set(HANAKO, o.stats ?? withoutActivity())
   zkill.charKills.set(HANAKO, o.kills ?? [])
   zkill.charLosses.set(HANAKO, o.losses ?? [])
   const client = new ZkillClient(
@@ -178,6 +183,29 @@ describe('PilotProfiles: a complete card', () => {
     expect(p.mood).toBeNull()
   })
 
+  it('fun sections: titles, remarks, letter, fortune, ad; tone is kept and cached per tone', async () => {
+    const { profiles } = await full()
+    const p = ok(await profiles.profile(HANAKO))
+    expect(p.tone).toBe('mixed')
+    expect(p.titles.length).toBeLessThanOrEqual(3)
+    expect(p.remarks.length).toBeGreaterThanOrEqual(1)
+    expect(p.remarks.length).toBeLessThanOrEqual(3)
+    expect(p.letter?.sign.startsWith('——')).toBe(true)
+    expect(p.fortune.yi).toHaveLength(2)
+    expect(p.fortune.ji).toHaveLength(2)
+    expect(p.ad).not.toBeNull()
+    const lines = [p.headline, p.lede, ...(p.mood ? [p.mood] : []), ...p.remarks, p.letter!.body, ...p.fortune.yi, ...p.fortune.ji, p.fortune.comment, p.ad!]
+    expect(new Set(lines).size).toBe(lines.length)
+    expect(lines.join('')).not.toMatch(/[{}]/)
+    // 同一个人同一天、同一语气：缓存命中；换语气是另一份
+    expect(ok(await profiles.profile(HANAKO))).toBe(p)
+    const gentle = ok(await profiles.profile(HANAKO, { tone: 'gentle' }))
+    expect(gentle).not.toBe(p)
+    expect(gentle.tone).toBe('gentle')
+    expect(ok(await profiles.profile(HANAKO, { tone: 'gentle' }))).toBe(gentle)
+    expect(ok(await profiles.profile(HANAKO, { tone: 'snarky' })).tone).toBe('snarky')
+  })
+
   it('recent big kill / loss: highest value inside the window, victim ship, system and time', async () => {
     const { profiles } = await full()
     const p = ok(await profiles.profile(HANAKO))
@@ -247,6 +275,41 @@ describe('PilotProfiles: a complete card', () => {
   })
 })
 
+describe('PilotProfiles: active hours from the stats activity', () => {
+  const full = () => fixture('zkill-stats-full.json')
+
+  it('uses stats.activity first, even with no list requested', async () => {
+    const { profiles, zkill } = await make({ stats: full() })
+    const p = ok(await profiles.profile(HANAKO, { recent: false }))
+    expect(zkill.count(/\/api\/(kills|losses)\//)).toBe(0)
+    expect(p.activity).toMatchObject({ source: 'stats', samples: 79, text: '北京 02:00–05:00（EVE 18–21）' })
+    expect(p.activity?.peak).toMatchObject({ utcStart: 18, utcEnd: 21, beijingStart: 2, beijingEnd: 5 })
+    expect(p.activity?.hoursUtc[19]).toBe(33)
+    expect(p.activity?.hoursBeijing[3]).toBe(33)
+  })
+
+  it('stats.activity wins over the kill lists', async () => {
+    const made = await make({ stats: full() })
+    made.zkill.charKills.set(HANAKO, busy(made.env))
+    expect(ok(await made.profiles.profile(HANAKO)).activity?.source).toBe('stats')
+  })
+
+  it('too few activity counts: falls to the lists', async () => {
+    const made = await make({ stats: { ...(full() as object), activity: { '1': { '5': 4 } } } })
+    made.zkill.charKills.set(HANAKO, busy(made.env))
+    expect(ok(await made.profiles.profile(HANAKO)).activity?.source).toBe('killmails')
+  })
+
+  it('too few of both: the recent time-zone labels when they have tz data, else the all-time ones', async () => {
+    const tiny = { ...(full() as object), activity: { '1': { '5': 4 } } }
+    const a = ok(await (await make({ stats: tiny })).profiles.profile(HANAKO)).activity
+    expect(a).toMatchObject({ source: 'labels', zones: ['use'], text: '主要活跃时段：美东时段' })
+    const noRecentTz = { ...tiny, recentLabels: { solo: { shipsDestroyed: 2, shipsLost: 0 } } }
+    const b = ok(await (await make({ stats: noRecentTz })).profiles.profile(HANAKO)).activity
+    expect(b).toMatchObject({ source: 'labels', zones: ['eu', 'use', 'au'] })
+  })
+})
+
 describe('PilotProfiles: activity fallbacks', () => {
   it('fewer than 10 samples: time-zone labels instead of hours', async () => {
     const made = await make()
@@ -292,6 +355,58 @@ describe('PilotProfiles: partial results', () => {
     const again = ok(await profiles.profile(HANAKO))
     expect(again).not.toBe(p)
     expect(again.partial).toEqual(['recent'])
+  })
+
+  it('a list over 6 MB is retried once as the 7-day form; the week list feeds the card quietly', async () => {
+    const made = await make()
+    made.zkill.oversize = /^\/api\/(kills|losses)\/characterID\/\d+\/$/
+    made.zkill.weekKills.set(HANAKO, [...busy(made.env), mail(made.env, 2, 13, 9e9, 11978)])
+    made.zkill.weekLosses.set(HANAKO, [mail(made.env, 4, 13, 2.1e8, 587)])
+    const p = ok(await made.profiles.profile(HANAKO))
+    expect(made.zkill.count(/\/api\/kills\/characterID\/\d+\/$/)).toBe(1)
+    expect(made.zkill.count(/pastSeconds\/604800\/$/)).toBe(2)
+    expect(p.partial).toEqual([])
+    expect(p.recentKill?.value).toBe(9e9)
+    expect(p.recentLoss?.value).toBe(2.1e8)
+    // 作息靠 7 天列表（统计里没有 activity）
+    expect(p.activity?.source).toBe('killmails')
+    expect(made.env.logger.at('warn')).toEqual([])
+    expect(made.env.logger.at('info')).toEqual([])
+  })
+
+  it('two oversize lists then two week lists in a slow queue: the week lists still get their own wait', async () => {
+    const made = await make({ minIntervalMs: 300, recentDeadlineMs: 750 })
+    made.zkill.oversize = /^\/api\/(kills|losses)\/characterID\/\d+\/$/
+    made.zkill.weekKills.set(HANAKO, [...busy(made.env), mail(made.env, 2, 13, 9e9, 11978)])
+    made.zkill.weekLosses.set(HANAKO, [mail(made.env, 4, 13, 2.1e8, 587)])
+    const p = ok(await made.profiles.profile(HANAKO))
+    expect(p.partial).toEqual([])
+    expect(p.recentKill?.value).toBe(9e9)
+    expect(p.recentLoss?.value).toBe(2.1e8)
+  })
+
+  it('still too large: the section is omitted, debug only, no failure or recovery log, the card is cached', async () => {
+    const made = await make()
+    made.zkill.oversize = /^\/api\/(kills|losses)\//
+    const p = ok(await made.profiles.profile(HANAKO))
+    expect(p.recentKill).toBeNull()
+    expect(p.recentLoss).toBeNull()
+    expect(p.partial).toEqual([])
+    expect(p.activity?.source).toBe('labels')
+    expect(made.env.logger.at('warn')).toEqual([])
+    expect(made.env.logger.at('info')).toEqual([])
+    expect(made.env.logger.at('debug').join('\n')).toContain('太大')
+  })
+
+  it('remembers which lists are too large: the next card does not download them again', async () => {
+    const made = await make()
+    made.zkill.oversize = /^\/api\/(kills|losses)\/characterID\/\d+\/$/
+    ok(await made.profiles.profile(HANAKO))
+    const first = made.zkill.count(/\/api\/(kills|losses)\/characterID\/\d+\/$/)
+    made.env.clock.advance((KB_CARD_CACHE_MIN + 1) * MIN)
+    ok(await made.profiles.profile(HANAKO))
+    expect(first).toBe(2)
+    expect(made.zkill.count(/\/api\/(kills|losses)\/characterID\/\d+\/$/)).toBe(2)
   })
 
   it('one list that cannot be read keeps the other', async () => {
@@ -394,7 +509,9 @@ describe('PilotProfiles: no record, rookies and special personas', () => {
     const stats = { shipsDestroyed: 60, shipsLost: 40, iskDestroyed: 5e9, iskLost: 2e9, months: { '202401': { year: 2024, month: 1, shipsDestroyed: 60, shipsLost: 40 } } }
     const { profiles } = await make({ stats })
     const p = ok(await profiles.profile(HANAKO))
-    expect(p.mood).toBe('已潜水一年以上')
+    // 窗口里 12 个月都没有记录
+    expect(p.mood).toMatch(/12/)
+    expect(p.mood).toMatch(/潜水|休息|暂别|消失|冬眠|蒸发/)
     expect(p.months.every((m) => m.kills === 0)).toBe(true)
   })
 })
@@ -408,6 +525,14 @@ describe('PilotProfiles: ESI trouble', () => {
     expect(await profiles.profile(0)).toMatchObject({ ok: false, code: 'NOT_A_CHARACTER' })
     expect(await profiles.profile(1.5)).toMatchObject({ ok: false, code: 'NOT_A_CHARACTER' })
   })
+
+  for (const status of [404, 422]) {
+    it(`ESI answers ${status} for the character route: NOT_A_CHARACTER, not "unreachable"`, async () => {
+      const { profiles, env } = await make()
+      env.fake.fault('GET', /^\/characters\/\d+$/, { status, body: { error: 'invalid character ID' } }, 5)
+      expect(await profiles.profile(HANAKO)).toMatchObject({ ok: false, code: 'NOT_A_CHARACTER' })
+    })
+  }
 
   it('ESI down: UPSTREAM_UNAVAILABLE', async () => {
     const { profiles, env } = await make()

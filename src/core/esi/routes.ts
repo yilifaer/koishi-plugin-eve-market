@@ -635,7 +635,8 @@ export function parseCharacter(json: unknown): EsiCharacter {
     allianceId: optInt(r, 'alliance_id'),
     birthday: time(r, 'birthday'),
     securityStatus: optNum(r, 'security_status'),
-    title: optStr(r, 'title'),
+    // 新兼容日期返回 corporation_title，旧的返回 title
+    title: optStr(r, 'corporation_title') ?? optStr(r, 'title'),
   }
 }
 

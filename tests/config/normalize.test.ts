@@ -768,7 +768,7 @@ describe('kb settings', () => {
 
   it('defaults: everyone, recent and auto on, nobody hidden', () => {
     const { settings, issues } = run({})
-    expect(settings.kb).toEqual({ scope: 'all', recent: true, auto: true, hidden: [] })
+    expect(settings.kb).toEqual({ scope: 'all', recent: true, auto: true, tone: 'mixed', hidden: [] })
     expect(issues).toEqual([])
   })
 
@@ -778,6 +778,14 @@ describe('kb settings', () => {
     const bad = run({ kb: { scope: 'nobody' } })
     expect(bad.settings.kb.scope).toBe('all')
     expect(bad.issues.filter((i) => i.section === 'kb')).toHaveLength(1)
+  })
+
+  it('tone: snarky / gentle / mixed, default mixed, bad values fall back with an issue', () => {
+    for (const tone of ['snarky', 'gentle', 'mixed']) expect(run({ kb: { tone } }).settings.kb.tone).toBe(tone)
+    const bad = run({ kb: { tone: 'spicy' } })
+    expect(bad.settings.kb.tone).toBe('mixed')
+    expect(bad.issues.filter((i) => i.section === 'kb')).toHaveLength(1)
+    expect(run({}).settings.kb.tone).toBe('mixed')
   })
 
   it('hidden rows: digits only, enabled only, duplicates merged', () => {

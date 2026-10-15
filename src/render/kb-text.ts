@@ -65,17 +65,18 @@ function bigEvent(label: string, kill: PilotKill): string {
 
 /**
  * 文字版简报（没有浏览器时用）：名字、军团 / 联盟、头衔、击毁 / 损失 / 单杀 / 效率、前 3 艘船、前 3 个星系、
- * 活跃时段、近期大击杀 / 大损失。没有的行不输出
+ * 活跃时段、近期大击杀 / 大损失、称号、锐评、读者来信（运势和广告文字版不放）。没有的行不输出
  */
 export function kbCardText(profile: PilotProfile): string {
   const lines: string[] = []
   lines.push(`${profile.name}｜${profile.personaLabel}`)
+  if (profile.title) lines.push(profile.title)
   const orgs = [
     profile.corporation && `军团 ${orgLine(profile.corporation, '[]')}`,
     profile.alliance && `联盟 ${orgLine(profile.alliance, '<>')}`,
   ].filter(Boolean)
   if (orgs.length) lines.push(orgs.join('　'))
-  if (profile.title) lines.push(`头衔：${profile.title}`)
+  if (profile.titles.length) lines.push(`本报授予称号：${profile.titles.join(' · ')}`)
   if (profile.birthday !== null) lines.push(`建号：EVE ${utcDate(profile.birthday)}（北京 ${beijingDate(profile.birthday)}）`)
   const t = profile.totals
   if (t.kills + t.losses > 0) {
@@ -94,5 +95,7 @@ export function kbCardText(profile: PilotProfile): string {
   if (profile.activity?.text) lines.push(`活跃时段：${profile.activity.text}`)
   if (profile.recentKill) lines.push(bigEvent('近期大击杀', profile.recentKill))
   if (profile.recentLoss) lines.push(bigEvent('近期大损失', profile.recentLoss))
+  if (profile.remarks.length) lines.push(`本报锐评：${profile.remarks.join(' / ')}`)
+  if (profile.letter) lines.push(`读者来信：${profile.letter.body}${profile.letter.sign}`)
   return lines.join('\n')
 }

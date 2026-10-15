@@ -419,8 +419,9 @@ export const BR_SEGMENT_HEIGHT = 4000
 export const BR_MAX_HEIGHT = 8000
 export const BR_JPEG_QUALITY = 85
 export const BR_RENDER_TIMEOUT_MS = 60000
-/** 页面加载完再等一会儿让它稳定 */
-export const BR_SETTLE_MS = 1500
+/** 页面稳定前最多等多久（只是上限，签名稳定了就提前结束；BR 数据到得晚，要留够） */
+export const BR_SETTLE_MS = 8000
+// 单次截图 60 秒仍够用：goto + 网络安静（≤ idleMs）+ 稳定（≤ settleMs）+ 撑高视口（≤ 3 × 2 秒），慢网络最坏约 30 秒
 /** 入队时估算（已过去的时间 + 前面任务数 × 60 秒）超过 240 秒就直接回复「截图繁忙」 */
 export const BR_QUEUE_TASK_SEC = 60
 export const BR_QUEUE_REJECT_SEC = 240
@@ -530,8 +531,8 @@ export const KILL_CACHE_HOURS = 24
 export const KILL_NEGATIVE_CACHE_MIN = 5
 /** ESI 击杀详情的缓存（击杀内容不会变） */
 export const ESI_KILLMAIL_CACHE_DAYS = 30
-/** 查人物、军团、联盟名字最多等多久，超时写「未知」 */
-export const KILL_NAMES_WAIT_MS = 1500
+/** 查人物、军团、联盟名字最多等多久，超时写「未知」；新击杀的 ID 欧服接口第一次查很慢，要小于 QUERY_DEADLINE_MS 并给 zKill 留时间 */
+export const KILL_NAMES_WAIT_MS = 4000
 /** 战报时间怎么取整到整点：先按击杀所在的整点，实测 BR 页面覆盖范围后再定 */
 export const KILL_BR_ROUNDING = 'floor' as 'floor' | 'nearest'
 /** Warbeacon 关联战报的时间范围：击杀时间前后各几分钟 */
@@ -551,6 +552,12 @@ export const JANICE_HOST = 'janice.e-351.com'
 export const JANICE_API_BASE = `https://${JANICE_HOST}`
 /** 按编号取估价；{code} 先过 JANICE_CODE_RE 再放进路径 */
 export const JANICE_APPRAISAL_PATH = '/api/rest/v2/appraisal/{code}'
+/** 校验密钥用：只有密钥有效时才返回 200，密钥错 / 没密钥返回 400（和编号不存在的 400 一模一样） */
+export const JANICE_MARKETS_PATH = '/api/rest/v2/markets'
+export const JANICE_KEY_CHECK_TIMEOUT_MS = 5000
+export const JANICE_KEY_CHECK_MAX_BYTES = 256 * 1024
+/** 密钥校验结果记多久 */
+export const JANICE_KEY_CHECK_CACHE_MIN = 10
 /** 密钥所在的请求头 */
 export const JANICE_KEY_HEADER = 'X-ApiKey'
 /** 估价编号：链接里 /a/ 后面的一段，大小写要保留（截图网站名单和接口共用这一条） */
@@ -561,7 +568,7 @@ export const JANICE_MAX_BYTES = 4 * 1024 * 1024
 /** 估价的价格在创建时就定了，内容不会变 */
 export const JANICE_CACHE_MAX = 100
 export const JANICE_CACHE_HOURS = 6
-/** 404：编号不对或已过期 */
+/** 400 / 404 且密钥没问题：编号不对或已过期 */
 export const JANICE_NEGATIVE_CACHE_MIN = 10
 /** 全局两次请求之间至少隔多久（别人的服务器，不连发） */
 export const JANICE_MIN_INTERVAL_MS = 1000
@@ -581,13 +588,16 @@ export const JANICE_WAIT_MS = 20_000
 
 /** 人物统计；真实服务器会 302 到 `.../kills/`，客户端跟随跳转 */
 export const ZKILL_STATS_PATH = '/api/stats/characterID/{id}/'
-/** 人物的击杀、损失：各返回最多 200 条完整击杀（带 zkb） */
+/** 人物的击杀、损失：各返回最多 200 条完整击杀（带 zkb）；活跃玩家的这个列表可能有十几 MB */
 export const ZKILL_CHAR_KILLS_PATH = '/api/kills/characterID/{id}/'
 export const ZKILL_CHAR_LOSSES_PATH = '/api/losses/characterID/{id}/'
+/** 列表太大时改取最近 7 天的（pastSeconds 最多 7 天，604800 秒） */
+export const ZKILL_CHAR_KILLS_WEEK_PATH = '/api/kills/characterID/{id}/pastSeconds/604800/'
+export const ZKILL_CHAR_LOSSES_WEEK_PATH = '/api/losses/characterID/{id}/pastSeconds/604800/'
 export const ZKILL_STATS_TIMEOUT_MS = 8000
 export const ZKILL_STATS_MAX_BYTES = 2 * 1024 * 1024
 export const ZKILL_LIST_TIMEOUT_MS = 6000
-export const ZKILL_LIST_MAX_BYTES = 3 * 1024 * 1024
+export const ZKILL_LIST_MAX_BYTES = 6 * 1024 * 1024
 /** zKill 回 3xx 时最多跟随几次（只跟随同一主机的 /api/ 路径） */
 export const ZKILL_REDIRECT_MAX = 2
 
@@ -604,6 +614,8 @@ export const KB_SEARCH_PER_MIN = 10
 
 export const KB_STATS_CACHE_MIN = 60
 export const KB_LIST_CACHE_MIN = 30
+/** 列表超过大小上限的记录放多久（活跃的人一直会那么大），期间直接改取 7 天的 */
+export const KB_LIST_TOO_BIG_CACHE_MIN = 360
 /** 成品资料（完整的、没有缺项的）的缓存 */
 export const KB_CARD_CACHE_MIN = 60
 export const KB_CACHE_MAX = 300
@@ -613,10 +625,12 @@ export const KB_NEGATIVE_CACHE_MIN = 10
 export const KB_DEADLINE_MS = 20000
 /** 「近期大击杀 / 大损失」和作息要用的两个列表最多等多久，超时只丢这一栏 */
 export const KB_RECENT_DEADLINE_MS = 6000
+/** 完整列表太大、改取 7 天的列表时，至少再给这么久（前面的请求已经把预算用完了） */
+export const KB_RECENT_WEEK_MIN_MS = 3000
 export const KB_RECENT_MAX_DAYS = 30
 /** 出生地（军团史 → 军团 → 空间站）最多等多久，超时写兜底说法 */
 export const KB_BIRTHPLACE_WAIT_MS = 3000
-/** 作息：至少这么多条击杀 / 损失才按小时统计，否则用 zKill 的时区标签 */
+/** 作息：至少这么多条击杀 / 损失（zKill 统计里的 activity 或列表）才按小时统计，否则用 zKill 的时区标签 */
 export const KB_ACTIVITY_MIN_SAMPLES = 10
 /** 「最活跃时段」连续几小时 */
 export const KB_ACTIVITY_SPAN_HOURS = 3
@@ -629,6 +643,8 @@ export const KB_MONTHS = 12
 
 /** 人设阈值，按顺序命中第一条（顺序在 persona.ts 的规则表里） */
 export const KB_ARCHETYPE_RULES = {
+  /** 老号没有击毁、有损失：建号满这么多年 */
+  pacifistMinYears: 5,
   /** 建号不到这么多天，或记录不到 rookieMinRecords 条 */
   rookieDays: 90,
   rookieMinRecords: 10,
@@ -658,6 +674,152 @@ export const KB_ARCHETYPE_RULES = {
 export const SHIP_GROUPS_CAPITAL: readonly number[] = [485, 547, 1538, 659, 30]
 /** 工业船：采矿驳船、采掘者、工业舰、深空运输舰、货舰、战略货舰、工业指挥舰、旗舰工业舰 */
 export const SHIP_GROUPS_INDUSTRIAL: readonly number[] = [463, 543, 28, 380, 513, 902, 941, 883]
+
+/** 「毒舌程度」默认值：毒舌和温和两份文案混在一起选 */
+export const KB_TONE_DEFAULT = 'mixed'
+
+/** 称号：一个人最多几个 */
+export const KB_TITLES_MAX = 3
+/** 称号的阈值。船型称号：某类船的出场（topAllTime 里的击毁次数）占比，或它是第一名且次数够 */
+export const KB_TITLE_RULES = {
+  shipMinAppearances: 10,
+  shipShare: 0.2,
+  /** 被 10 人以上围攻击毁的损失占一半以上 */
+  baitShare: 0.5,
+  baitMinLosses: 10,
+  /** 蛋舱常驻嘉宾：蛋舱被击毁占损失的一半以上，且次数 ≥ 20 */
+  podShare: 0.5,
+  podMinCount: 20,
+  /** 新手船（小型舰艇、穿梭机）损失次数 */
+  rookieShipsMinLosses: 10,
+  /** 货舰损失次数（鲸鱼级以上货舰 1 次就算） */
+  freighterMinLosses: 1,
+  minerShare: 0.3,
+  minerMinLosses: 5,
+  soloLossShare: 0.2,
+  soloLossMinLosses: 10,
+  highsecShare: 0.5,
+  highsecMinLosses: 10,
+  /** 货舰称号没有占比，给一个固定分数参与排序 */
+  freighterScore: 0.6,
+  /** 诱导驾驶员：带诱导的船损失次数；或损失够多时占比 */
+  cynoMinCount: 3,
+  cynoShare: 0.2,
+  cynoShareMinLosses: 10,
+  /** 旗舰猎手：标签 capital 的击毁数 */
+  capitalKillerMinKills: 5,
+  /** 百亿猎手：标签 isk:10b+ 的击毁数，或近期最大一击的价值（ISK） */
+  whaleMinKills: 3,
+  whaleRecentValue: 10_000_000_000,
+  /** 势力战老兵：所有 fw:* 标签的击毁数之和 */
+  fwMinKills: 50,
+  /** 内鬼嫌疑人：标签 awox 的击毁数，且占全部击毁 1% 以上；没有占比，给一个较低的固定分数让船型 / 身份称号先上 */
+  awoxMinKills: 3,
+  awoxMinShare: 0.01,
+  awoxScore: 0.2,
+  /** 大战常客：标签 #:100+ 的击毁数 ≥ 20，或占全部击毁 10% 以上且击毁 ≥ 50 */
+  bigBattleMinKills: 20,
+  bigBattleShare: 0.1,
+  bigBattleShareMinKills: 50,
+  /** 占击毁比例的称号，击毁数至少这么多才看比例 */
+  shareMinKills: 20,
+  /** 占损失比例的称号，损失数至少这么多才看比例 */
+  shareMinLosses: 10,
+  /** 低安游侠 / 零安居民：对应地区标签的击毁占比，且击毁数够多 */
+  lowsecShare: 0.5,
+  lowsecMinKills: 30,
+  nullsecShare: 0.8,
+  nullsecMinKills: 50,
+  /** 只靠近期最大一击拿到的百亿猎手：没有占比，给一个固定分数参与排序 */
+  whaleRecentScore: 0.5,
+  /** 零安居民很常见（零安联盟的人几乎都是），给低分让更有特色的称号先占位 */
+  nullsecScore: 0.01,
+  /** 单杀王：单杀次数 */
+  soloKingMinKills: 100,
+} as const
+
+/** 船型称号对应的船组（SDE 的 groupID，已和插件自带的数据核对） */
+export const KB_TITLE_SHIP_GROUPS: Readonly<Record<string, readonly number[]>> = {
+  bomber: [834],
+  interceptor: [831],
+  bubbler: [541, 894],
+  blackops: [898],
+  covops: [830],
+  logi: [832, 1527],
+  ewar: [893, 833, 906],
+  t3: [963],
+  t3d: [1305],
+  marauder: [900],
+  commandship: [540],
+  battleship: [27],
+  frigate: [25],
+  destroyer: [420],
+  af: [324],
+  hac: [358],
+  dread: [485],
+  carrier: [547],
+  super: [659],
+  titan: [30],
+  fax: [1538],
+}
+/** 蛋舱 */
+export const SHIP_GROUP_POD = 29
+/** 新手船：护卫舰级以下的小型舰艇（Corvette）、穿梭机 */
+export const SHIP_GROUPS_ROOKIE: readonly number[] = [237, 31]
+/** 货舰：货舰、跳跃货舰 */
+export const SHIP_GROUPS_FREIGHTER: readonly number[] = [513, 902]
+/** 采矿驳船、采掘者 */
+export const SHIP_GROUPS_MINER: readonly number[] = [463, 543]
+/** 旗舰级（含战力辅助舰）：被击毁就是大事 */
+export const SHIP_GROUPS_CAPITAL_LOSS: readonly number[] = [485, 547, 659, 30, 1538]
+/** 「小船」：护卫舰、驱逐舰、小型舰艇 */
+export const SHIP_GROUPS_CHEAP: readonly number[] = [25, 420, 237]
+/** zKill 按参与人数分的损失标签（互不重叠的区间）：10 人以上 */
+export const KB_LABELS_GANG10: readonly string[] = ['#:10+', '#:25+', '#:50+', '#:100+', '#:1000+']
+
+/** 锐评的阈值与条数 */
+export const KB_REMARK_RULES = {
+  /** 一张卡放几条 */
+  count: 1,
+  /** 击毁价值占比：低于 lowEff 或不低于 highEff（百分比），且记录够多 */
+  lowEff: 30,
+  highEff: 90,
+  effMinRecords: 30,
+  lossesGtKillsMin: 10,
+  /** 近期大击杀 / 大损失 ≥ 10 亿；大击杀 ≥ 100 亿另有一条 */
+  bigRecent: 1_000_000_000,
+  bigKill10b: 10_000_000_000,
+  /** 累计损失 ≥ 1T */
+  bigIskLoss: 1_000_000_000_000,
+  soloHeavyMin: 20,
+  soloHeavyShare: 0.3,
+  blobberGang: 90,
+  blobberAvgGang: 20,
+  blobberMinKills: 50,
+  dormantMonths: 3,
+  hotWeekKills: 30,
+  oldTimerYears: 10,
+  newbieDays: 90,
+  highDanger: 85,
+  lowDanger: 20,
+  dangerMinRecords: 20,
+  npcDeathsMin: 3,
+  soloLossShare: 0.2,
+  soloLossMin: 10,
+  highsecLossShare: 0.4,
+  highsecLossMin: 10,
+  cheapShipsMinKills: 50,
+  manyLosses: 500,
+  manyKills: 1000,
+  /** 周末（周六、周日）击毁占一半以上，且样本够 */
+  weekendShare: 0.5,
+  weekendMinSamples: 20,
+  /** 北京时间最活跃时段的起点：夜猫子 0–3 点开始（整段在 0–6 点内），黄金档 19–21 点开始（整段在 19–24 点内） */
+  nightOwlStart: [0, 3],
+  primeTimeStart: [19, 21],
+  tinyGangAvg: 3,
+  tinyGangMinKills: 20,
+} as const
 
 /** 图片：只从这个主机下载，由插件下载后转成 data: 嵌进页面 */
 export const EVE_IMAGE_BASE = 'https://images.evetech.net'

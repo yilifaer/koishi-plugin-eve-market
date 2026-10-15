@@ -6,14 +6,19 @@ export type SiteKind = 'battle-report' | 'appraisal' | 'map' | 'custom'
 export interface ShotProfile {
   viewportWidth: number
   viewportHeight: number
-  waitUntil: 'load' | 'domcontentloaded' | 'networkidle0' | 'networkidle2'
+  /** 页面开始加载后最多再等多久网络安静下来；一直不安静（长连接、广告）也照样往下截，0 = 不等 */
+  idleMs: number
   /** 加载后最多再等多久让页面高度稳定 */
   settleMs: number
   /** 有这个元素才算加载好（只给内置网站用，代码里写死） */
   readySelector?: string
   readyTimeoutMs?: number
+  /** 页面按 100dvh 排版、内容在内部容器里滚动：截图前把视口加高到容器装得下（只给内置网站用） */
+  growViewport?: boolean
   /** 截图前隐藏的元素（广告、横幅），只给内置网站用 */
   hideSelectors?: readonly string[]
+  /** 页面上的同意框：找到文字完全等于其中之一的按钮就点一下（写「拒绝」一类的，不要写同意），只给内置网站用 */
+  dismissTexts?: readonly string[]
   /** 1–3，来自控制台；最高高度 = maxImages × 每张的高度 */
   maxImages: number
 }

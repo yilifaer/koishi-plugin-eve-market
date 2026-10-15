@@ -17,12 +17,12 @@ import type { ShotTarget } from '../../src/render/site-shot'
 const CHROME = process.env.CHROME_PATH
 const HAS_CHROME = !!CHROME && fs.existsSync(CHROME)
 
-const PROFILE: ShotProfile = { viewportWidth: 800, viewportHeight: 600, waitUntil: 'networkidle2', settleMs: 600, maxImages: 1 }
-const target = (path: string): ShotTarget => ({
+const PROFILE: ShotProfile = { viewportWidth: 800, viewportHeight: 600, idleMs: 3000, settleMs: 600, maxImages: 1 }
+const target = (path: string, profile: Partial<ShotProfile> = {}): ShotTarget => ({
   url: `https://kb.example.com${path}`,
   siteId: 'custom-1',
   siteName: '测试站',
-  profile: PROFILE,
+  profile: { ...PROFILE, ...profile },
   allowHosts: ['kb.example.com'],
 })
 
@@ -82,6 +82,28 @@ describe.skipIf(!HAS_CHROME)('SiteScreenshotter net guard with Chromium and loca
       if (path === '/script-redirect') return html(`${BODY}<script>setTimeout(function () { location.href = 'https://example.invalid/' }, 50)</script>`)
       if (path === '/popup') return html(`${BODY}<script>window.open('http://127.0.0.1:${port}/popped')</script>`)
       if (path === '/ok') return html(BODY)
+      // 100dvh 的应用壳：html/body 不滚动，内容在内部容器里滚（内联 !important 改不动高度，只能撑视口）
+      if (path === '/shell') {
+        return html(`<style>html, body { height: 100dvh !important; overflow: hidden }</style>
+<div style="display:flex;flex-direction:column;height:100dvh !important"><div style="height:50px;background:#fa0">页头</div>
+<div style="flex:1;min-height:0;overflow-y:auto"><div style="height:1500px;background:#08f">长内容</div></div></div>`)
+      }
+      // 同意框：点「I decline」后把标题改成 declined；点别的按钮标题不变
+      if (path === '/consent') {
+        return html(`${BODY}<div id="box"><button id="yes">That's ok</button><button id="no">I decline</button></div>
+<script>document.getElementById('no').onclick = function () { document.title = 'declined'; document.getElementById('box').remove() }</script>`)
+      }
+      // 脚本跑完以后才出现的同意框
+      if (path === '/consent-late') {
+        return html(`${BODY}<script>setTimeout(function () {
+  var b = document.createElement('button'); b.textContent = ' I Decline '; b.onclick = function () { document.title = 'declined' }; document.body.appendChild(b)
+}, 400)</script>`)
+      }
+      // 提示框：被藏起来时（display:none）标题是 hidden
+      if (path === '/tip') {
+        return html(`${BODY}<div class="tip-layer"><p>tip</p></div>
+<script>setTimeout(function () { document.title = getComputedStyle(document.querySelector('.tip-layer')).display === 'none' ? 'hidden' : 'shown' }, 600)</script>`)
+      }
       res.writeHead(404)
       res.end()
     })
@@ -102,8 +124,9 @@ describe.skipIf(!HAS_CHROME)('SiteScreenshotter net guard with Chromium and loca
     await new Promise<void>((resolve) => (server ? server.close(() => resolve()) : resolve()))
   })
 
-  async function run(path: string) {
-    const ticket = shooter().request(target(path))
+  async function run(path: string, profile: Partial<ShotProfile> = {}) {
+    // fresh：同一地址换参数再截，不吃缓存
+    const ticket = shooter().request(target(path, profile), { fresh: true })
     if (ticket.status !== 'queued') throw new Error(`期望排上队，实际是 ${ticket.status}`)
     return ticket.done
   }
@@ -121,6 +144,16 @@ describe.skipIf(!HAS_CHROME)('SiteScreenshotter net guard with Chromium and loca
     expect(outcome).toMatchObject({ ok: false, reason: 'redirect', diag: { blockedRedirects: 1 } })
     expect(opened.at(-1)!.isClosed()).toBe(true)
   }, 30000)
+
+  it('growViewport makes an app shell with an inner scroller as tall as its content', async () => {
+    const plain = await run('/shell')
+    expect(plain).toMatchObject({ ok: true })
+    if (plain.ok) expect(plain.shot.pageHeight).toBe(PROFILE.viewportHeight)
+    const grown = await run('/shell', { growViewport: true })
+    expect(grown).toMatchObject({ ok: true })
+    // 页头 50 + 内部内容 1500
+    if (grown.ok) expect(grown.shot.pageHeight).toBe(1550)
+  }, 60000)
 
   it('a challenge page is reported as blocked', async () => {
     const outcome = await run('/challenge')
@@ -149,5 +182,33 @@ describe.skipIf(!HAS_CHROME)('SiteScreenshotter net guard with Chromium and loca
     if (outcome.ok) expect(outcome.shot.diag).toMatchObject({ blockedRedirects: 0, closedPopups: 1 })
     await new Promise((resolve) => setTimeout(resolve, 300))
     expect((await browser.pages()).length).toBe(before)
+  }, 30000)
+
+  it('clicks the decline button of the consent box, not the accept one, even when it shows up late', async () => {
+    const now = await shooter().request(target('/consent', { dismissTexts: ['I decline'] }), { fresh: true })
+    if (now.status !== 'queued') throw new Error('没排上队')
+    const outcome = await now.done
+    expect(outcome).toMatchObject({ ok: true })
+    if (outcome.ok) expect(outcome.shot.diag.title).toBe('declined')
+
+    const late = shooter().request(target('/consent-late', { dismissTexts: ['I decline'] }), { fresh: true })
+    if (late.status !== 'queued') throw new Error('没排上队')
+    const lateOutcome = await late.done
+    if (lateOutcome.ok) expect(lateOutcome.shot.diag.title).toBe('declined')
+    else throw new Error(`截图失败：${lateOutcome.reason}`)
+  }, 30000)
+
+  it('a profile without dismissTexts leaves the consent box alone', async () => {
+    const outcome = await run('/consent')
+    expect(outcome).toMatchObject({ ok: true })
+    if (outcome.ok) expect(outcome.shot.diag.title).toBe('测试页')
+  }, 30000)
+
+  it('hides the tip layer named in hideSelectors', async () => {
+    const ticket = shooter().request(target('/tip', { hideSelectors: ['.tip-layer'], settleMs: 1200 }), { fresh: true })
+    if (ticket.status !== 'queued') throw new Error('没排上队')
+    const outcome = await ticket.done
+    if (!outcome.ok) throw new Error(`截图失败：${outcome.reason}`)
+    expect(outcome.shot.diag.title).toBe('hidden')
   }, 30000)
 })

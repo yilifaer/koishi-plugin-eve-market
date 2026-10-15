@@ -1,6 +1,6 @@
 // 战报截图的兼容层（§2.11、§6.9）。真正的截图器是 site-shot.ts 的 SiteScreenshotter（所有网站共用）；
 // 这里的 BrScreenshotter 只认 br.evetools.org 的规范化战报链接，页面参数取名单里 BR 工具的那一份
-// （视口 1440×900、networkidle2、稳定 1.5 秒、最多 2 张 × 4000 = 8000 像素）。
+// （视口 1440×900、网络安静最多等 6 秒、稳定 1.5 秒、最多 2 张 × 4000 = 8000 像素）。
 // 排队、缓存、同一链接共用、页面名额的规则见 site-shot.ts。
 
 import { BR_MAX_HEIGHT, BR_SEGMENT_HEIGHT } from '../constants'

@@ -1,6 +1,7 @@
 // KillService：真的 ZkillClient + EsiApi，zKill 和 ESI 都指向本机的假服务。
 
 import { afterEach, describe, expect, it } from 'vitest'
+import { KILL_NAMES_WAIT_MS, QUERY_DEADLINE_MS } from '../../../src/constants'
 import { createKillService } from '../../../src/core/killmail'
 import { createSiteRegistry } from '../../../src/core/sites'
 import { isFailure } from '../../../src/core/types'
@@ -41,6 +42,8 @@ interface Setup {
   /** zKill 回老格式（只有 hash 和估值），击杀正文要去 ESI 取 */
   minimal?: boolean
   minIntervalMs?: number
+  /** 查名字最多等多久；null = 用默认值（生产值） */
+  namesWaitMs?: number | null
 }
 
 interface Made {
@@ -71,7 +74,7 @@ async function make(setup: Setup = {}): Promise<Made> {
   )
   const service = createKillService({
     zkill: client, esi: env.api, items: { byId: (id) => SHIPS.get(id) }, universe: { system: (id) => SYSTEMS.get(id) },
-    clock: env.clock, scheduler: realScheduler, logger: env.logger, namesWaitMs: 150,
+    clock: env.clock, scheduler: realScheduler, logger: env.logger, ...(setup.namesWaitMs === null ? {} : { namesWaitMs: setup.namesWaitMs ?? 150 }),
   })
   return { service, zkill, env, client }
 }
@@ -330,6 +333,28 @@ describe('KillService.summary: names', () => {
     const started = Date.now()
     const s = ok(await m.service.summary(KILL, { deadlineMs: 5000 }))
     expect(Date.now() - started).toBeLessThan(2000)
+    expect(s.victim.character).toBeNull()
+  })
+
+  it('waits 4 s for names by default, which is inside the 6 s card deadline', () => {
+    expect(KILL_NAMES_WAIT_MS).toBe(4000)
+    expect(KILL_NAMES_WAIT_MS).toBeLessThan(QUERY_DEADLINE_MS)
+  })
+
+  it('a slow name lookup still gets its time: names that arrive after 0.3 s are used', async () => {
+    const m = await make({ namesWaitMs: 2000 })
+    const release = m.env.fake.hold(/^\/universe\/names$/)
+    setTimeout(release, 300)
+    const s = ok(await m.service.summary(KILL))
+    expect(s.victim.character).toBe('Some Pilot')
+  })
+
+  it('never lets the name wait push the card past its own deadline', async () => {
+    const m = await make({ namesWaitMs: null })
+    m.env.fake.hold(/^\/universe\/names$/)
+    const started = Date.now()
+    const s = ok(await m.service.summary(KILL, { deadlineMs: 1000 }))
+    expect(Date.now() - started).toBeLessThan(1000)
     expect(s.victim.character).toBeNull()
   })
 

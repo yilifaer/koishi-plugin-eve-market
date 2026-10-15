@@ -213,9 +213,9 @@ describe('registry', () => {
     expect(reg.sites.map((s) => s.id)).toEqual(['br', 'dotlan', 'custom-2', 'custom-1'])
     const [br, dotlan, c2] = reg.sites
     expect(br).toMatchObject({ name: 'br', host: 'br.evetools.org', auto: true, legacyText: true, kind: 'battle-report' })
-    expect(br.profile).toEqual({ viewportWidth: 1440, viewportHeight: 900, waitUntil: 'networkidle2', settleMs: 1500, maxImages: 2 })
-    expect(dotlan.profile).toMatchObject({ viewportWidth: 1440, viewportHeight: 900, waitUntil: 'load', settleMs: 2000, maxImages: 1 })
-    expect(c2.profile).toMatchObject({ waitUntil: 'networkidle2', settleMs: 2000, maxImages: 3 })
+    expect(br.profile).toEqual({ viewportWidth: 1440, viewportHeight: 900, idleMs: 6000, settleMs: 8000, maxImages: 2 })
+    expect(dotlan.profile).toMatchObject({ viewportWidth: 1440, viewportHeight: 900, idleMs: 5000, settleMs: 5000, maxImages: 1 })
+    expect(c2.profile).toMatchObject({ idleMs: 5000, settleMs: 5000, maxImages: 3 })
     expect(c2.profile.readySelector).toBeUndefined()
     expect(c2.profile.hideSelectors).toBeUndefined()
     expect(reg.hosts).toEqual(['br.evetools.org', 'evemaps.dotlan.net', 'b.example.com', 'a.example.com'])

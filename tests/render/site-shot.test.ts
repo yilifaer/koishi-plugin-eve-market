@@ -3,12 +3,15 @@
 
 import { describe, expect, it } from 'vitest'
 import { SHOT_SEGMENT_HEIGHT } from '../../src/constants'
-import type { Logger } from '../../src/core/ports'
+import type { Logger, Scheduler } from '../../src/core/ports'
 import type { ShotProfile } from '../../src/core/sites'
 import { SiteScreenshotter } from '../../src/render/site-shot'
 import type { ShotOutcome, ShotTarget, ShotTicket, SiteScreenshotterOptions } from '../../src/render/site-shot'
 import { createRenderer } from '../../src/render/renderer'
 import type { PageFactory, PageRequest, RenderPage, ShotOptions } from '../../src/render/renderer'
+
+/** 睡觉不真睡：稳定窗口按轮询间隔累计，测试不用等真实的几秒 */
+const instant: Scheduler = { timeout: (fn) => { const t = setImmediate(fn); return () => clearImmediate(t) } }
 
 const flush = () => new Promise<void>((resolve) => setImmediate(resolve))
 
@@ -33,6 +36,14 @@ interface Behavior {
   /** 第几次查元素才出现（1 = 第一次就有；不写 = 一直没有） */
   readyOnPoll?: number
   gotoMs?: number
+  /** 网络一直不安静：waitForNetworkIdle 到 timeout 抛错 */
+  neverIdle?: boolean
+  /** 页面高度随视口变（100dvh 的应用壳）：给了就优先于 heights */
+  heightOf?: (viewportHeight: number) => number
+  /** 每次读内部滚动容器藏起来的高度依次返回（最后一个一直用） */
+  hidden?: number[]
+  /** 第几次找同意框按钮才找到（1 = 第一次就有；不写 = 一直没有） */
+  dismissOnPoll?: number
 }
 
 class FakePage implements RenderPage {
@@ -40,15 +51,22 @@ class FakePage implements RenderPage {
   readonly expressions: string[] = []
   readonly shots: ShotOptions[] = []
   viewport?: { width: number; height: number; deviceScaleFactor?: number }
+  readonly viewports: Array<{ width: number; height: number; deviceScaleFactor?: number }> = []
+  private hiddenReads = 0
   gotoOptions?: { timeout?: number; waitUntil?: string }
   url?: string
+  idleOptions?: { idleTime?: number; concurrency?: number; timeout?: number }
   closed = false
+  private dismissPolls = 0
   private reads = 0
   private polls = 0
 
   constructor(private readonly b: Behavior = {}) {}
 
-  async setViewport(v: { width: number; height: number; deviceScaleFactor?: number }) { this.viewport = v }
+  async setViewport(v: { width: number; height: number; deviceScaleFactor?: number }) {
+    this.viewport = v
+    this.viewports.push(v)
+  }
   async setJavaScriptEnabled() {}
   async setRequestInterception() {}
   on(_event: 'request', _handler: (request: PageRequest) => void) { return this }
@@ -62,16 +80,35 @@ class FakePage implements RenderPage {
     return { status: () => this.b.status ?? 200 }
   }
 
+  async waitForNetworkIdle(options: { idleTime?: number; concurrency?: number; timeout?: number }) {
+    this.calls.push('idle')
+    this.idleOptions = options
+    if (this.b.neverIdle) {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      throw new Error('Timeout')
+    }
+  }
+
   async evaluate(expression: string) {
     this.expressions.push(expression)
+    if (expression.includes('el.click()')) {
+      this.calls.push('dismiss')
+      this.dismissPolls++
+      return this.b.dismissOnPoll !== undefined && this.dismissPolls >= this.b.dismissOnPoll
+    }
+    if (expression.includes('overflowY')) {
+      this.calls.push('hidden')
+      const hidden = this.b.hidden ?? [0]
+      return hidden[Math.min(this.hiddenReads++, hidden.length - 1)]
+    }
     if (expression.includes('scrollHeight')) {
       this.calls.push('probe')
       const heights = this.b.heights ?? [1000]
-      const h = heights[Math.min(this.reads, heights.length - 1)]
+      const h = this.b.heightOf ? this.b.heightOf(this.viewport?.height ?? 0) : heights[Math.min(this.reads, heights.length - 1)]
       const flags = this.b.challenge ?? [false]
       const c = flags[Math.min(this.reads, flags.length - 1)]
       this.reads++
-      return [h, true, c, this.b.title ?? '']
+      return [h, true, c, this.b.title ?? '', 100, 50]
     }
     if (expression.includes('display:none')) {
       this.calls.push('hide')
@@ -113,7 +150,7 @@ function fakeSource(make: (n: number) => FakePage = () => new FakePage()) {
   return { source, pages, peak: () => peak }
 }
 
-const PROFILE: ShotProfile = { viewportWidth: 1440, viewportHeight: 900, waitUntil: 'networkidle2', settleMs: 20, maxImages: 2 }
+const PROFILE: ShotProfile = { viewportWidth: 1440, viewportHeight: 900, idleMs: 3000, settleMs: 20, maxImages: 2 }
 const target = (name: string, profile: Partial<ShotProfile> = {}): ShotTarget => ({
   url: `https://${name}.example.com/p`,
   siteId: name,
@@ -141,14 +178,58 @@ function shotOf(outcome: ShotOutcome) {
 }
 
 describe('SiteScreenshotter profiles', () => {
-  it('uses the viewport and waitUntil of the site profile', async () => {
+  it('uses the viewport of the site profile and only waits for domcontentloaded in goto', async () => {
     const { source, pages } = fakeSource()
     const { shots } = shooter(source)
-    shotOf(await outcomeOf(shots.request(target('dotlan', { viewportWidth: 1000, viewportHeight: 600, waitUntil: 'load' }))))
+    shotOf(await outcomeOf(shots.request(target('dotlan', { viewportWidth: 1000, viewportHeight: 600 }))))
     expect(pages[0].url).toBe('https://dotlan.example.com/p')
     expect(pages[0].viewport).toEqual({ width: 1000, height: 600, deviceScaleFactor: 1 })
-    expect(pages[0].gotoOptions?.waitUntil).toBe('load')
+    expect(pages[0].gotoOptions?.waitUntil).toBe('domcontentloaded')
     expect(pages[0].shots[0].clip!.width).toBe(1000)
+  })
+
+  it('still shoots a page that never gets network idle, with the HTTP status', async () => {
+    const { source, pages } = fakeSource(() => new FakePage({ neverIdle: true, status: 200 }))
+    const { shots } = shooter(source)
+    const shot = shotOf(await outcomeOf(shots.request(target('janice', { idleMs: 3000 }))))
+    expect(shot.diag.status).toBe(200)
+    expect(pages[0].idleOptions).toMatchObject({ timeout: 3000 })
+    // 软等待在 goto 之后、截图之前
+    const calls = pages[0].calls
+    expect(calls.indexOf('goto')).toBeLessThan(calls.indexOf('idle'))
+    expect(calls.indexOf('idle')).toBeLessThan(calls.indexOf('screenshot'))
+  })
+
+  it('skips the idle wait when idleMs is 0', async () => {
+    const { source, pages } = fakeSource()
+    const { shots } = shooter(source)
+    shotOf(await outcomeOf(shots.request(target('janice', { idleMs: 0 }))))
+    expect(pages[0].calls).not.toContain('idle')
+  })
+
+  it('keeps the status of a failing page even when it never gets idle', async () => {
+    const { source } = fakeSource(() => new FakePage({ neverIdle: true, status: 404 }))
+    const { shots } = shooter(source)
+    const outcome = await outcomeOf(shots.request(target('janice')))
+    expect(outcome).toMatchObject({ ok: false, reason: 'http', status: 404 })
+  })
+
+  it('clicks the consent button of the profile, waiting for it to appear, and shoots anyway when it never does', async () => {
+    const found = fakeSource(() => new FakePage({ dismissOnPoll: 3 }))
+    const a = shooter(found.source)
+    shotOf(await outcomeOf(a.shots.request(target('dotlan', { dismissTexts: ['I decline'] }))))
+    expect(found.pages[0].calls.filter((c) => c === 'dismiss')).toHaveLength(3)
+    expect(found.pages[0].expressions.some((e) => e.includes('"i decline"'))).toBe(true)
+
+    const missing = fakeSource()
+    const b = shooter(missing.source)
+    shotOf(await outcomeOf(b.shots.request(target('dotlan', { dismissTexts: ['I decline'] }))))
+    expect(missing.pages[0].calls).toContain('screenshot')
+
+    const none = fakeSource()
+    const c = shooter(none.source)
+    shotOf(await outcomeOf(c.shots.request(target('dotlan'))))
+    expect(none.pages[0].calls).not.toContain('dismiss')
   })
 
   it('settles for at most the profile settleMs', async () => {
@@ -158,6 +239,48 @@ describe('SiteScreenshotter profiles', () => {
     await outcomeOf(shots.request(target('janice', { settleMs: 50 })))
     // 第一次读 + 最多 ceil(50 / 5) 次
     expect(pages[0].calls.filter((c) => c === 'probe').length).toBe(11)
+  })
+
+  it('keeps waiting through a viewport-high plateau and shoots after the content arrives', async () => {
+    // 先出只有页头的空壳：高度被视口撑在 900，几秒后数据才到（2101）
+    const heights = [...Array(8).fill(900), 2101]
+    const { source, pages } = fakeSource(() => new FakePage({ heights }))
+    const { shots } = shooter(source, { scheduler: instant, settlePollMs: 250 })
+    const shot = shotOf(await outcomeOf(shots.request(target('janice', { settleMs: 8000, maxImages: 2 }))))
+    expect(shot.pageHeight).toBe(2101)
+    expect(pages[0].shots[0].clip!.height).toBe(2101)
+  })
+
+  it('needs a longer stable window for a page not taller than the viewport', async () => {
+    const probes = async (height: number, settleMs: number) => {
+      const { source, pages } = fakeSource(() => new FakePage({ heights: [height] }))
+      const { shots } = shooter(source, { scheduler: instant, settlePollMs: 250 })
+      shotOf(await outcomeOf(shots.request(target('janice', { settleMs }))))
+      return pages[0].calls.filter((c) => c === 'probe').length
+    }
+    // 第一次读 + 稳定窗口 / 250 毫秒：普通页 1500 → 6 次，不超过视口的页 3500 → 14 次
+    expect(await probes(1000, 8000)).toBe(1 + 6)
+    expect(await probes(900, 8000)).toBe(1 + 14)
+    expect(await probes(500, 8000)).toBe(1 + 14)
+    // 窗口再长也不超过 settleMs
+    expect(await probes(900, 1000)).toBe(1 + 4)
+  })
+
+  it('a change in text length or node count restarts the stable window', async () => {
+    let reads = 0
+    class Growing extends FakePage {
+      async evaluate(expression: string) {
+        const value = await super.evaluate(expression)
+        if (!Array.isArray(value)) return value
+        // 高度一直不变，文字量前 4 次读取都在涨
+        return [value[0], value[1], value[2], value[3], 100 + Math.min(reads++, 4), value[5]]
+      }
+    }
+    const { source, pages } = fakeSource(() => new Growing({ heights: [1000] }))
+    const { shots } = shooter(source, { scheduler: instant, settlePollMs: 250 })
+    shotOf(await outcomeOf(shots.request(target('janice', { settleMs: 8000 }))))
+    // 第 1–5 次读取的文字量各不相同（100…104），之后稳定 6 次
+    expect(pages[0].calls.filter((c) => c === 'probe').length).toBe(5 + 6)
   })
 
   it('maxImages sets the highest page height that is kept', async () => {
@@ -212,6 +335,70 @@ describe('SiteScreenshotter profiles', () => {
     const shot = shotOf(await outcomeOf(shots.request(target('janice'))))
     expect(shot.diag).toMatchObject({ status: 200, title: '估价结果', challenge: false, blockedRedirects: 0, blockedPrivate: 0, closedPopups: 0 })
     expect(shot.diag.elapsedMs).toBeGreaterThanOrEqual(0)
+  })
+})
+
+describe('SiteScreenshotter growViewport', () => {
+  // 100dvh 的应用壳：页面高度就是视口高度，内容藏在内部滚动容器里
+  const shell = (extra: Partial<Behavior>) => fakeSource(() => new FakePage({ heightOf: (vh) => vh, ...extra }))
+  const grow = (profile: Partial<ShotProfile> = {}) => target('janice', { growViewport: true, settleMs: 3000, ...profile })
+
+  it('grows the viewport by the hidden overflow and shoots the taller page', async () => {
+    const { source, pages } = shell({ hidden: [1200, 0] })
+    const { shots } = shooter(source, { scheduler: instant, settlePollMs: 250 })
+    const shot = shotOf(await outcomeOf(shots.request(grow({ maxImages: 2 }))))
+    expect(pages[0].viewports.map((v) => v.height)).toEqual([900, 2100])
+    expect(pages[0].viewports[1]).toMatchObject({ width: 1440, deviceScaleFactor: 1 })
+    expect(shot.pageHeight).toBe(2100)
+    expect(pages[0].shots[0].clip!.height).toBe(2100)
+    expect(pages[0].calls.filter((c) => c === 'hidden')).toHaveLength(2)
+  })
+
+  it('does not grow when nothing is hidden (1 px or less counts as nothing)', async () => {
+    const { source, pages } = shell({ hidden: [1] })
+    const { shots } = shooter(source, { scheduler: instant, settlePollMs: 250 })
+    const shot = shotOf(await outcomeOf(shots.request(grow())))
+    expect(pages[0].viewports.map((v) => v.height)).toEqual([900])
+    expect(shot.pageHeight).toBe(900)
+  })
+
+  it('stops at the cap of maxImages times the segment height', async () => {
+    const { source, pages } = shell({ hidden: [50000] })
+    const { shots } = shooter(source, { scheduler: instant, settlePollMs: 250 })
+    shotOf(await outcomeOf(shots.request(grow({ maxImages: 1 }))))
+    expect(pages[0].viewports.map((v) => v.height)).toEqual([900, SHOT_SEGMENT_HEIGHT])
+    // 到上限就不再读
+    expect(pages[0].calls.filter((c) => c === 'hidden')).toHaveLength(1)
+  })
+
+  it('stops at the cap of the maxHeight option when it is set', async () => {
+    const { source, pages } = shell({ hidden: [50000] })
+    const { shots } = shooter(source, { scheduler: instant, settlePollMs: 250, maxHeight: 2500 })
+    shotOf(await outcomeOf(shots.request(grow({ maxImages: 3 }))))
+    expect(pages[0].viewports.map((v) => v.height)).toEqual([900, 2500])
+  })
+
+  it('grows at most 3 rounds even when content keeps showing up', async () => {
+    const { source, pages } = shell({ hidden: [500] })
+    const { shots } = shooter(source, { scheduler: instant, settlePollMs: 250 })
+    shotOf(await outcomeOf(shots.request(grow({ maxImages: 3 }))))
+    expect(pages[0].viewports.map((v) => v.height)).toEqual([900, 1400, 1900, 2400])
+    expect(pages[0].calls.filter((c) => c === 'hidden')).toHaveLength(3)
+  })
+
+  it('is skipped when the profile does not ask for it', async () => {
+    const { source, pages } = shell({ hidden: [1200] })
+    const { shots } = shooter(source, { scheduler: instant, settlePollMs: 250 })
+    shotOf(await outcomeOf(shots.request(target('janice', { settleMs: 3000 }))))
+    expect(pages[0].viewports.map((v) => v.height)).toEqual([900])
+    expect(pages[0].calls).not.toContain('hidden')
+  })
+
+  it('is skipped on a verification page', async () => {
+    const { source, pages } = shell({ hidden: [1200], challenge: [true], title: 'Just a moment...' })
+    const { shots } = shooter(source, { scheduler: instant, settlePollMs: 250 })
+    expect(await outcomeOf(shots.request(grow()))).toMatchObject({ ok: false, reason: 'blocked' })
+    expect(pages[0].calls).not.toContain('hidden')
   })
 })
 

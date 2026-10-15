@@ -433,6 +433,18 @@ describe('ZkillClient caches', () => {
     expect(http.calls).toHaveLength(3)
   })
 
+  it('bigOk: a too-large answer is its own kind, debug only, not remembered, and the client stays healthy', async () => {
+    const client = make({ minIntervalMs: 0 })
+    http.script = [new NetworkError('too-large'), new NetworkError('too-large')]
+    expect(failure(await client.getJson(A, { bigOk: true, maxBytes: 100 })).kind).toBe('too-large')
+    expect(failure(await client.getJson(A, { bigOk: true, maxBytes: 100 })).kind).toBe('too-large')
+    expect(http.calls).toHaveLength(2)
+    expect(logger.lines.warn).toHaveLength(0)
+    expect(logger.lines.debug.join('\n')).toContain('100')
+    expect((await client.getJson(B)).ok).toBe(true)
+    expect(logger.lines.info).toHaveLength(0)
+  })
+
   it('warns about a failing zKill once, then only debug-logs until it recovers', async () => {
     const client = make({ minIntervalMs: 0 })
     http.script = [{ status: 500 }, { status: 500 }]

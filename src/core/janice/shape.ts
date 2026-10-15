@@ -14,7 +14,7 @@ export interface JaniceRawItem {
   typeId: number
   en: string
   amount: number
-  /** 这一行的小计（未乘比例） */
+  /** 这一行的小计（接口已按估价比例算好） */
   totals: JaniceRawPrices
 }
 
@@ -26,7 +26,7 @@ export interface JaniceAppraisal {
   designation: string | null
   /** 响应里的原始值；缺失时 null（合不合法由 service 判断） */
   percentage: number | null
-  /** 总价（未乘比例） */
+  /** 总价（接口已按估价比例算好） */
   totals: JaniceRawPrices
   items: JaniceRawItem[]
   packagedVolume: number | null

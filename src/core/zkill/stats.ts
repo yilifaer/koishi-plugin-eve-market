@@ -1,7 +1,13 @@
 // zKill 人物统计的宽松解析。字段名按 2026-10-14 的真实响应核对：缺字段、类型不对都当作没有，绝不抛异常。
 // 人物简介（info.description）带链接和广告，一律不读、不保留。字段名猜错只改这一个文件和 ZKILL_STATS_PATH。
 
-import { ZKILL_CHAR_KILLS_PATH, ZKILL_CHAR_LOSSES_PATH, ZKILL_STATS_PATH } from '../../constants'
+import {
+  ZKILL_CHAR_KILLS_PATH,
+  ZKILL_CHAR_KILLS_WEEK_PATH,
+  ZKILL_CHAR_LOSSES_PATH,
+  ZKILL_CHAR_LOSSES_WEEK_PATH,
+  ZKILL_STATS_PATH,
+} from '../../constants'
 
 export interface ZkillMonth {
   /** YYYY-MM */
@@ -22,6 +28,14 @@ export interface ZkillGroupStat {
 export interface ZkillLabelStat {
   kills: number
   losses: number
+}
+
+/** 带诱导（诱导力场）的损失船数：cyno = { count, standard, covert, industrial } */
+export interface ZkillCyno {
+  count: number
+  standard: number
+  covert: number
+  industrial: number
 }
 
 export interface ZkillStats {
@@ -45,6 +59,14 @@ export interface ZkillStats {
   /** 全部时间最常出没的星系（topAllTime 的 system） */
   topSystems: Array<{ systemId: number; kills: number }>
   labels: Record<string, ZkillLabelStat>
+  /** 带诱导的损失；没有时全 0 */
+  cyno: ZkillCyno
+  /** 近期的标签统计（同 labels）；没有时 {} */
+  recentLabels: Record<string, ZkillLabelStat>
+  /** 全部击杀按 UTC 小时 0–23 的次数（activity 里七个星期几加起来）；没有或读不懂时 [] */
+  activityHours: number[]
+  /** 同一份 activity 按星期几 0–6 汇总（0 = 周日，6 = 周六，zKill 沿用 PHP 的星期编号）；没有或读不懂时 [] */
+  activityDays: number[]
   /** 近 7 天（activepvp）；没有时 null */
   week: { kills: number; ships: number; systems: number; regions: number } | null
   info: {
@@ -68,6 +90,15 @@ export function zkillCharKillsPath(characterId: number): string {
 
 export function zkillCharLossesPath(characterId: number): string {
   return ZKILL_CHAR_LOSSES_PATH.replace('{id}', String(characterId))
+}
+
+/** 最近 7 天的击杀 / 损失（完整列表太大时用） */
+export function zkillCharKillsWeekPath(characterId: number): string {
+  return ZKILL_CHAR_KILLS_WEEK_PATH.replace('{id}', String(characterId))
+}
+
+export function zkillCharLossesWeekPath(characterId: number): string {
+  return ZKILL_CHAR_LOSSES_WEEK_PATH.replace('{id}', String(characterId))
 }
 
 type Obj = Record<string, unknown>
@@ -172,9 +203,36 @@ function parseLabels(raw: unknown): Record<string, ZkillLabelStat> {
   if (!src) return out
   for (const [key, value] of Object.entries(src)) {
     const l = obj(value)
-    if (l && /^[\w:+-]{1,32}$/.test(key) && !UNSAFE_KEYS.has(key)) out[key] = { kills: count(l.shipsDestroyed), losses: count(l.shipsLost) }
+    if (l && /^[\w:+#-]{1,32}$/.test(key) && !UNSAFE_KEYS.has(key)) out[key] = { kills: count(l.shipsDestroyed), losses: count(l.shipsLost) }
   }
   return out
+}
+
+/** cyno：{ count, standard, covert, industrial }，缺字段按 0；没给 count 时用三类之和 */
+function parseCyno(raw: unknown): ZkillCyno {
+  const c = obj(raw)
+  const standard = count(c?.standard)
+  const covert = count(c?.covert)
+  const industrial = count(c?.industrial)
+  return { count: count(c?.count) || standard + covert + industrial, standard, covert, industrial }
+}
+
+/** activity：{ max, days, '0'..'6': { '0'..'23': 次数 } }（星期几 × UTC 小时，稀疏，键是字符串）。读不懂或全 0 返回 [] */
+function parseActivity(raw: unknown): { hours: number[]; days: number[] } {
+  const src = obj(raw)
+  if (!src) return { hours: [], days: [] }
+  const hours = Array.from({ length: 24 }, () => 0)
+  const days = Array.from({ length: 7 }, () => 0)
+  for (let day = 0; day < 7; day++) {
+    const row = obj(src[String(day)])
+    if (!row) continue
+    for (let h = 0; h < 24; h++) {
+      const n = count(row[String(h)])
+      hours[h] += n
+      days[day] += n
+    }
+  }
+  return hours.some((n) => n > 0) ? { hours, days } : { hours: [], days: [] }
 }
 
 function parseWeek(raw: unknown): ZkillStats['week'] {
@@ -201,7 +259,7 @@ function parseInfo(raw: unknown): ZkillStats['info'] {
 export function emptyZkillStats(): ZkillStats {
   return {
     present: false, kills: 0, losses: 0, soloKills: 0, soloLosses: 0, iskKilled: 0, iskLost: 0,
-    danger: null, gang: null, avgGangSize: null, months: [], groups: [], topShips: [], topSystems: [], labels: {}, week: null,
+    danger: null, gang: null, avgGangSize: null, months: [], groups: [], topShips: [], topSystems: [], labels: {}, cyno: { count: 0, standard: 0, covert: 0, industrial: 0 }, recentLabels: {}, activityHours: [], activityDays: [], week: null,
     info: { name: null, birthday: null, corporationId: null, allianceId: null, secStatus: null },
   }
 }
@@ -216,6 +274,7 @@ export function parseZkillStats(json: unknown): ZkillStats {
     .map((row) => ({ id: id(row?.shipTypeID), kills: count(row?.kills) }))
     .filter((row): row is { id: number; kills: number } => row.id !== null && row.kills > 0)
     .sort((a, b) => b.kills - a.kills)
+  const activity = parseActivity(r.activity)
   const stats: ZkillStats = {
     present: true,
     kills: count(r.shipsDestroyed),
@@ -232,6 +291,10 @@ export function parseZkillStats(json: unknown): ZkillStats {
     topShips: (topShips.length ? topShips : fallbackShips).map((s) => ({ typeId: s.id, kills: s.kills })),
     topSystems: topAllTime(r.topAllTime, 'system', 'solarSystemID').map((s) => ({ systemId: s.id, kills: s.kills })),
     labels: parseLabels(r.labels),
+    cyno: parseCyno(r.cyno),
+    recentLabels: parseLabels(r.recentLabels),
+    activityHours: activity.hours,
+    activityDays: activity.days,
     week: parseWeek(r.activepvp),
     info: parseInfo(r.info),
   }

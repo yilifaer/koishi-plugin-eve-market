@@ -30,6 +30,8 @@ export type ZkillFailureKind =
   | 'throttled'
   /** 403 或 Cloudflare 验证页：暂停到 retryAt */
   | 'blocked'
+  /** 响应超过 maxBytes（调用方说了「太大是预期内的」，见 ZkillGetOptions.bigOk）；不记失败、不告警 */
+  | 'too-large'
   /** 调用方的 deadlineMs 到了；请求本身在后台继续，结果写进缓存 */
   | 'deadline'
   /** 客户端已停止 */
@@ -55,6 +57,8 @@ export interface ZkillGetOptions {
   emptyTtlMs?: number
   /** 调用方最多等多久（包括排队），到时间返回 deadline 失败 */
   deadlineMs?: number
+  /** 响应超过 maxBytes 是预期内的（活跃玩家的击杀列表）：返回 too-large，只写 debug，不记失败、不算故障 */
+  bigOk?: boolean
 }
 
 export interface ZkillClientOptions {
@@ -269,6 +273,10 @@ export class ZkillClient {
       }
     } catch (e) {
       if (this.stopped || (e instanceof NetworkError && e.kind === 'aborted')) return this.fail('aborted', '请求被中止')
+      if (opts.bigOk && e instanceof NetworkError && e.kind === 'too-large') {
+        logger.debug('zKill %s 响应超过 %d 字节', url.slice(this.base.length), opts.maxBytes ?? ZKILL_MAX_BYTES)
+        return this.fail('too-large', `响应超过 ${opts.maxBytes ?? ZKILL_MAX_BYTES} 字节`)
+      }
       return this.unavailable(url, describeError(e))
     }
     const now = clock.now()

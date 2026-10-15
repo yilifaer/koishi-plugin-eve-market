@@ -1,6 +1,8 @@
 // Janice 的 HTTP 客户端，只做 GET /api/rest/v2/appraisal/{code}。密钥只放在 X-ApiKey 请求头里，
 // 不进地址、日志、错误文字。别人的服务器，所以保守：全局同一时间只发 1 个请求、两次之间隔开一段时间；
 // 429 按 Retry-After 暂停；密钥被拒绝时日志最多 10 分钟告警一次（只写状态码）。
+// 密钥错、没密钥、编号不存在，估价接口都回一样的 400；所以 400 / 404 时再用 /markets 校验一次密钥
+// （同一个队列里发，结果缓存 10 分钟）：200 才说明编号真的不存在。
 // 暂停窗口和告警时间放在模块级存储里，插件重载后还在。解析响应字段不在这里（shape.ts），缓存也不在这里（service.ts）。
 
 import {
@@ -8,7 +10,11 @@ import {
   JANICE_APPRAISAL_PATH,
   JANICE_BAD_KEY_WARN_MIN,
   JANICE_CODE_RE,
+  JANICE_KEY_CHECK_CACHE_MIN,
+  JANICE_KEY_CHECK_MAX_BYTES,
+  JANICE_KEY_CHECK_TIMEOUT_MS,
   JANICE_KEY_HEADER,
+  JANICE_MARKETS_PATH,
   JANICE_MAX_BYTES,
   JANICE_MAX_PAUSE_MS,
   JANICE_MAX_QUEUE,
@@ -46,6 +52,13 @@ interface JaniceState {
   warned: boolean
 }
 
+/** 一次密钥校验的结果：ok = 密钥有效；否则 status 是 Janice 回的状态码 */
+interface KeyCheck {
+  ok: boolean
+  status: number
+  at: number
+}
+
 const STATE_KEY = 'janice'
 const ACCEPT = 'application/json'
 
@@ -60,6 +73,7 @@ export class JaniceClient {
   private readonly life = new AbortController()
   private tail: Promise<unknown> = Promise.resolve()
   private queued = 0
+  private keyCheck: KeyCheck | undefined
 
   constructor(private readonly ports: JanicePorts, private readonly options: JaniceClientOptions) {
     this.base = (options.base ?? JANICE_API_BASE).replace(/\/+$/, '')
@@ -111,25 +125,31 @@ export class JaniceClient {
 
   /** 全局只有一个队列：前一个结束（并隔够时间）以后才发下一个 */
   private async turn(code: string): Promise<JaniceFetch> {
-    const { clock, scheduler } = this.ports
+    const { clock } = this.ports
     const { state } = this
     if (this.stopped) return failure('JANICE_DOWN', '客户端已停止')
     const early = this.paused()
     if (early) return early
-    const wait = state.lastEnd + this.minIntervalMs - clock.now()
-    if (wait > 0) {
-      try {
-        await sleep(scheduler, wait, this.life.signal)
-      } catch {
-        return failure('JANICE_DOWN', '客户端已停止')
-      }
-    }
+    const stopped = await this.gap()
+    if (stopped) return stopped
     const late = this.paused()
     if (late) return late
     try {
       return await this.send(code)
     } finally {
       state.lastEnd = clock.now()
+    }
+  }
+
+  /** 等到离上一个请求结束至少隔 minIntervalMs；等的时候客户端停了就返回失败 */
+  private async gap(): Promise<CoreFailure | null> {
+    const wait = this.state.lastEnd + this.minIntervalMs - this.ports.clock.now()
+    if (wait <= 0) return null
+    try {
+      await sleep(this.ports.scheduler, wait, this.life.signal)
+      return null
+    } catch {
+      return failure('JANICE_DOWN', '客户端已停止')
     }
   }
 
@@ -157,6 +177,7 @@ export class JaniceClient {
       return this.down(describeError(e, undefined, [apiKey]))
     }
     const { status } = res
+    if (status < 200 || status >= 300) logger.debug('Janice 估价 %s 返回 HTTP %s', code, status)
     if (status >= 300 && status < 400) return this.down('HTTP 3xx')
     if (status === 429) {
       const now = clock.now()
@@ -171,7 +192,7 @@ export class JaniceClient {
       this.warnBadKey(status)
       return failure('JANICE_BAD_KEY', `Janice 拒绝了密钥（HTTP ${status}）`)
     }
-    if (status === 404 || status === 400) return failure('JANICE_NOT_FOUND', `HTTP ${status}`)
+    if (status === 404 || status === 400) return this.missing(status)
     if (status < 200 || status >= 300) return this.down(`HTTP ${status}`)
     let json: unknown
     try {
@@ -183,6 +204,45 @@ export class JaniceClient {
     this.state.warned = false
     logger.debug('Janice 估价 %s 读取成功', code)
     return { ok: true, json }
+  }
+
+  /** 400 / 404：密钥有效才是编号不存在，密钥被拒绝就是密钥问题 */
+  private async missing(status: number): Promise<CoreFailure> {
+    const check = await this.checkKey()
+    if (check && !check.ok) {
+      this.warnBadKey(check.status)
+      return failure('JANICE_BAD_KEY', `Janice 拒绝了密钥（HTTP ${check.status}）`)
+    }
+    return failure('JANICE_NOT_FOUND', `HTTP ${status}`)
+  }
+
+  /** 用 /markets 校验密钥（只有有效密钥才回 200）；结果缓存，校验本身失败返回 undefined */
+  private async checkKey(): Promise<KeyCheck | undefined> {
+    const { http, clock, logger } = this.ports
+    const { apiKey, userAgent } = this.options
+    const cached = this.keyCheck
+    if (cached && clock.now() - cached.at < JANICE_KEY_CHECK_CACHE_MIN * 60_000) return cached
+    // 紧跟着刚才那个请求，也要隔开
+    this.state.lastEnd = clock.now()
+    if (await this.gap()) return undefined
+    try {
+      const res = await http.request({
+        method: 'GET',
+        url: `${this.base}${JANICE_MARKETS_PATH}`,
+        headers: { [JANICE_KEY_HEADER]: apiKey, Accept: ACCEPT, 'User-Agent': userAgent },
+        timeoutMs: JANICE_KEY_CHECK_TIMEOUT_MS,
+        maxBytes: JANICE_KEY_CHECK_MAX_BYTES,
+        signal: this.life.signal,
+        redirect: 'manual',
+      })
+      const { status } = res
+      if (status === 200) return (this.keyCheck = { ok: true, status, at: clock.now() })
+      if (status === 400 || status === 401 || status === 403) return (this.keyCheck = { ok: false, status, at: clock.now() })
+      logger.debug('Janice 密钥校验返回 HTTP %s，无法判断', status)
+    } catch (e) {
+      logger.debug('Janice 密钥校验失败：%s', describeError(e, undefined, [apiKey]))
+    }
+    return undefined
   }
 
   private down(why: string): CoreFailure {

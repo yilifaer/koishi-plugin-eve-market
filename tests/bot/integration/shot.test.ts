@@ -299,7 +299,9 @@ describe('截图: slow hint and reply budget', () => {
   })
 
   it('a page longer than the limit says so under the last image', async () => {
-    const e = await start({ puppeteer: browserWith({ [DOTLAN]: { height: 9000 } }) })
+    // 假时钟：慢提示不会触发（页面稳定要等真实的几秒）
+    const time = new FakeTime(TEST_START)
+    const e = await start({ puppeteer: browserWith({ [DOTLAN]: { height: 9000 } }), clock: time, scheduler: time })
     const sent = await e.h.group(`截图 ${DOTLAN}`)
     expect(jpegs(sent).map((i) => i.height)).toEqual([4000])
     expect(texts(sent)).toEqual(['页面过长，已截取前 4000 像素'])

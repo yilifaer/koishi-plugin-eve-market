@@ -9,7 +9,7 @@ export interface FakeItem {
   eid: number
   name: string
   amount: number
-  /** 这一行的 sell / buy / split 小计（100%） */
+  /** 这一行的 sell / buy / split 小计（接口返回的数，已是估价的比例） */
   sell: number
   buy: number
   split: number
@@ -111,7 +111,9 @@ export class FakeJanice {
   server!: http.Server
   base = ''
   readonly requests: JaniceLogEntry[] = []
-  /** 编号 → 返回的内容；没有的回 404 + ProblemDetails */
+  /** 设了以后，只有带这个密钥的请求才算有效；其他的（含没带）估价和 /markets 都回 400（和真实的 Janice 一样）。不设 = 任何密钥都有效 */
+  validKey?: string
+  /** 编号 → 返回的内容；没有的回 400 + ProblemDetails */
   appraisals = new Map<string, unknown>()
   /** 下 N 个请求依次出的故障（用完恢复正常） */
   faults: JaniceFault[] = []
@@ -154,9 +156,16 @@ export class FakeJanice {
     await this.hold
     const fault = this.faults.shift()
     if (fault) return this.fault(fault, res)
+    const keyOk = this.validKey === undefined || key === this.validKey
+    if (!keyOk) return this.problem(res, 400, path)
+    if (path === '/api/rest/v2/markets') return this.json(res, 200, [{ id: 2, name: 'Jita 4-4' }])
     const m = /^\/api\/rest\/v2\/appraisal\/([A-Za-z0-9]+)$/.exec(path)
     if (m && this.appraisals.has(m[1])) return this.json(res, 200, this.appraisals.get(m[1]))
-    this.json(res, 404, { type: 'about:blank', title: 'Not Found', status: 404, detail: 'No such appraisal', instance: path })
+    this.problem(res, 400, path)
+  }
+
+  private problem(res: http.ServerResponse, status: number, path: string) {
+    this.json(res, status, { type: 'about:blank', title: 'Bad Request', status, detail: 'Bad Request', instance: path })
   }
 
   private json(res: http.ServerResponse, status: number, value: unknown) {

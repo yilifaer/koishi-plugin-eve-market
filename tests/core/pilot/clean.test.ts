@@ -7,6 +7,11 @@ describe('cleanTitle', () => {
     expect(cleanTitle('<font size="12" color="#ffffffff">Line Member</font>')).toBe('Line Member')
   })
 
+  it('keeps in-game titles with a leading hash and hyphen', () => {
+    expect(cleanTitle('#Test-Alpha')).toBe('#Test-Alpha')
+    expect(cleanTitle('<b>#Night-Shift</b>')).toBe('#Night-Shift')
+  })
+
   it('removes links and domains', () => {
     expect(cleanTitle('Recruiter https://join.example/now')).toBe('Recruiter')
     expect(cleanTitle('visit spam.net today')).toBe('visit today')

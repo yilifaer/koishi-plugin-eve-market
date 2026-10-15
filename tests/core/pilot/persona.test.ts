@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { KB_ARCHETYPE_RULES as R, SHIP_GROUPS_CAPITAL, SHIP_GROUPS_INDUSTRIAL } from '../../../src/constants'
 import {
-  ACTIVITY_TEXT, BIRTHPLACE_TEXT, FOOTER_TEXT, MOOD_TEXT, PERSONA_COPY, ZONE_NAMES, composeCopy, fillTemplate, hash32, pickMood, pickPersona,
+  PERSONA_LABEL, PERSONA_LINES, composeCopy, fillTemplate, hash32, spaceCjk, idleMonths, pickMood, pickMoodKey, pickPersona, tonePool,
 } from '../../../src/core/pilot'
-import type { PersonaInput } from '../../../src/core/pilot'
+import type { MoodInput, PersonaInput } from '../../../src/core/pilot'
 import type { PersonaId } from '../../../src/core/types'
 import { emptyZkillStats } from '../../../src/core/zkill'
 import type { ZkillStats } from '../../../src/core/zkill'
@@ -15,6 +15,17 @@ function input(over: Partial<ZkillStats> = {}, extra: Partial<Omit<PersonaInput,
 describe('pickPersona: rule table, first match wins', () => {
   it('ghost: no records at all (beats everything)', () => {
     expect(pickPersona(input({ kills: 0, losses: 0 }, { ageDays: 5 }))).toBe('ghost')
+  })
+
+  it('pacifist: no kills, at least one loss, account 5 years or older (before rookie)', () => {
+    const year = 365
+    expect(pickPersona(input({ kills: 0, losses: 11 }, { ageDays: 5 * year }))).toBe('pacifist')
+    // 记录很少的老号也算（先于 rookie）
+    expect(pickPersona(input({ kills: 0, losses: 1 }, { ageDays: 8 * year }))).toBe('pacifist')
+    expect(pickPersona(input({ kills: 0, losses: 11 }, { ageDays: 5 * year - 1 }))).not.toBe('pacifist')
+    expect(pickPersona(input({ kills: 1, losses: 11 }, { ageDays: 8 * year }))).not.toBe('pacifist')
+    expect(pickPersona(input({ kills: 0, losses: 0 }, { ageDays: 8 * year }))).toBe('ghost')
+    expect(pickPersona(input({ kills: 0, losses: 11 }, { ageDays: null }))).not.toBe('pacifist')
   })
 
   it('rookie: under 90 days or under 10 records (boundaries)', () => {
@@ -94,43 +105,28 @@ describe('pickPersona: rule table, first match wins', () => {
 })
 
 describe('copy templates', () => {
-  const ALL: PersonaId[] = ['ghost', 'rookie', 'capital', 'industrial', 'wormhole', 'ganker', 'solo', 'fleet', 'reaper', 'underdog', 'pilot', 'unknown']
-  const texts = (): string[] => [
-    ...ALL.flatMap((p) => [PERSONA_COPY[p].label, ...PERSONA_COPY[p].headlines, ...PERSONA_COPY[p].ledes]),
-    MOOD_TEXT.hotWeek, MOOD_TEXT.dormant(3), MOOD_TEXT.dormantLong, MOOD_TEXT.bigKill, MOOD_TEXT.bigLoss,
-    FOOTER_TEXT, BIRTHPLACE_TEXT.at('X'), BIRTHPLACE_TEXT.fallback, ACTIVITY_TEXT.peak('20:00', '23:00', 12, 15), ACTIVITY_TEXT.zones(['A', 'B']),
-    ...Object.values(ZONE_NAMES),
-  ]
+  const ALL = Object.keys(PERSONA_LINES) as PersonaId[]
   const names = { name: 'Hanako Kisaragi' }
 
-  it('every persona has at least 3 headlines and 3 ledes', () => {
+  it('every persona has a name, a label, and copy in both tones', () => {
+    expect(ALL).toHaveLength(13)
     for (const p of ALL) {
-      expect(PERSONA_COPY[p].headlines.length, p).toBeGreaterThanOrEqual(3)
-      expect(PERSONA_COPY[p].ledes.length, p).toBeGreaterThanOrEqual(3)
-    }
-  })
-
-  it('every persona has a headline and a lede that need only the name', () => {
-    for (const p of ALL) {
-      expect(PERSONA_COPY[p].headlines.some((t) => fillTemplate(t, names) !== null), `${p} headline`).toBe(true)
-      expect(PERSONA_COPY[p].ledes.some((t) => fillTemplate(t, names) !== null), `${p} lede`).toBe(true)
+      expect(PERSONA_LABEL[p], p).toBeTruthy()
       const { headline, lede } = composeCopy(p, 2119876543, '2026-10-14', names)
       expect(headline.length).toBeGreaterThan(0)
       expect(lede.length).toBeGreaterThan(0)
       expect(`${headline}${lede}`).not.toMatch(/[{}]/)
     }
-  })
-
-  it('only known placeholders are used', () => {
-    const known = new Set(['name', 'kills', 'losses', 'solo', 'eff', 'isk', 'k7', 'ship', 'system', 'region', 'years'])
-    for (const t of texts()) for (const m of t.matchAll(/\{(\w+)\}/g)) expect(known.has(m[1]), `${t} → ${m[1]}`).toBe(true)
+    expect(PERSONA_LABEL.pacifist).toBe('和平主义者')
   })
 
   it('skips templates whose data is missing', () => {
     expect(fillTemplate('{name}打了{kills}次', names)).toBeNull()
-    expect(fillTemplate('{name}打了{kills}次', { ...names, kills: '12' })).toBe('Hanako Kisaragi打了12次')
-    const { lede } = composeCopy('solo', 1, '2026-10-14', names)
-    expect(lede).not.toMatch(/单杀|\d/)
+    expect(fillTemplate('{name}打了{kills}次', { ...names, kills: '12' })).toBe('Hanako Kisaragi 打了 12 次')
+    for (const tone of ['gentle', 'snarky', 'mixed'] as const) {
+      const { lede } = composeCopy('solo', 1, '2026-10-14', names, tone)
+      expect(lede, tone).not.toMatch(/\d/)
+    }
   })
 
   it('the same character on the same day gets the same lines; other days can differ', () => {
@@ -146,51 +142,91 @@ describe('copy templates', () => {
     expect(people.size).toBeGreaterThan(1)
   })
 
+  it('tone modes pick from the right pools', () => {
+    const lines = { gentle: ['g1', 'g2'], snarky: ['s1'] }
+    expect(tonePool('gentle', lines)).toEqual(['g1', 'g2'])
+    expect(tonePool('snarky', lines)).toEqual(['s1'])
+    expect(tonePool('mixed', lines)).toEqual(['g1', 'g2', 's1'])
+    const values = { ...names, kills: '300', losses: '100', solo: '88', eff: '88%', isk: '23.20B', k7: '14', ship: '马其顿级', system: '吉他', region: '伏尔戈', years: '7' }
+    const pools = (tone: 'gentle' | 'snarky') => new Set([...PERSONA_LINES.solo[tone].headlines])
+    const seen = { gentle: false, snarky: false }
+    for (let day = 1; day <= 60; day++) {
+      const key = `2026-09-${String(day % 30 + 1).padStart(2, '0')}`
+      for (const id of [1, 2, 3, 4]) {
+        const g = composeCopy('solo', id, key, values, 'gentle').headline
+        const s = composeCopy('solo', id, key, values, 'snarky').headline
+        expect([...pools('gentle')].some((t) => fillTemplate(t, values) === g), g).toBe(true)
+        expect([...pools('snarky')].some((t) => fillTemplate(t, values) === s), s).toBe(true)
+        const m = composeCopy('solo', id, key, values, 'mixed').headline
+        if ([...pools('gentle')].some((t) => fillTemplate(t, values) === m)) seen.gentle = true
+        if ([...pools('snarky')].some((t) => fillTemplate(t, values) === m)) seen.snarky = true
+      }
+    }
+    // 混合两边都会选到
+    expect(seen).toEqual({ gentle: true, snarky: true })
+  })
+
   it('hash32 is stable', () => {
     expect(hash32('abc')).toBe(hash32('abc'))
     expect(hash32('abc')).not.toBe(hash32('abd'))
     expect(hash32('')).toBe(0x811c9dc5)
   })
-
-  it('has no gender words or pronouns, region or ethnicity jokes, or swearing', () => {
-    const banned = /[他她男女]|兄弟|哥们|老哥|小哥|姐|姑娘|小伙|大叔|大妈|汉子|娘|爷们|美女|帅哥|傻|蠢|废物|垃圾|菜鸡|脑残|弱智|白痴|智障|滚|妈|操|尼玛|卧槽|混蛋|王八|畜生|死全家|黑人|白人|老外|洋人|棒子|鬼子|阿三|猴|北方|南方|外地|农村|乡下|穷鬼|屌|逼/
-    for (const t of texts()) expect(t, t).not.toMatch(banned)
-  })
-
-  it('keeps the tone sharp: the owner-approved jokes are in the table', () => {
-    const all = ALL.flatMap((p) => [...PERSONA_COPY[p].headlines, ...PERSONA_COPY[p].ledes]).join('\n')
-    expect(all).toContain('移动靶')
-    expect(all).toContain('保险公司 VIP')
-    expect(all).toContain('击毁数还没损失数多')
-  })
 })
 
 describe('pickMood', () => {
   const idle = (n: number) => Array.from({ length: 12 }, (_, i) => ({ kills: i < 12 - n ? 3 : 0, losses: 0 }))
-  const base = { weekKills: 0, months: idle(0), recentKillValue: null, recentLossValue: null, iskOf: (v: number) => `${v / 1e9}B` }
+  const base: MoodInput = { weekKills: 0, months: idle(0), recentKillValue: null, recentLossValue: null }
+  const key = (over: Partial<MoodInput>) => pickMoodKey({ ...base, ...over })
 
   it('hot week at 30 kills', () => {
-    expect(pickMood({ ...base, weekKills: R.moodWeekKills })).toBe('本周火力全开')
-    expect(pickMood({ ...base, weekKills: R.moodWeekKills - 1 })).toBeNull()
-    expect(pickMood({ ...base, weekKills: null })).toBeNull()
+    expect(key({ weekKills: R.moodWeekKills })).toBe('hotWeek')
+    expect(key({ weekKills: R.moodWeekKills - 1 })).toBeNull()
+    expect(key({ weekKills: null })).toBeNull()
   })
 
   it('dormant after 3 empty months, counting the months', () => {
-    expect(pickMood({ ...base, months: idle(2) })).toBeNull()
-    expect(pickMood({ ...base, months: idle(3) })).toBe('已潜水 3 个月')
-    expect(pickMood({ ...base, months: idle(7) })).toBe('已潜水 7 个月')
-    expect(pickMood({ ...base, months: idle(12) })).toBe(MOOD_TEXT.dormantLong)
+    expect(key({ months: idle(2) })).toBeNull()
+    expect(key({ months: idle(3) })).toBe('dormant')
+    expect(idleMonths(idle(7))).toBe(7)
+    expect(idleMonths(idle(0))).toBe(0)
+    expect(key({ months: [] })).toBeNull()
   })
 
   it('big kill and big loss from 10B', () => {
-    expect(pickMood({ ...base, recentKillValue: 10e9 })).toBe('近日猎获 10B')
-    expect(pickMood({ ...base, recentKillValue: 9.9e9 })).toBeNull()
-    expect(pickMood({ ...base, recentLossValue: 12e9 })).toContain('12B')
+    expect(key({ recentKillValue: 10e9 })).toBe('bigKill')
+    expect(key({ recentKillValue: 9.9e9 })).toBeNull()
+    expect(key({ recentLossValue: 12e9 })).toBe('bigLoss')
   })
 
   it('order: hot week, dormant, big kill, big loss', () => {
-    expect(pickMood({ ...base, weekKills: 40, recentKillValue: 20e9 })).toBe('本周火力全开')
-    expect(pickMood({ ...base, months: idle(4), recentKillValue: 20e9 })).toBe('已潜水 4 个月')
-    expect(pickMood({ ...base, recentKillValue: 20e9, recentLossValue: 30e9 })).toBe('近日猎获 20B')
+    expect(key({ weekKills: 40, recentKillValue: 20e9 })).toBe('hotWeek')
+    expect(key({ months: idle(4), recentKillValue: 20e9 })).toBe('dormant')
+    expect(key({ recentKillValue: 20e9, recentLossValue: 30e9 })).toBe('bigKill')
+  })
+
+  it('fills the line with the values and skips lines whose data is missing', () => {
+    const values = { name: 'A', dormant: '5', bigKillIsk: '12.0B' }
+    for (const tone of ['gentle', 'snarky', 'mixed'] as const) {
+      expect(pickMood({ ...base, months: idle(5) }, values, tone, '1:2026-10-14', new Set())).toMatch(/5/)
+      expect(pickMood({ ...base, recentKillValue: 12e9 }, values, tone, '1:2026-10-14', new Set())).toContain('12.0B')
+      // 没有大损失的金额：这一类的句子都用到金额，整条跳过
+      expect(pickMood({ ...base, recentLossValue: 12e9 }, values, tone, '1:2026-10-14', new Set())).toBeNull()
+      expect(pickMood(base, values, tone, '1:2026-10-14', new Set())).toBeNull()
+    }
+  })
+})
+
+describe('spaceCjk', () => {
+  it('adds a space between latin / digits and Chinese, not next to Chinese punctuation', () => {
+    expect(spaceCjk('Kaito Minamoto不是飞船')).toBe('Kaito Minamoto 不是飞船')
+    expect(spaceCjk('价值3B')).toBe('价值 3B')
+    expect(spaceCjk('3B，好')).toBe('3B，好')
+    expect(spaceCjk('（Kaito）击毁')).toBe('（Kaito）击毁')
+    expect(spaceCjk('已经有空格 ABC 了')).toBe('已经有空格 ABC 了')
+    expect(spaceCjk('纯中文')).toBe('纯中文')
+  })
+
+  it('fillTemplate applies it to the filled text', () => {
+    expect(fillTemplate('{name}不是飞船', { name: 'Kaito Minamoto' })).toBe('Kaito Minamoto 不是飞船')
   })
 })

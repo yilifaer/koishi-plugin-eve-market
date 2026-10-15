@@ -47,12 +47,15 @@ describe('Config schema', () => {
   })
 
   it('the KB group: everyone, recent and auto on, an empty hidden table of id / note / enabled', () => {
-    expect(Config({} as any).kb).toEqual({ scope: 'all', recent: true, auto: true, hidden: [] })
+    expect(Config({} as any).kb).toEqual({ scope: 'all', recent: true, auto: true, tone: 'mixed', hidden: [] })
     expect(Config({ kb: { scope: 'bogus' } } as any).kb.scope).toBe('all')
     const kb = (Config as any).list[14].dict.kb
-    expect(Object.keys(kb.dict)).toEqual(['scope', 'recent', 'auto', 'hidden'])
+    expect(Object.keys(kb.dict)).toEqual(['scope', 'recent', 'auto', 'tone', 'hidden'])
     expect(tableOf(kb.dict.hidden)).toEqual(['characterId', 'note', 'enabled'])
     expect(kb.dict.auto.meta.description).toContain('zKill 人物链接')
+    expect(Config({ kb: { tone: 'bogus' } } as any).kb.tone).toBe('mixed')
+    expect(Config({ kb: { tone: 'snarky' } } as any).kb.tone).toBe('snarky')
+    expect(kb.dict.tone.meta.description).toContain('毒舌程度')
   })
 
   it('has the groups in console order with Chinese titles; industry since 0.2.0', () => {

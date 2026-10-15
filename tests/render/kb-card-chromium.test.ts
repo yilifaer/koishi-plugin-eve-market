@@ -38,7 +38,9 @@ describe.skipIf(!hasChrome)('KB card in a real Chromium', () => {
     expect(full.data.length).toBeGreaterThan(30_000)
     expect(full.data.length).toBeLessThan(1_500_000)
 
-    const sparse = await cards.get({ profile: ghost(), images: emptyImages(), now: NOW_MS })
+    // 没有整活儿栏的稀疏卡：撑不满最小高度
+    const bare = { ...ghost(), letter: null, ad: null, remarks: [], titles: [], fortune: { yi: [], ji: [], comment: '' } }
+    const sparse = await cards.get({ profile: bare, images: emptyImages(), now: NOW_MS })
     expect(imageSize(sparse.data)).toEqual({ width: KB_CARD_WIDTH * KB_CARD_SCALE, height: KB_CARD_MIN_HEIGHT * KB_CARD_SCALE })
     expect((await browser.pages()).length).toBe(before)
   }, 60_000)

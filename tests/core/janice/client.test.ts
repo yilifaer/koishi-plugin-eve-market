@@ -115,9 +115,38 @@ describe('JaniceClient status mapping', () => {
   for (const [status, code] of cases) {
     it(`${status} -> ${code}`, async () => {
       http.script = [{ status, body: { type: 'x', title: 't', status, detail: 'd', instance: 'i' } }]
-      expect(failure(await make().fetchAppraisal('AbC123')).code).toBe(code)
+      expect(failure(await make({ minIntervalMs: 0 }).fetchAppraisal('AbC123')).code).toBe(code)
     })
   }
+
+  it('400 and 404 check the key once via /markets: 200 = not found, 400/401/403 = bad key', async () => {
+    const client = make({ minIntervalMs: 0 })
+    http.script = [{ status: 400 }, { body: [] }]
+    expect(failure(await client.fetchAppraisal('AbC123')).code).toBe('JANICE_NOT_FOUND')
+    const check = http.calls[1]
+    expect(check.url).toBe(`${BASE}/api/rest/v2/markets`)
+    expect(check.req.headers).toEqual({ 'X-ApiKey': KEY, Accept: 'application/json', 'User-Agent': UA })
+    expect(check.req.timeoutMs).toBe(5000)
+    expect(check.req.maxBytes).toBeLessThan(1024 * 1024)
+    expect(check.req.redirect).toBe('manual')
+    for (const status of [400, 401, 403]) {
+      const other = make({ minIntervalMs: 0 })
+      http.script = [{ status: 404 }, { status }]
+      expect(failure(await other.fetchAppraisal('Zz9Yx8')).code, String(status)).toBe('JANICE_BAD_KEY')
+    }
+    expect(logger.all()).not.toContain(KEY)
+  })
+
+  it('keeps the interval between the appraisal request and the key check', async () => {
+    const client = make()
+    http.script = [{ status: 400 }, { body: [] }]
+    const pending = client.fetchAppraisal('AbC123')
+    await flush()
+    expect(http.calls).toHaveLength(1)
+    await time.advance(1000)
+    expect(failure(await pending).code).toBe('JANICE_NOT_FOUND')
+    expect(http.calls.map((c) => c.at)).toEqual([http.calls[0].at, http.calls[0].at + 1000])
+  })
 
   it('maps timeouts and network errors to JANICE_DOWN, too-large and non-JSON to JANICE_BAD_RESPONSE', async () => {
     const client = make({ minIntervalMs: 0 })

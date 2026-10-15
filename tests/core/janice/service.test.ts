@@ -116,29 +116,27 @@ describe('get: the view', () => {
 describe('get: pricePercentage', () => {
   const ITEMS: FakeItem[] = [{ eid: 34, name: 'Tritanium', amount: 10, sell: 1000, buy: 1000, split: 1001 }]
 
-  it('multiplies the totals and the item rows by 0.93 and floors', async () => {
+  it('uses the API numbers as they are at 93%, only reporting the percentage', async () => {
     fake.add('AbC123', { pricePercentage: 0.93 }, ITEMS)
     const v = view(await service.get('AbC123'))
     expect(v.percentage).toBe(0.93)
-    expect(v.totals).toEqual({ sell: 930, buy: 930, split: 930 })
-    expect(v.items[0].prices).toEqual({ sell: 930, buy: 930, split: 930 })
+    expect(v.totals).toEqual({ sell: 1000, buy: 1000, split: 1001 })
+    expect(v.items[0].prices).toEqual({ sell: 1000, buy: 1000, split: 1001 })
     expect(v.percentageGuessed).toBe(false)
   })
 
   it('does not lose a whole ISK to float error', async () => {
-    fake.add('AbC123', { pricePercentage: 0.29 }, [{ eid: 34, name: 'Tritanium', amount: 1, sell: 100, buy: 100, split: 100 }])
+    fake.add('AbC123', { pricePercentage: 0.29 }, [{ eid: 34, name: 'Tritanium', amount: 1, sell: 28.999999999999996, buy: 29, split: 29 }])
     expect(view(await service.get('AbC123')).totals.sell).toBe(29)
   })
 
   it('keeps the exact integer for totals of hundreds of billions', async () => {
-    // 几项相加后差一点点：225367226999.99997 × 0.93 = 209591521109.99997，固定 1e-6 的容差会少 1 ISK
+    // 几项相加后差一点点：固定 1e-6 的容差会少 1 ISK
     const big = (n: number) => [{ eid: 34, name: 'Tritanium', amount: 1, sell: n, buy: n, split: n }]
-    fake.add('AbC123', { pricePercentage: 0.93 }, big(225367226999.99997))
+    fake.add('AbC123', { pricePercentage: 0.93 }, big(209591521109.99997))
     expect(view(await service.get('AbC123')).totals).toEqual({ sell: 209591521110, buy: 209591521110, split: 209591521110 })
-    fake.add('AbC124', { pricePercentage: 0.93 }, big(330599270799.99994))
+    fake.add('AbC124', { pricePercentage: 0.93 }, big(307457321843.99994))
     expect(view(await service.get('AbC124')).totals.sell).toBe(307457321844)
-    fake.add('AbC125', { pricePercentage: 0.93 }, big(1e11))
-    expect(view(await service.get('AbC125')).totals.sell).toBe(93_000_000_000)
   })
 
   it('still floors a real fraction at large totals', async () => {
@@ -147,13 +145,15 @@ describe('get: pricePercentage', () => {
   })
 
   it('floors fractions, never rounds up', async () => {
-    fake.add('AbC123', { pricePercentage: 0.5 }, [{ eid: 34, name: 'Tritanium', amount: 1, sell: 101, buy: 101, split: 101 }])
-    expect(view(await service.get('AbC123')).totals.sell).toBe(50)
+    fake.add('AbC123', { pricePercentage: 0.5 }, [{ eid: 34, name: 'Tritanium', amount: 1, sell: 101.9, buy: 101, split: 101 }])
+    expect(view(await service.get('AbC123')).totals.sell).toBe(101)
   })
 
-  it('accepts a percentage up to 10 (1000%)', async () => {
+  it('accepts a percentage up to 10 (1000%) without scaling', async () => {
     fake.add('AbC123', { pricePercentage: 10 }, ITEMS)
-    expect(view(await service.get('AbC123')).totals.sell).toBe(10000)
+    const v = view(await service.get('AbC123'))
+    expect(v.percentage).toBe(10)
+    expect(v.totals.sell).toBe(1000)
   })
 
   for (const [name, value] of [['missing', undefined], ['0', 0], ['11', 11], ['negative', -1], ['a string', '0.9'], ['null', null], ['NaN-ish', 1e999]] as const) {
@@ -167,6 +167,53 @@ describe('get: pricePercentage', () => {
       expect(v.totals.sell).toBe(1000)
     })
   }
+})
+
+describe('get: wrong key vs missing code', () => {
+  const lastWarn = () => logger.at('warn').join('\n')
+
+  it('a good key + unknown code: checks /markets once, says not found', async () => {
+    fake.validKey = KEY
+    expect(fail(await service.get('AbC123')).code).toBe('JANICE_NOT_FOUND')
+    expect(fake.count(/markets$/)).toBe(1)
+    expect(fake.requests.every((r) => r.apiKey === KEY)).toBe(true)
+    expect(service.status().lastError).toBeUndefined()
+    expect(logger.at('warn')).toHaveLength(0)
+  })
+
+  it('a wrong key: the same 400 becomes JANICE_BAD_KEY, status is red, one warn without the key', async () => {
+    fake.validKey = 'some-other-key'
+    fake.add('AbC123')
+    expect(fail(await service.get('AbC123')).code).toBe('JANICE_BAD_KEY')
+    expect(service.status().lastError?.code).toBe('JANICE_BAD_KEY')
+    expect(logger.at('warn')).toHaveLength(1)
+    expect(lastWarn()).toContain('400')
+    expect(logger.text()).not.toContain(KEY)
+  })
+
+  it('caches the key check for 10 minutes', async () => {
+    fake.validKey = KEY
+    await service.get('AbC123')
+    await service.get('Zz9Yx8')
+    expect(fake.count(/markets$/)).toBe(1)
+    await time.advance(10 * 60_000)
+    await service.get('Qq7Ww6')
+    expect(fake.count(/markets$/)).toBe(2)
+  })
+
+  it('a failed key check keeps JANICE_NOT_FOUND and only logs at debug', async () => {
+    fake.faults = [{ kind: 'status', status: 400 }, { kind: 'status', status: 500 }]
+    expect(fail(await service.get('AbC123')).code).toBe('JANICE_NOT_FOUND')
+    expect(logger.at('warn')).toHaveLength(0)
+    expect(logger.at('debug').join('\n')).toContain('密钥校验')
+  })
+
+  it('logs every non-2xx appraisal answer at debug with code and status only', async () => {
+    fake.faults = [{ kind: 'status', status: 500 }]
+    await service.get('AbC123')
+    expect(logger.at('debug').join('\n')).toMatch(/AbC123.*500/)
+    expect(logger.text()).not.toContain(KEY)
+  })
 })
 
 describe('get: failures', () => {
@@ -286,13 +333,13 @@ describe('get: caching', () => {
   it('remembers a 404 for 10 minutes, then asks again (and finds it once it exists)', async () => {
     expect(fail(await service.get('AbC123')).code).toBe('JANICE_NOT_FOUND')
     expect(fail(await service.get('AbC123')).code).toBe('JANICE_NOT_FOUND')
-    expect(fake.count()).toBe(1)
+    expect(fake.count(/appraisal/)).toBe(1)
     fake.add('AbC123')
     await time.advance(10 * 60_000 - 1)
     expect(fail(await service.get('AbC123')).code).toBe('JANICE_NOT_FOUND')
     await time.advance(1)
     expect(view(await service.get('AbC123')).code).toBe('AbC123')
-    expect(fake.count()).toBe(2)
+    expect(fake.count(/appraisal/)).toBe(2)
   })
 
   it('does not cache a bad key or a busy answer', async () => {

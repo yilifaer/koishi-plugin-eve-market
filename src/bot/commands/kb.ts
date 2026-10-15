@@ -113,7 +113,7 @@ async function lookup(inv: Invocation, who: { id: number } | { name: string }): 
   }
   if (kb.hidden.includes(id)) return { kind: 'text', text: KB.hidden }
 
-  const profile = await core.pilots.profile(id, { recent: kb.recent })
+  const profile = await core.pilots.profile(id, { recent: kb.recent, tone: kb.tone })
   if (isFailure(profile)) return { kind: 'text', text: failureText(profile, '') }
   const image = await render(inv, profile)
   return { kind: 'profile', profile, image }

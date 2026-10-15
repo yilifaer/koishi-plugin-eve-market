@@ -8,7 +8,7 @@ import { BUILTIN_SITES, checkConfigHost, hostMatches } from '../core/sites'
 import type {
   AccessSettings, AdvancedSettings, AppraisalSettings, ConfigIssue, ConfigSection, DefaultQuantitySetting, DisplaySettings, JaniceSettings,
   FreightRoute, IndustryActivity, IndustryLocationSetting, IndustrySettings, IndustryStructureSetting, ItemAliasSetting,
-  KbScope, KbSettings,
+  KbScope, KbSettings, KbToneMode,
   MarketRefField, MarketRefSetting, MarketSetting, MarketType, NoticeSetting, PriceSide, RenderSettings, ScreenshotSettings, Settings, ShotSiteSetting,
   SsoSettings, StructurePurpose, Visibility,
 } from '../core/types'
@@ -872,6 +872,7 @@ function normalizeKb(raw: Raw, issues: IssueList): KbSettings {
     scope: pick<KbScope>(issues, s, '在哪里可用', o.scope, ['all', 'allowed', 'off'], 'all', { field: 'scope' }),
     recent: bool(o.recent, true),
     auto: bool(o.auto, true),
+    tone: pick<KbToneMode>(issues, s, '毒舌程度', o.tone, ['snarky', 'gentle', 'mixed'], 'mixed', { field: 'tone' }),
     hidden: [...hidden],
   }
 }

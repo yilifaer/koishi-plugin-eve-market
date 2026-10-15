@@ -35,7 +35,7 @@ export const BUILTIN_SITES: readonly BuiltinSite[] = [
     name: 'BR 工具战报',
     host: BR_HOST,
     badLinkHint: '只支持战报页',
-    profile: { ...VIEWPORT, waitUntil: 'networkidle2', settleMs: BR_SETTLE_MS },
+    profile: { ...VIEWPORT, idleMs: 6000, settleMs: BR_SETTLE_MS },
   },
   {
     id: 'warbeacon',
@@ -43,7 +43,8 @@ export const BUILTIN_SITES: readonly BuiltinSite[] = [
     name: 'Warbeacon 战报',
     host: 'warbeacon.net',
     badLinkHint: '只支持关联战报和单场战报页',
-    profile: { ...VIEWPORT, waitUntil: 'networkidle2', settleMs: 3000 },
+    // 右上的拖放提示框是 naive-ui 的气泡，挂在 body 下的 .v-binder-follower-container 里，截图前整个藏起来
+    profile: { ...VIEWPORT, idleMs: 6000, settleMs: 8000, growViewport: true, hideSelectors: ['.v-binder-follower-container'] },
     path: (path) => {
       const r = WARBEACON_RELATED.exec(path)
       if (r) return `/br/related/${r[1]}/${r[2]}/${r[3] ? `${r[3]}/` : ''}`
@@ -57,7 +58,7 @@ export const BUILTIN_SITES: readonly BuiltinSite[] = [
     name: 'Janice 估价结果',
     host: JANICE_HOST,
     badLinkHint: '只支持估价结果页',
-    profile: { ...VIEWPORT, waitUntil: 'networkidle2', settleMs: 2000 },
+    profile: { ...VIEWPORT, idleMs: 4000, settleMs: 5000 },
     path: (path) => {
       const m = JANICE.exec(path)
       return m ? `/a/${m[1]}${m[2] ? `/${m[2]}` : ''}` : null
@@ -69,7 +70,8 @@ export const BUILTIN_SITES: readonly BuiltinSite[] = [
     name: 'DOTLAN 星图',
     host: 'evemaps.dotlan.net',
     badLinkHint: '只支持星域、星系、联盟、军团页和星图',
-    profile: { ...VIEWPORT, waitUntil: 'load', settleMs: 2000 },
+    // cookie 同意框盖住星图还把页面压暗：点「I decline」
+    profile: { ...VIEWPORT, idleMs: 5000, settleMs: 5000, dismissTexts: ['I decline'] },
     path: (path) => {
       const m = DOTLAN.exec(path)
       if (!m) return null
@@ -81,7 +83,7 @@ export const BUILTIN_SITES: readonly BuiltinSite[] = [
 ]
 
 /** 自定义网站的页面参数 */
-export const CUSTOM_PROFILE: Omit<ShotProfile, 'maxImages'> = { ...VIEWPORT, waitUntil: 'networkidle2', settleMs: 2000 }
+export const CUSTOM_PROFILE: Omit<ShotProfile, 'maxImages'> = { ...VIEWPORT, idleMs: 5000, settleMs: 5000 }
 
 /** 最长的规范化地址 */
 export const MAX_URL_LENGTH = 500

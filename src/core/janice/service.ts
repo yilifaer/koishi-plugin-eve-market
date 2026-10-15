@@ -1,6 +1,6 @@
 // JaniceService：估价编号 → JaniceView。先看内存缓存（估价的价格创建时就定了，内容不会变，放 6 小时），
-// 「没有这份估价」记 10 分钟，Janice 连不上记 30 秒；同一编号并发合并；价格乘上这份估价自己的比例
-// （Janice 的接口返回 100% 的数字，比例只存着，网页显示时才乘）；物品中文名按 typeId 查词库。
+// 「没有这份估价」记 10 分钟，Janice 连不上记 30 秒；同一编号并发合并；价格直接用接口返回的数
+// （实测接口给的总价和单项价已经是这份估价设定的比例，不再乘；比例只当信息显示）；物品中文名按 typeId 查词库。
 // status() 只给 { configured, lastError }，不含密钥。
 
 import {
@@ -42,16 +42,15 @@ function pick<T extends string>(allowed: readonly T[], value: string | null): T 
   return allowed.find((a) => a === lower) ?? null
 }
 
-/** 乘比例后向下取整到整 ISK；乘出来差一点点就是整数的（0.93 × 1000 = 930.0000000000001 一类）按整数算 */
-function scaled(value: number, percentage: number): number {
-  const x = value * percentage
+/** 向下取整到整 ISK；差一点点就是整数的（929.9999999999999 一类）按整数算 */
+function whole(x: number): number {
   const near = Math.round(x)
   // 容差随数值变大：千亿级的 double 间距已经超过 1e-6；相对 1e-15 约几个间距，仍远小于 1 ISK
   return Math.abs(x - near) <= Math.max(1e-6, Math.abs(x) * 1e-15) ? near : Math.floor(x)
 }
 
-function scaledPrices(p: JaniceRawPrices, percentage: number): JanicePrices {
-  return { sell: scaled(p.sell, percentage), buy: scaled(p.buy, percentage), split: scaled(p.split, percentage) }
+function wholePrices(p: JaniceRawPrices): JanicePrices {
+  return { sell: whole(p.sell), buy: whole(p.buy), split: whole(p.split) }
 }
 
 function failure(code: FailureCode, message: string): CoreFailure {
@@ -134,13 +133,13 @@ class Service implements JaniceService {
       designation: pick(DESIGNATIONS, a.designation),
       percentage,
       percentageGuessed: !valid,
-      totals: scaledPrices(a.totals, percentage),
+      totals: wholePrices(a.totals),
       items: a.items.map((i) => ({
         typeId: i.typeId,
         en: i.en,
         zh: this.deps.items.byId(i.typeId)?.zh || null,
         amount: i.amount,
-        prices: scaledPrices(i.totals, percentage),
+        prices: wholePrices(i.totals),
       })),
       itemTypes: a.items.length,
       units: a.items.reduce((n, i) => n + i.amount, 0),

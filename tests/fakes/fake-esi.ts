@@ -144,6 +144,8 @@ export interface RawCharacter {
   alliance_id?: number
   birthday: string
   security_status?: number
+  corporation_title?: string
+  /** 旧兼容日期的字段名 */
   title?: string
   description?: string
   gender?: string

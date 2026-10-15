@@ -2,7 +2,8 @@
 // 只打开 ShotTarget.url（识别规则从各部分重新拼出来的 https 地址），页面参数（视口、等待方式、稳定时间、张数）来自网站的 profile。
 // 排队：所有网站共用一个队列和 Renderer 的外部页面名额（PageKind 'br'）；按「从收到消息算起」估算完成时间
 // （已过去的时间 +（前面的任务数 + 1）× 60 秒），超过 240 秒直接回答繁忙。同一地址 10 分钟内用缓存；正在截的同一地址共用一次结果。
-// 截图：视口 → goto → 状态码 → 隐藏元素 → 等元素 → 等高度稳定 → 按页面高度用 clip 分段截 JPEG，
+// 截图：视口 → goto（只等 domcontentloaded，先拿到状态码）→ 隐藏元素 → 等网络安静（软等待，最多 idleMs，一直有长连接也照样往下）
+// → 等元素 → 点掉同意框 → 等高度稳定 → 按页面高度用 clip 分段截 JPEG，
 // 每段不超过 4000 像素，最多 maxImages 段，再长的部分截掉并标出。
 // 安全：截图前装网络守卫（net-guard.ts），主框架跳出名单的跳转和打内网的请求都拦下；页面像验证页（Cloudflare 一类）就放弃。
 // 页面的事都交给 Renderer.withPage：单次渲染最多 60 秒（拿到名额才开始算）、无论成败都关闭页面。不 import puppeteer。
@@ -122,9 +123,17 @@ export interface SiteScreenshotterOptions {
   cacheMax?: number
 }
 
-/** 页面稳定：每隔这么久读一次高度，连续 STABLE_READS 次不变（且已加载完）就开始截图 */
+/** 页面稳定：每隔这么久读一次高度、文字量、节点数，连续不变的时间够长（且已加载完）就开始截图 */
 const SETTLE_POLL_MS = 250
-const STABLE_READS = 2
+/** 高度、文字量、节点数连续这么久不变才算稳定 */
+const STABLE_MS = 1500
+/** 高度不超过视口时（可能只是 documentElement 被视口撑到的下限，内容还没出来）要稳定更久 */
+const SHORT_STABLE_MS = 3500
+/** 点同意框按钮最多等多久（框常常在脚本跑完以后才出来） */
+const DISMISS_WAIT_MS = 1500
+/** 网络安静的判定：同时不超过 2 个请求，持续 500 毫秒 */
+const IDLE_TIME_MS = 500
+const IDLE_CONCURRENCY = 2
 /** 状态码是这几个时先看看是不是验证页 */
 const CHALLENGE_STATUS = new Set([403, 429, 503])
 
@@ -135,8 +144,20 @@ const PROBE = `(() => {
   const title = document.title || ''
   const challenge = /^(?:just a moment|attention required|checking your browser|verify you are human|ddos-guard|请稍候)/i.test(title) ||
     !!document.querySelector('#challenge-form, #cf-challenge-running, .cf-browser-verification, iframe[src*="challenges.cloudflare.com"], #px-captcha')
-  return [Math.max(d ? d.scrollHeight : 0, b ? b.scrollHeight : 0), document.readyState === 'complete', challenge, title.slice(0, 80)]
+  return [Math.max(d ? d.scrollHeight : 0, b ? b.scrollHeight : 0), document.readyState === 'complete', challenge, title.slice(0, 80), b ? (b.innerText || '').length : 0, document.getElementsByTagName('*').length]
 })()`
+
+/** 内部滚动容器（overflow auto/scroll）里被藏起来的高度：内容比框高多少（取最大的一个） */
+const HIDDEN_OVERFLOW = `(() => {
+  let max = 0
+  for (const e of document.querySelectorAll('body *')) {
+    const oy = getComputedStyle(e).overflowY
+    if ((oy === 'auto' || oy === 'scroll') && e.clientHeight > 0) max = Math.max(max, e.scrollHeight - e.clientHeight)
+  }
+  return max
+})()`
+/** 撑高视口的最多轮数（页面按 100dvh 排版，视口高了容器才跟着高） */
+const GROW_ROUNDS = 3
 
 /** 把截到的高度分成几段：每段不超过 segment，尽量一样高（不留几像素的细条） */
 export function splitHeight(height: number, segment: number): Array<{ y: number; height: number }> {
@@ -168,6 +189,7 @@ interface Probe {
   complete: boolean
   challenge: boolean
   title: string
+  sig: string
 }
 
 export class SiteScreenshotter {
@@ -311,7 +333,8 @@ export class SiteScreenshotter {
     const timeout = Math.max(1, this.renderTimeoutMs - (this.now() - started))
     let response: Awaited<ReturnType<RenderPage['goto']>>
     try {
-      response = await page.goto(url, { waitUntil: profile.waitUntil, timeout })
+      // 只等 domcontentloaded：单页应用常有长连接，networkidle 永远等不到，goto 会拖到超时而且拿不到状态码
+      response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout })
     } catch (error) {
       // 重定向被守卫拦下时 goto 会报错：这不是网络故障
       const blocked = redirected()
@@ -328,9 +351,25 @@ export class SiteScreenshotter {
     }
 
     if (profile.hideSelectors?.length) await page.evaluate(this.hideScript(profile.hideSelectors))
+    await this.waitIdle(page, profile.idleMs)
     if (profile.readySelector) await this.waitReady(page, profile.readySelector, profile.readyTimeoutMs ?? 0, signal)
 
-    const last = await this.settle(page, signal, this.settleMs ?? profile.settleMs)
+    if (profile.dismissTexts?.length) await this.dismiss(page, profile.dismissTexts, signal)
+
+    // 先等页面稳定（内部滚动容器里的内容也要等出来）
+    let last = await this.settle(page, signal, this.settleMs ?? profile.settleMs, profile.viewportHeight)
+    // 「100dvh + 内部滚动」的应用壳：内部容器藏着的高度加到视口上，重排后再读（内联 height:...!important 改不动，只能撑视口）
+    if (profile.growViewport && !last.challenge) {
+      const cap = this.maxHeight ?? profile.maxImages * this.segmentHeight
+      let vh = profile.viewportHeight
+      for (let i = 0; i < GROW_ROUNDS && vh < cap; i++) {
+        const hidden = Number(await page.evaluate(HIDDEN_OVERFLOW))
+        if (!(hidden > 1)) break
+        vh = Math.min(cap, vh + Math.ceil(hidden))
+        await page.setViewport({ width, height: vh, deviceScaleFactor: 1 })
+        last = await this.settle(page, signal, 2000, 0)
+      }
+    }
     if (last.challenge) return { ok: false, reason: 'blocked', status, diag: diagOf({ status, title: last.title, challenge: true }) }
     const blocked = redirected()
     if (blocked) return blocked
@@ -362,6 +401,31 @@ export class SiteScreenshotter {
     return `(() => { const s = document.createElement('style'); s.textContent = ${JSON.stringify(css)}; (document.head || document.documentElement).appendChild(s); return true })()`
   }
 
+  /** 软等待：网络安静就继续，等满 idleMs 还没安静（长连接、广告）也照样继续；页面出错留给后面的步骤报 */
+  private async waitIdle(page: RenderPage, idleMs: number) {
+    if (!(idleMs > 0) || !page.waitForNetworkIdle) return
+    // 总时限由 Renderer 管（到点会中止整个任务），这里只管自己的上限
+    await page.waitForNetworkIdle({ idleTime: IDLE_TIME_MS, concurrency: IDLE_CONCURRENCY, timeout: idleMs }).catch(() => undefined)
+  }
+
+  /** 找文字完全等于 texts 之一的按钮点一下（不区分大小写），最多等 DISMISS_WAIT_MS；没有这个框也照样截 */
+  private async dismiss(page: RenderPage, texts: readonly string[], signal: AbortSignal) {
+    const script = `((texts) => {
+      const nodes = document.querySelectorAll('button, a, input[type=button], input[type=submit], [role=button]')
+      for (const el of nodes) {
+        const text = ((el.value || el.textContent) || '').trim().toLowerCase()
+        const box = el.getBoundingClientRect()
+        if (texts.includes(text) && box.width > 0 && box.height > 0) { el.click(); return true }
+      }
+      return false
+    })(${JSON.stringify(texts.map((t) => t.toLowerCase()))})`
+    const rounds = Math.ceil(DISMISS_WAIT_MS / this.settlePollMs)
+    for (let i = 0; i <= rounds; i++) {
+      if ((await page.evaluate(script)) === true) return
+      if (i < rounds) await sleep(this.scheduler, this.settlePollMs, signal)
+    }
+  }
+
   /** 每隔一会儿查一次元素有没有出现，最多等 timeoutMs；到时候没出现也照样截 */
   private async waitReady(page: RenderPage, selector: string, timeoutMs: number, signal: AbortSignal) {
     const script = `!!document.querySelector(${JSON.stringify(selector)})`
@@ -373,31 +437,37 @@ export class SiteScreenshotter {
   }
 
   /**
-   * 最多等 settleMs：高度连续几次不变、并且已经加载完就算稳定，返回最后读到的结果。
+   * 最多等 settleMs：高度、文字量、节点数连续一段时间不变（STABLE_MS，高度不超过视口要 SHORT_STABLE_MS）、并且已经加载完就算稳定，返回最后读到的结果。
    * 没等到稳定也照样截（内容通常在 networkidle 时已经出来了）；读到验证页立刻停。
    */
-  private async settle(page: RenderPage, signal: AbortSignal, settleMs: number): Promise<Probe> {
+  private async settle(page: RenderPage, signal: AbortSignal, settleMs: number, viewportHeight: number): Promise<Probe> {
     let last = await this.probe(page)
-    let stable = 0
-    const rounds = Math.ceil(settleMs / this.settlePollMs)
-    for (let i = 0; i < rounds && stable < STABLE_READS && !last.challenge; i++) {
+    let sig = last.sig
+    let sameFor = 0
+    let waited = 0
+    while (waited < settleMs && !last.challenge) {
       await sleep(this.scheduler, this.settlePollMs, signal)
+      waited += this.settlePollMs
       const next = await this.probe(page)
-      stable = next.height === last.height && next.complete && next.height > 0 ? stable + 1 : 0
+      sameFor = next.sig === sig && next.complete && next.height > 0 ? sameFor + this.settlePollMs : 0
+      sig = next.sig
       last = next
+      const need = last.height <= viewportHeight ? SHORT_STABLE_MS : STABLE_MS
+      if (sameFor >= need) break
     }
     return last
   }
 
   private async probe(page: RenderPage): Promise<Probe> {
     const value = await page.evaluate(PROBE)
-    if (!Array.isArray(value)) return { height: 0, complete: false, challenge: false, title: '' }
+    if (!Array.isArray(value)) return { height: 0, complete: false, challenge: false, title: '', sig: '' }
     const height = Number(value[0])
     return {
       height: Number.isFinite(height) ? Math.ceil(height) : 0,
       complete: value[1] === true,
       challenge: value[2] === true,
       title: typeof value[3] === 'string' ? value[3] : '',
+      sig: value.slice(0, 1).concat(value.slice(4)).join('/'),
     }
   }
 }

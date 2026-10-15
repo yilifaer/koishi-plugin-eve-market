@@ -275,5 +275,41 @@
   "allianceID": 99000501,
   "secStatus": 1.5,
   "description": "<p>Visit http://evil.example/ads &amp; buy cheap ISK at spam.example</p>"
+ },
+ "activity": {
+  "max": 20,
+  "days": [
+   "Sun",
+   "Mon",
+   "Tue",
+   "Wed",
+   "Thu",
+   "Fri",
+   "Sat"
+  ],
+  "1": {
+   "3": 2,
+   "18": 12,
+   "19": 20,
+   "20": 15
+  },
+  "2": {
+   "19": 9,
+   "20": 11
+  },
+  "5": {
+   "19": 4,
+   "21": 6
+  }
+ },
+ "recentLabels": {
+  "tz:use": {
+   "shipsDestroyed": 9,
+   "shipsLost": 1
+  },
+  "solo": {
+   "shipsDestroyed": 3,
+   "shipsLost": 0
+  }
  }
 }

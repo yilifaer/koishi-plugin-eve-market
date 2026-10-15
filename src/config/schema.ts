@@ -1,7 +1,7 @@
 import { Schema } from 'koishi'
 import { FORMULA_DEFAULTS } from '../core/industry'
 import type {
-  Clickable, JaniceWho, KbScope, Lang, ListPriceDisplayMode, MarketType, NumberStyle, OutputMode, PriceDisplayMode, PriceSide, Visibility,
+  Clickable, JaniceWho, KbScope, KbToneMode, Lang, ListPriceDisplayMode, MarketType, NumberStyle, OutputMode, PriceDisplayMode, PriceSide, Visibility,
 } from '../core/types'
 import { INVALID_ROW_KEY } from './normalize'
 import {
@@ -139,7 +139,7 @@ export interface Config {
     custom: ShotCustomRow[]
   }
   janice: { apiKey: string; who: JaniceWho }
-  kb: { scope: KbScope; recent: boolean; auto: boolean; hidden: KbHiddenRow[] }
+  kb: { scope: KbScope; recent: boolean; auto: boolean; tone: KbToneMode; hidden: KbHiddenRow[] }
   advanced: { manifestUrl: string; glossaryUrl: string; esiContact: string }
 }
 
@@ -471,6 +471,11 @@ export const Config: Schema<Config> = Schema.intersect([
         .description('人物卡上显示近期大击杀、大损失和活跃时段（每张卡多查 2 次 zKill，慢 2–3 秒）。关掉出图更快。'),
       auto: bool(true)
         .description('@机器人 的消息里带 zKill 人物链接时，自动回复人物卡。'),
+      tone: choice<KbToneMode>([
+        ['mixed', '混合'],
+        ['snarky', '毒舌'],
+        ['gentle', '温和'],
+      ]).default('mixed').loose().description('**毒舌程度**：人物卡上的标题、导语、锐评、读者来信、运势和广告用哪种语气。毒舌 = 只用毒舌的句子 / 温和 = 只用温和的句子 / 混合 = 两种句子混在一起选。同一个人同一天看到的内容固定，隔天换。'),
       hidden: table(Schema.object({
         characterId: str().description('人物 ID'),
         note: str().description('备注'),

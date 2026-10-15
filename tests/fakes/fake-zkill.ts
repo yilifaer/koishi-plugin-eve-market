@@ -72,6 +72,11 @@ export class FakeZkill {
   /** 人物的击杀、损失列表（完整击杀 + zkb；没有的回 `[]`；测试也可以放读不懂的内容） */
   charKills = new Map<number, RawZkillKill[] | unknown>()
   charLosses = new Map<number, RawZkillKill[] | unknown>()
+  /** 最近 7 天的列表（pastSeconds/604800）；没放的回 `[]` */
+  weekKills = new Map<number, RawZkillKill[] | unknown>()
+  weekLosses = new Map<number, RawZkillKill[] | unknown>()
+  /** 路径匹配这个的请求回一个超大的响应（7 MB，比 KB 列表的 6 MB 上限大） */
+  oversize: RegExp | null = null
   /** 路径匹配这个的请求一直不回应（连接保持到 stop） */
   hang: RegExp | null = null
   /** 下 N 个请求依次出的故障（用完恢复正常） */
@@ -102,6 +107,7 @@ export class FakeZkill {
     const fault = this.faults.shift()
     if (fault) return this.fault(fault, res)
     if (this.hang?.test(path)) return void this.held.push(res)
+    if (this.oversize?.test(path)) return this.fault({ kind: 'huge', bytes: 7 * 1024 * 1024 }, res)
     const m = /^\/api\/killID\/(\d+)\/$/.exec(path)
     if (m) return this.json(res, this.kills.has(Number(m[1])) ? [this.kills.get(Number(m[1]))] : [])
     const stats = /^\/api\/stats\/characterID\/(\d+)\/(kills\/)?$/.exec(path)
@@ -113,8 +119,11 @@ export class FakeZkill {
       }
       return this.json(res, this.stats.get(Number(stats[1])) ?? {})
     }
-    const list = /^\/api\/(kills|losses)\/characterID\/(\d+)\/$/.exec(path)
-    if (list) return this.json(res, (list[1] === 'kills' ? this.charKills : this.charLosses).get(Number(list[2])) ?? [])
+    const list = /^\/api\/(kills|losses)\/characterID\/(\d+)\/(pastSeconds\/604800\/)?$/.exec(path)
+    if (list) {
+      const weekly = list[3] ? (list[1] === 'kills' ? this.weekKills : this.weekLosses) : null
+      return this.json(res, (weekly ?? (list[1] === 'kills' ? this.charKills : this.charLosses)).get(Number(list[2])) ?? [])
+    }
     if (this.routes.has(path)) return this.json(res, this.routes.get(path))
     res.statusCode = 404
     res.end('Not found')

@@ -48,11 +48,33 @@ function secColor(security: number): string {
   return security >= 0.45 ? '#1f6b3a' : security > 0 ? '#8a6a00' : '#b3261e'
 }
 
-/** 标题字号：一行放得下的最大值，夹在上下限之间；再放不下用省略号 */
+/** 标题最多几行，再长才用省略号 */
+const HEADLINE_MAX_LINES = 2
+
+/** 估算标题在 HEADLINE_WIDTH 里排几行：中文逐字、英文按词（太长的词按宽度拆） */
+function headlineLines(text: string, size: number): number {
+  let lines = 1
+  let used = 0
+  for (const token of text.match(/[\u2000-\u{10ffff}]|[^\s\u2000-\u{10ffff}]+\s*|\s+/gu) ?? []) {
+    const width = textWidth(token.trimEnd(), size, true)
+    if (used > 0 && used + width > HEADLINE_WIDTH) {
+      lines++
+      used = 0
+    }
+    if (width > HEADLINE_WIDTH) {
+      lines += Math.floor(width / HEADLINE_WIDTH)
+      used = width % HEADLINE_WIDTH
+    } else used += textWidth(token, size, true)
+  }
+  return lines
+}
+
+/** 标题字号：两行放得下的最大值，夹在上下限之间；再放不下用省略号（CSS 的 line-clamp） */
 export function headlineFontSize(text: string): number {
-  const full = textWidth(text, KB_HEADLINE_FONT_MAX, true)
-  if (full <= HEADLINE_WIDTH) return KB_HEADLINE_FONT_MAX
-  return Math.max(KB_HEADLINE_FONT_MIN, Math.floor((HEADLINE_WIDTH / full) * KB_HEADLINE_FONT_MAX))
+  for (let size = KB_HEADLINE_FONT_MAX; size > KB_HEADLINE_FONT_MIN; size--) {
+    if (headlineLines(text, size) <= HEADLINE_MAX_LINES) return size
+  }
+  return KB_HEADLINE_FONT_MIN
 }
 
 function dateLine(now: number): string {
@@ -78,10 +100,11 @@ body{font-family:${FONT_SERIF};color:#1B1A17;padding:24px;background:#EFE6D2 rep
 .pic{width:240px;height:280px;border:3px solid #1B1A17;filter:grayscale(1) sepia(.35) contrast(1.1);overflow:hidden}
 .cap{font-size:17px;font-style:italic;margin-top:6px;line-height:1.35;overflow-wrap:anywhere}
 .txt{flex:1;min-width:0}
-h1{line-height:1.1;font-weight:900;letter-spacing:-1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+h1{line-height:1.1;font-weight:900;letter-spacing:-1px;overflow:hidden;overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:${HEADLINE_MAX_LINES}}
 .lede{font-size:20px;line-height:1.5;text-align:justify;margin-top:10px;overflow-wrap:anywhere}
 .org{margin-top:10px;border-top:1px solid #1B1A17;padding-top:8px;display:flex;flex-direction:column;gap:6px;font-size:19px}
 .org div{display:flex;align-items:center;gap:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.org .gt{font-size:17px;color:#5a564b;letter-spacing:.5px}
 .org i{width:28px;height:28px;display:block;flex:none;filter:grayscale(.6)}
 .dos{margin-top:8px;font-size:17px;line-height:1.4;color:#3d3a31}
 .dos div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -109,6 +132,25 @@ li em{font-style:normal;overflow:hidden;text-overflow:ellipsis}
 .hours{display:flex;gap:2px;margin-top:4px}.hours i{flex:1;height:34px;display:block;border:1px solid rgba(27,26,23,.25)}
 .ax{display:flex;justify-content:space-between;font-size:16px;margin-top:2px}
 .best{font-size:19px;margin-top:6px;line-height:1.35}
+.titles{margin-top:12px;display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;font-size:17px}
+.titles>span{letter-spacing:1px}
+.titles b{display:inline-block;max-width:100%;border:2px solid #B3261E;color:#B3261E;padding:0 8px;line-height:1.5;font-size:17px;letter-spacing:1px;transform:rotate(-1.5deg);overflow-wrap:anywhere}
+.titles b:nth-child(even){transform:rotate(1deg)}
+.ed{margin:16px 4px 0;border:1px solid #1B1A17;outline:1px solid #1B1A17;outline-offset:3px;padding:8px 14px 10px}
+.ed h3,.box h3{font-size:20px;letter-spacing:6px;display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid #1B1A17;padding-bottom:2px;margin-bottom:6px}
+.ed h3 small,.box h3 small{font-size:14px;letter-spacing:0;font-weight:normal;color:#5a564b}
+.ed p{font-size:18px;line-height:1.45;padding:3px 0 3px 22px;position:relative;overflow-wrap:anywhere}
+.ed p:before{content:"—";position:absolute;left:0;color:#B3261E;font-weight:bold}
+.fun{display:flex;gap:16px;margin-top:16px;align-items:stretch}.fun>.box{flex:1;min-width:0}
+.box{border:1px solid #1B1A17;padding:8px 12px 10px;background:rgba(255,255,255,.18)}
+.letter q{display:block;quotes:none;font-style:italic;font-size:18px;line-height:1.5;overflow-wrap:anywhere}
+.letter .sign{text-align:right;font-size:16px;margin-top:6px;overflow-wrap:anywhere}
+.fort div{font-size:18px;line-height:1.4;display:flex;gap:8px;padding:2px 0;overflow-wrap:anywhere}
+.fort div b{flex:none;font-size:18px;border:1px solid currentColor;width:24px;height:24px;line-height:22px;text-align:center}
+.fort .yi{color:#1B1A17}.fort .ji{color:#B3261E}
+.fort em{display:block;margin-top:6px;font-size:16px;color:#3d3a31;border-top:1px dotted #1B1A17;padding-top:5px;overflow-wrap:anywhere}
+.ad{position:relative;margin-top:18px;border:1px dashed #1B1A17;padding:8px 12px 8px 54px;font-size:16px;line-height:1.45;overflow-wrap:anywhere}
+.ad i{position:absolute;left:10px;top:9px;font-style:normal;font-size:12px;border:1px solid #1B1A17;padding:0 4px;letter-spacing:2px;color:#5a564b}
 .foot{margin-top:18px;border-top:1px solid #1B1A17;padding-top:6px;font-size:15px;color:#4a463c;display:flex;justify-content:space-between;gap:10px}
 `.trim()
 
@@ -170,7 +212,7 @@ function placesColumn(p: PilotProfile): string {
 
 function activityColumn(p: PilotProfile): string {
   const a = p.activity
-  const strip = a && a.source === 'killmails' ? hoursStrip(a.hoursBeijing) : null
+  const strip = a && a.source !== 'labels' ? hoursStrip(a.hoursBeijing) : null
   const months = monthsSvg(p.months)
   const text = a?.text ?? ''
   if (!strip && !text && !months) return ''
@@ -186,6 +228,8 @@ function activityColumn(p: PilotProfile): string {
 
 function orgBlock(p: PilotProfile, images: PilotImageSet): string {
   const rows: string[] = []
+  // 游戏里设置的军团头衔，原样写（保留开头的 #），放在军团行上面
+  if (p.title) rows.push(`<div class="gt">${esc(p.title)}</div>`)
   if (p.corporation) rows.push(`<div><i>${image(images.corporation, logoSilhouette('corp'))}</i>${esc(orgLine(p.corporation, '[]'))}</div>`)
   if (p.alliance) rows.push(`<div><i>${image(images.alliance, logoSilhouette('alliance'))}</i>${esc(orgLine(p.alliance, '<>'))}</div>`)
   return rows.length ? `<div class="org">${rows.join('')}</div>` : ''
@@ -194,8 +238,40 @@ function orgBlock(p: PilotProfile, images: PilotImageSet): string {
 function dossier(p: PilotProfile): string {
   const rows: string[] = []
   if (p.birthday !== null) rows.push(`<div>建号：EVE ${utcDate(p.birthday)}（北京 ${beijingDate(p.birthday)}）</div>`)
-  if (p.title) rows.push(`<div>军团头衔：${esc(p.title)}</div>`)
   return rows.length ? `<div class="dos">${rows.join('')}</div>` : ''
+}
+
+/** 称号：横幅下面一行小印章；没有称号不输出 */
+function titlesLine(p: PilotProfile): string {
+  return p.titles.length ? `<div class="titles"><span>本报授予称号：</span>${p.titles.map((t) => `<b>${esc(t)}</b>`).join('')}</div>` : ''
+}
+
+/** 本报锐评：双线框社论，破折号开头 */
+function remarksBox(p: PilotProfile): string {
+  if (!p.remarks.length) return ''
+  return `<div class="ed"><h3><span>本报锐评</span><small>社论</small></h3>${p.remarks.map((r) => `<p>${esc(r)}</p>`).join('')}</div>`
+}
+
+function letterBox(p: PilotProfile): string {
+  const l = p.letter
+  if (!l) return ''
+  return `<div class="box letter"><h3><span>读者来信</span></h3><q>${esc(l.body)}</q><div class="sign">${esc(l.sign)}</div></div>`
+}
+
+function fortuneBox(p: PilotProfile): string {
+  const f = p.fortune
+  if (!f.yi.length && !f.ji.length && !f.comment) return ''
+  const row = (cls: string, label: string, items: string[]) => (items.length ? `<div class="${cls}"><b>${label}</b><span>${items.map(esc).join('　')}</span></div>` : '')
+  return `<div class="box fort"><h3><span>今日运势</span></h3>${row('yi', '宜', f.yi)}${row('ji', '忌', f.ji)}${f.comment ? `<em>${esc(f.comment)}</em>` : ''}</div>`
+}
+
+function funRow(p: PilotProfile): string {
+  const boxes = letterBox(p) + fortuneBox(p)
+  return boxes ? `<div class="fun">${boxes}</div>` : ''
+}
+
+function adBox(p: PilotProfile): string {
+  return p.ad ? `<div class="ad"><i>广告</i>${esc(p.ad)}</div>` : ''
 }
 
 /** 页脚：资料里的来源句在最后一个「 · 」处断开，中间补上截至时间 */
@@ -222,13 +298,17 @@ export function kbCardHtml(view: KbCardView): string {
     `<div class="mast"><div class="en">NEW EDEN NEWS</div><div class="zh">新伊甸日报</div>`
     + `<div class="meta"><span>${dateLine(view.now)}</span><span>欧服 TRANQUILITY 版</span><span>售价 1,000 ISK</span></div></div>`,
     `<div class="banner"><span>号外 · ${esc(p.personaLabel)}</span>${p.mood ? `<small>${esc(p.mood)}</small>` : ''}</div>`,
+    titlesLine(p),
     `<div class="lead"><div class="photo"><div class="pic">${image(images.portrait, portraitSilhouette(), p.name)}</div>`
     + `<div class="cap">图：${esc(p.name)}，${esc(p.birthplace)}</div></div>`
     + `<div class="txt"><h1 style="font-size:${size}px">${esc(p.headline)}</h1><p class="lede">${esc(p.lede)}</p>${orgBlock(p, images)}${dossier(p)}</div></div>`,
     '<div class="sep"></div>',
     statsGrid(p),
     shipsSection(p, images),
+    remarksBox(p),
     two ? `<div class="two">${two}</div>` : '',
+    funRow(p),
+    adBox(p),
     footer(p),
     '</body></html>',
   ]
@@ -255,9 +335,9 @@ export interface KbCardsOptions {
   now?: () => number
 }
 
-/** 缓存键：人物 ID + 资料时间 */
+/** 缓存键：人物 ID + 资料时间 + 文案语气 */
 export function kbCardKey(profile: PilotProfile): string {
-  return `${profile.id}:${profile.updatedAt}`
+  return `${profile.id}:${profile.updatedAt}:${profile.tone}`
 }
 
 export function createKbCards(renderer: Renderer, options: KbCardsOptions = {}): KbCards {

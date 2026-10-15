@@ -184,7 +184,7 @@ describe('BrScreenshotter with fake pages', () => {
     const page = pages[0]
     expect(page.url).toBe(link(1))
     expect(page.viewport).toEqual({ width: BR_VIEWPORT_WIDTH, height: expect.any(Number), deviceScaleFactor: 1 })
-    expect(page.gotoOptions?.waitUntil).toBe('networkidle2')
+    expect(page.gotoOptions?.waitUntil).toBe('domcontentloaded')
     expect(page.gotoOptions?.timeout).toBeLessThanOrEqual(BR_RENDER_TIMEOUT_MS)
     expect(page.shots).toEqual([
       { type: 'jpeg', quality: BR_JPEG_QUALITY, captureBeyondViewport: true, clip: { x: 0, y: 0, width: BR_VIEWPORT_WIDTH, height: 3000 } },
@@ -211,12 +211,15 @@ describe('BrScreenshotter with fake pages', () => {
   })
 
   it('waits for the height to settle before measuring', async () => {
-    const { source, pages } = fakeSource(() => new FakePage({ heights: [900, 900, 4500, 5200, 5200, 5200, 5200] }))
-    const { br } = shooter(source, { settleMs: 100, settlePollMs: 5 })
+    // 先是被视口撑在 900 的空壳（readyState 已 complete），数据到了才长高；睡觉不真睡
+    const heights = [...Array(5).fill(900), 4500, 5200]
+    const { source, pages } = fakeSource(() => new FakePage({ heights }))
+    const instant = { timeout: (fn: () => void) => { const t = setImmediate(fn); return () => clearImmediate(t) } }
+    const { br } = shooter(source, { settleMs: 8000, settlePollMs: 250, scheduler: instant })
     const shot = shotOf(await outcomeOf(br.request(link(1))))
     expect(shot.pageHeight).toBe(5200)
-    // 连续两次不变就开始截，不把时间用完
-    expect(pages[0].calls.filter((c) => c === 'evaluate').length).toBe(6)
+    // 900 平台期不算稳定；5200 稳定 1500 毫秒（6 次读取）就开始截，不把 8 秒用完：5 + 4500 + 5200 + 6
+    expect(pages[0].calls.filter((c) => c === 'evaluate').length).toBe(5 + 1 + 1 + 6)
   })
 
   it('does not open anything for links outside the site', async () => {
@@ -477,6 +480,7 @@ describe.skipIf(!HAS_CHROME)('BrScreenshotter with Chromium and local pages', ()
         requested.set(page, url)
         return typed.goto(url.replace(/^https:\/\/br\.evetools\.org/, origin), options)
       },
+      waitForNetworkIdle: (options) => typed.waitForNetworkIdle!(options),
       evaluate: (expression) => typed.evaluate(expression),
       screenshot: (options) => typed.screenshot(options),
       close: () => typed.close(),
@@ -616,7 +620,7 @@ describe.skipIf(!HAS_CHROME)('BrScreenshotter with Chromium and local pages', ()
 
   it('a page that never answers times out, is closed, and the queue moves on', async () => {
     // 时限调小到 4 秒（正常的页面 1–2 秒就能截完）
-    const br = chromium({ renderTimeoutMs: 4000, logger: new QuietLogger() })
+    const br = chromium({ renderTimeoutMs: 4000, settleMs: 1500, logger: new QuietLogger() })
     const slow = pending(br.request(link(SLOW)))
     const next = pending(br.request(link(SHORT)))
     expect(next.ahead()).toBe(1)
