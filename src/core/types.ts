@@ -350,11 +350,21 @@ export interface SsoSettings {
   adminKey: string
 }
 
+/** 图片配色：走势图、KB 人物卡、网站截图都跟着它 */
+export type ImageTheme = 'dark' | 'light'
+/** 走势图样式：K 线 / 均价折线 */
+export type TrendStyle = 'kline' | 'line'
+/** 涨跌颜色：red = 红涨绿跌，green = 绿涨红跌 */
+export type UpColor = 'red' | 'green'
+
 export interface RenderSettings {
   influenceMapUrl: string
   coalitionMapUrl: string
   /** BR 工具战报实际是否自动截图（旧开关、新开关、BR 启用三者都满足） */
   brAuto: boolean
+  theme: ImageTheme
+  trendStyle: TrendStyle
+  upColor: UpColor
 }
 
 /** 截图名单里的一个网站（只含启用、有效的） */

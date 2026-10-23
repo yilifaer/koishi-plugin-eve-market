@@ -1,7 +1,7 @@
 import { Schema } from 'koishi'
 import { FORMULA_DEFAULTS } from '../core/industry'
 import type {
-  Clickable, JaniceWho, KbScope, KbToneMode, Lang, ListPriceDisplayMode, MarketType, NumberStyle, OutputMode, PriceDisplayMode, PriceSide, Visibility,
+  Clickable, ImageTheme, JaniceWho, KbScope, KbToneMode, Lang, ListPriceDisplayMode, MarketType, NumberStyle, OutputMode, PriceDisplayMode, PriceSide, TrendStyle, UpColor, Visibility,
 } from '../core/types'
 import { SHOT_WAIT_DEFAULT_SEC, SHOT_WAIT_WARBEACON_SEC } from '../constants'
 import { INVALID_ROW_KEY } from './normalize'
@@ -130,7 +130,7 @@ export interface Config {
   notices: { list: NoticeRow[] }
   industry: IndustryConfig
   sso: { clientId: string; clientSecret: string; callbackUrl: string; adminKey: string }
-  render: { influenceMapUrl: string; coalitionMapUrl: string; brAuto: boolean }
+  render: { influenceMapUrl: string; coalitionMapUrl: string; brAuto: boolean; theme: ImageTheme; trendStyle: TrendStyle; upColor: UpColor }
   screenshot: {
     killAuto: boolean
     br: ShotSiteConfig
@@ -424,6 +424,18 @@ export const Config: Schema<Config> = Schema.intersect([
         .description('「联盟势力图」的图片地址。'),
       brAuto: bool(true)
         .description('旧设置：关掉时 BR 工具战报一律不自动截图。新的开关在「截图」分组里，这个以后会删掉。'),
+      theme: choice<ImageTheme>([
+        ['dark', '深色'],
+        ['light', '浅色'],
+      ]).default('dark').loose().description('**图片配色**：走势图、KB 人物卡用深色还是浅色；网站截图时也请网站用对应的配色（网站本身没有深色模式的保持原样）。'),
+      trendStyle: choice<TrendStyle>([
+        ['kline', 'K 线'],
+        ['line', '折线'],
+      ]).default('kline').loose().description('**走势图样式**：K 线 = 每天一根 K 线，加 5、20、60 日均线和成交量柱 / 折线 = 均价折线加最高最低价阴影带（0.0.9 以前的样子）。'),
+      upColor: choice<UpColor>([
+        ['red', '红涨绿跌'],
+        ['green', '绿涨红跌'],
+      ]).default('red').loose().description('**涨跌颜色**：走势图上涨、下跌用什么颜色。'),
     }).default({} as Config['render']).loose(),
   }).description('图片与截图'),
 

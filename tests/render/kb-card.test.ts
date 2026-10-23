@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { KB_CARD_JPEG_QUALITY, KB_CARD_MIN_HEIGHT, KB_CARD_SCALE, KB_CARD_WIDTH } from '../../src/constants'
+import { KB_PALETTES } from '../../src/render/kb-theme'
 import { createKbCards, createRenderer, headlineFontSize, kbCardHtml, kbCardKey } from '../../src/render'
 import type { KbCardView } from '../../src/render'
 import { FakeBrowser, gate } from '../fakes/fake-browser'
@@ -12,8 +13,49 @@ const view = (profile = soloHunter(), imgs = images()): KbCardView => ({ profile
 
 describe('kbCardHtml snapshots', () => {
   it('solo hunter', () => expect(kbCardHtml(view())).toMatchSnapshot())
+  it('solo hunter, day edition', () => expect(kbCardHtml({ ...view(), theme: 'light' })).toMatchSnapshot())
   it('rookie', () => expect(kbCardHtml(view(rookie()))).toMatchSnapshot())
   it('ghost with no records', () => expect(kbCardHtml(view(ghost(), emptyImages()))).toMatchSnapshot())
+})
+
+describe('kbCardHtml theme', () => {
+  it('defaults to the night edition', () => {
+    expect(kbCardHtml(view())).toBe(kbCardHtml({ ...view(), theme: 'dark' }))
+    expect(kbCardHtml(view())).toContain('欧服 TRANQUILITY 夜间版')
+  })
+
+  it('light keeps the plain dateline and the beige paper', () => {
+    const html = kbCardHtml({ ...view(), theme: 'light' })
+    expect(html).toContain('欧服 TRANQUILITY 版')
+    expect(html).not.toContain('夜间版')
+    expect(html).toContain('--paper:#EFE6D2')
+  })
+
+  it('themes share one layout and differ only in colours', () => {
+    const strip = (h: string) => h.replace(/<style>[\s\S]*?<\/style>/, '').replace(/rgba\([\d,.]+\)|#[0-9A-Fa-f]{6}|夜间版|版/g, '_')
+    expect(strip(kbCardHtml({ ...view(), theme: 'dark' }))).toBe(strip(kbCardHtml({ ...view(), theme: 'light' })))
+    expect(kbCardHtml({ ...view(), theme: 'dark' })).not.toBe(kbCardHtml({ ...view(), theme: 'light' }))
+  })
+
+  it('chart colours follow the theme', () => {
+    expect(kbCardHtml({ ...view(), theme: 'dark' })).toContain('fill="#E6E0D2"')
+    expect(kbCardHtml({ ...view(), theme: 'light' })).toContain('fill="#1B1A17"')
+  })
+
+  it('body text has comfortable contrast on both papers (WCAG AA, 4.5)', () => {
+    const lum = (hex: string) => {
+      const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
+      return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+    }
+    const ratio = (a: string, b: string) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05)
+    for (const p of Object.values(KB_PALETTES)) {
+      for (const fg of [p.ink, p.mute, p.sub, p.foot, p.red, p.secHigh, p.secNull]) expect(ratio(fg, p.paper)).toBeGreaterThanOrEqual(4.5)
+      expect(ratio('#FFFFFF', p.banner)).toBeGreaterThanOrEqual(4.5)
+    }
+    // 低安黄字沿用日间版原色（粗体、约 4.1），夜间版必须过线
+    expect(ratio(KB_PALETTES.dark.secLow, KB_PALETTES.dark.paper)).toBeGreaterThanOrEqual(4.5)
+    expect(ratio(KB_PALETTES.light.secLow, KB_PALETTES.light.paper)).toBeGreaterThanOrEqual(4)
+  })
 })
 
 describe('kbCardHtml content', () => {
@@ -219,6 +261,16 @@ describe('createKbCards', () => {
     advance(61 * 60_000)
     expect(cards.cached(view())).toBeUndefined()
     cards.clear()
+  })
+
+  it('cache key includes the theme, and default equals dark', async () => {
+    const { browser, cards } = setup()
+    expect(kbCardKey({ ...view(), theme: 'light' })).not.toBe(kbCardKey({ ...view(), theme: 'dark' }))
+    expect(kbCardKey(view())).toBe(kbCardKey({ ...view(), theme: 'dark' }))
+    await cards.get({ ...view(), theme: 'dark' })
+    expect(cards.cached({ ...view(), theme: 'light' })).toBeUndefined()
+    await cards.get({ ...view(), theme: 'light' })
+    expect(browser.pages).toHaveLength(2)
   })
 
   it('cache key includes the UTC date: a new UTC day never reuses yesterday card', async () => {

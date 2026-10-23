@@ -68,7 +68,7 @@ export async function shootLink(inv: Invocation, link: SiteLink, run: ShotRun = 
     await inv.reply.text(badLinkText(site))
     return
   }
-  const target: ShotTarget = { url: link.url, siteId: site.id, siteName: site.name, profile: site.profile, allowHosts: sites.hosts }
+  const target: ShotTarget = { url: link.url, siteId: site.id, siteName: site.name, profile: site.profile, allowHosts: sites.hosts, theme: inv.commands.settings.render.theme }
   // 排队按「从收到消息算起」估算：用 QQ 事件的时间（和回复时限用的是同一个）
   const stamp = inv.session.timestamp
   const receivedAt = typeof stamp === 'number' && stamp > 0 ? stamp : undefined

@@ -1,7 +1,7 @@
 // 走势图页面：自包含 HTML、截图参数、PNG 缓存（同一张图只出一次，用到就算最近用过）、缓存键。
 
 import { describe, expect, it } from 'vitest'
-import { CHART_COLORS_LIGHT, CHART_RENDER_TIMEOUT_MS } from '../../src/constants'
+import { CHART_COLORS, CHART_RENDER_TIMEOUT_MS } from '../../src/constants'
 import { RenderError, chartKey, chartPage, createChartImages, renderChart } from '../../src/render'
 import type { HtmlShotOptions, RenderedImage, Renderer } from '../../src/render'
 
@@ -30,7 +30,7 @@ describe('chartPage', () => {
     expect(html.startsWith('<!doctype html>')).toBe(true)
     expect(html).toContain('<meta charset="utf-8">')
     expect(html).toContain(`<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:">`)
-    expect(html).toContain(`background:${CHART_COLORS_LIGHT.background};width:800px;height:450px;overflow:hidden`)
+    expect(html).toContain(`background:${CHART_COLORS.background};width:800px;height:450px;overflow:hidden`)
     expect(html).toContain(`<body>${SVG}</body>`)
     // 除了 SVG 的命名空间，没有任何网址、外链、脚本
     expect(html.replace('http://www.w3.org/2000/svg', '')).not.toMatch(/https?:|<link|<script|src=|href=|@import/)
@@ -106,6 +106,25 @@ describe('createChartImages', () => {
     await render('d')
     expect(['a', 'c', 'd'].map((k) => charts.cached(svgOf(k))?.data.toString())).toEqual(['a', undefined, 'd'])
     expect(calls).toHaveLength(4)
+  })
+})
+
+describe('chart variant', () => {
+  it('the same SVG with another variant (style / theme / up colour) is another cache entry', async () => {
+    const { calls, renderer } = fakeRenderer()
+    const charts = createChartImages(renderer)
+    const first = charts.get(SVG, { variant: 'kline/dark/red' })
+    calls[0].resolve(image('red'))
+    await first
+    expect(charts.cached(SVG, 'kline/dark/red')).toBeDefined()
+    expect(charts.cached(SVG, 'kline/dark/green')).toBeUndefined()
+    expect(charts.cached(SVG)).toBeUndefined()
+    const second = charts.get(SVG, { variant: 'kline/dark/green' })
+    calls[1].resolve(image('green'))
+    expect((await second).data.toString()).toBe('green')
+    expect(calls).toHaveLength(2)
+    expect(chartKey(SVG, 'a')).not.toBe(chartKey(SVG, 'b'))
+    expect(chartKey(SVG)).toBe(chartKey(SVG, ''))
   })
 })
 

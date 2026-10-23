@@ -13,9 +13,10 @@ import {
   SHOT_NET_GUARD, SHOT_SEGMENT_HEIGHT,
 } from '../constants'
 import type { Logger, Scheduler } from '../core/ports'
+import type { ImageTheme } from '../core/types'
 import { hostMatches } from '../core/sites'
-import type { ShotProfile } from '../core/sites'
-import { LruCache, imageSize, sleep } from '../core/util'
+import type { ShotProfile, SiteThemeValues } from '../core/sites'
+import { LruCache, describeError, imageSize, sleep } from '../core/util'
 import { installNetGuard } from './net-guard'
 import type { NetGuard } from './net-guard'
 import { isRenderError, realScheduler, toImageBuffer } from './renderer'
@@ -32,7 +33,12 @@ export interface ShotTarget {
   profile: ShotProfile
   /** 主框架允许去的域名（所有启用网站的域名） */
   allowHosts: readonly string[]
+  /** 图片配色（控制台设置）；不写 = 深色 */
+  theme?: ImageTheme
 }
+
+/** 缓存键：配色也算进去，切换配色以后新请求不会拿到旧配色的图 */
+export const shotKey = (url: string, theme: ImageTheme = 'dark'): string => `${theme}|${url}`
 
 /** 只给「截图测试」看的检查结果 */
 export interface ShotDiag {
@@ -46,6 +52,10 @@ export interface ShotDiag {
   blockedRedirects: number
   blockedPrivate: number
   closedPopups: number
+  /** 请求的配色 */
+  theme: ImageTheme
+  /** 稳定后页面实际的亮度（0 黑 – 1 白，取页面上几个点的中位数）；没量到 = 没有这一项 */
+  luminance?: number
   /** goto 返回时已用的毫秒（还没返回 = 没有这一项） */
   openMs?: number
   /** 失败或超时时正卡在哪一步（成功时没有） */
@@ -157,6 +167,32 @@ const PROBE = `(() => {
   return [Math.max(d ? d.scrollHeight : 0, b ? b.scrollHeight : 0), document.readyState === 'complete', challenge, title.slice(0, 80), b ? (b.innerText || '').length : 0, document.getElementsByTagName('*').length]
 })()`
 
+/** 页面亮度：在视口里取 9 个点，各取最上面一层不透明的背景色算亮度（0–1），返回中位数；全是透明就按 color-scheme 算画布颜色 */
+const LUMINANCE = `(() => {
+  const canvas = /dark/.test(getComputedStyle(document.documentElement).colorScheme) ? 0.05 : 1
+  const lum = (c) => {
+    const m = /rgba?\\(([^)]+)\\)/.exec(c)
+    if (!m) return null
+    const p = m[1].split(/[ ,\\/]+/).filter(Boolean).map(Number)
+    if (p.length < 3 || p.slice(0, 3).some((v) => !Number.isFinite(v))) return null
+    const a = p.length > 3 ? p[3] : 1
+    if (!(a > 0.5)) return null
+    const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4) }
+    return 0.2126 * f(p[0]) + 0.7152 * f(p[1]) + 0.0722 * f(p[2])
+  }
+  const out = []
+  for (const fx of [0.1, 0.5, 0.9]) for (const fy of [0.1, 0.5, 0.9]) {
+    let v = canvas
+    for (const e of document.elementsFromPoint(innerWidth * fx, innerHeight * fy)) {
+      const l = lum(getComputedStyle(e).backgroundColor)
+      if (l !== null) { v = l; break }
+    }
+    out.push(v)
+  }
+  out.sort((a, b) => a - b)
+  return out[4]
+})()`
+
 /** 内部滚动容器（overflow auto/scroll）里被藏起来的高度：内容比框高多少（取最大的一个） */
 const HIDDEN_OVERFLOW = `(() => {
   let max = 0
@@ -215,6 +251,8 @@ interface Trace {
   guard?: NetGuard
   /** 这次渲染开始的时间（拿到页面名额以后） */
   started: number
+  /** 请求的配色 */
+  theme: ImageTheme
 }
 
 /**
@@ -282,15 +320,15 @@ export class SiteScreenshotter {
   }
 
   /** 10 分钟内截过的结果；不排队 */
-  cached(url: string): SiteShot | undefined {
-    return this.cache.get(url)
+  cached(url: string, theme?: ImageTheme): SiteShot | undefined {
+    return this.cache.get(shotKey(url, theme))
   }
 
   /** 截一个地址 */
   request(target: ShotTarget, options: ShotRequestOptions = {}): ShotTicket {
     if (!this.acceptable(target)) return { status: 'invalid' }
     if (this.stop.signal.aborted) return { status: 'busy', queued: 0 }
-    const key = target.url
+    const key = shotKey(target.url, target.theme)
     const hit = options.fresh ? undefined : this.cache.get(key)
     if (hit) return { status: 'cached', shot: hit }
 
@@ -368,7 +406,7 @@ export class SiteScreenshotter {
 
   /** 单次渲染（Renderer 负责排队、时限和关闭页面）；失败也返回结果，不抛出 */
   private async capture(target: ShotTarget): Promise<ShotOutcome> {
-    const trace: Trace = { steps: [], started: this.now() }
+    const trace: Trace = { steps: [], started: this.now(), theme: target.theme ?? 'dark' }
     try {
       return await this.renderer.withPage((page, signal) => this.shoot(page, target, signal, trace), {
         kind: 'br',
@@ -389,6 +427,7 @@ export class SiteScreenshotter {
       blockedRedirects: trace.guard?.stats.blockedRedirects ?? 0,
       blockedPrivate: trace.guard?.stats.blockedPrivate ?? 0,
       closedPopups: trace.guard?.stats.closedPopups ?? 0,
+      theme: trace.theme,
       ...(trace.status === undefined ? {} : { status: trace.status }),
       ...(trace.openMs === undefined ? {} : { openMs: trace.openMs }),
       ...(trace.stage === undefined ? {} : { stage: trace.stage }),
@@ -417,6 +456,7 @@ export class SiteScreenshotter {
     const redirected = (): ShotOutcome | undefined =>
       guard && guard.stats.blockedRedirects > 0 ? { ok: false, reason: 'redirect', diag: diagOf() } : undefined
 
+    await this.applyTheme(page, trace.theme, profile, url)
     const width = profile.viewportWidth
     await page.setViewport({ width, height: profile.viewportHeight, deviceScaleFactor: 1 })
     const timeout = Math.max(1, this.limitMs(profile) - (this.now() - started))
@@ -479,6 +519,7 @@ export class SiteScreenshotter {
     if (last.challenge) return { ok: false, reason: 'blocked', status, diag: diagOf({ status, title: last.title, challenge: true }) }
     const blocked = redirected()
     if (blocked) return blocked
+    const luminance = await this.luminance(page)
     const pageHeight = last.height
     if (!(pageHeight > 0)) return { ok: false, reason: 'failed', message: '页面是空的', diag: diagOf({ status, title: last.title }) }
     const keptHeight = Math.min(pageHeight, this.maxHeight ?? profile.maxImages * this.segmentHeight)
@@ -501,8 +542,44 @@ export class SiteScreenshotter {
     }
     trace.steps.push({ stage: 'shoot', ms: this.now() - shootAt })
     trace.stage = undefined
-    const diag = diagOf({ status, title: last.title, challenge: false }) as ShotDiag
+    const diag = diagOf({ status, title: last.title, challenge: false, ...(luminance === undefined ? {} : { luminance }) }) as ShotDiag
     return { ok: true, shot: { url, images, pageHeight, keptHeight, truncated: pageHeight > keptHeight, capturedAt: this.now(), diag } }
+  }
+
+  /**
+   * 打开页面前先定配色：用 prefers-color-scheme 告诉网站要深色还是浅色（不做颜色反转，没有深色模式的网站保持原样）；
+   * 内置网站有自己的开关（localStorage、cookie）的，按配色写进去
+   */
+  /** 配色只是锦上添花：设置失败只写日志，照常截图 */
+  private async applyTheme(page: RenderPage, theme: ImageTheme, profile: ShotProfile, url: string) {
+    try {
+      await this.setTheme(page, theme, profile, url)
+    } catch (e) {
+      this.logger?.warn(`截图配色设置失败（照常截图）：${describeError(e)}`)
+    }
+  }
+
+  private async setTheme(page: RenderPage, theme: ImageTheme, profile: ShotProfile, url: string) {
+    await page.emulateMediaFeatures?.([{ name: 'prefers-color-scheme', value: theme }])
+    const values: SiteThemeValues | undefined = theme === 'dark' ? profile.darkMode : profile.darkMode?.light
+    if (!values) return
+    const entries = Object.entries(values.localStorage ?? {})
+    if (entries.length && page.evaluateOnNewDocument) {
+      const script = entries.map(([k, v]) => `try { localStorage.setItem(${JSON.stringify(k)}, ${JSON.stringify(v)}) } catch {}`).join('\n')
+      await page.evaluateOnNewDocument(script)
+    }
+    const cookies = Object.entries(values.cookies ?? {})
+    if (cookies.length && page.setCookie) await page.setCookie(...cookies.map(([name, value]) => ({ name, value, url })))
+  }
+
+  /** 页面亮度（0–1）；量不出来就没有（不影响截图） */
+  private async luminance(page: RenderPage): Promise<number | undefined> {
+    try {
+      const value = Number(await page.evaluate(LUMINANCE))
+      return Number.isFinite(value) ? value : undefined
+    } catch {
+      return undefined
+    }
   }
 
   /** 截图前隐藏广告、横幅一类的元素（选择器是代码里写死的） */

@@ -82,6 +82,10 @@ describe.skipIf(!HAS_CHROME)('SiteScreenshotter net guard with Chromium and loca
       if (path === '/script-redirect') return html(`${BODY}<script>setTimeout(function () { location.href = 'https://example.invalid/' }, 50)</script>`)
       if (path === '/popup') return html(`${BODY}<script>window.open('http://127.0.0.1:${port}/popped')</script>`)
       if (path === '/ok') return html(BODY)
+      // 跟着系统配色：深色时黑底，否则白底
+      if (path === '/scheme') return html('<style>html { background: #fff } @media (prefers-color-scheme: dark) { html { background: #0b0d12 } }</style><p>配色</p>')
+      // 配色存在 localStorage（darkMode）：脚本读到 dark 就把底色改黑
+      if (path === '/stored') return html('<p>配色</p><script>document.documentElement.style.background = localStorage.getItem("site.theme") === "dark" ? "#0b0d12" : "#fff"</script>')
       // 100dvh 的应用壳：html/body 不滚动，内容在内部容器里滚（内联 !important 改不动高度，只能撑视口）
       if (path === '/shell') {
         return html(`<style>html, body { height: 100dvh !important; overflow: hidden }</style>
@@ -124,9 +128,9 @@ describe.skipIf(!HAS_CHROME)('SiteScreenshotter net guard with Chromium and loca
     await new Promise<void>((resolve) => (server ? server.close(() => resolve()) : resolve()))
   })
 
-  async function run(path: string, profile: Partial<ShotProfile> = {}) {
+  async function run(path: string, profile: Partial<ShotProfile> = {}, theme?: 'dark' | 'light') {
     // fresh：同一地址换参数再截，不吃缓存
-    const ticket = shooter().request(target(path, profile), { fresh: true })
+    const ticket = shooter().request({ ...target(path, profile), ...(theme ? { theme } : {}) }, { fresh: true })
     if (ticket.status !== 'queued') throw new Error(`期望排上队，实际是 ${ticket.status}`)
     return ticket.done
   }
@@ -231,5 +235,23 @@ describe.skipIf(!HAS_CHROME)('SiteScreenshotter net guard with Chromium and loca
     } finally {
       await page.close()
     }
+  }, 30000)
+
+  it('renders a prefers-color-scheme page dark when dark is asked and light when light is asked', async () => {
+    const dark = await run('/scheme', {}, 'dark')
+    const light = await run('/scheme', {}, 'light')
+    if (!dark.ok || !light.ok) throw new Error('截图失败')
+    expect(dark.shot.diag).toMatchObject({ theme: 'dark' })
+    expect(dark.shot.diag.luminance).toBeLessThan(0.1)
+    expect(light.shot.diag.luminance).toBeGreaterThan(0.9)
+  }, 30000)
+
+  it('applies the darkMode localStorage before the page script runs', async () => {
+    const darkMode = { localStorage: { 'site.theme': 'dark' }, light: { localStorage: { 'site.theme': 'light' } } }
+    const dark = await run('/stored', { darkMode }, 'dark')
+    const light = await run('/stored', { darkMode }, 'light')
+    if (!dark.ok || !light.ok) throw new Error('截图失败')
+    expect(dark.shot.diag.luminance).toBeLessThan(0.1)
+    expect(light.shot.diag.luminance).toBeGreaterThan(0.9)
   }, 30000)
 })

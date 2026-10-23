@@ -6,7 +6,7 @@
 //   出图时插件停用了就什么都不再发（和战报一样）。
 // - 有成交的日子少于 3 天：只回「成交太少，无法绘图」。
 
-import { DEADLINE_GUARD_MS, GLOBAL_MARKET_REGION, GLOBAL_MARKET_TYPES, QUERY_DEADLINE_MS, TREND_DAYS } from '../../constants'
+import { DEADLINE_GUARD_MS, GLOBAL_MARKET_REGION, GLOBAL_MARKET_TYPES, QUERY_DEADLINE_MS, TREND_DAYS, TREND_MA_WARMUP } from '../../constants'
 import { CATEGORY_SHIP } from '../../core/items'
 import { inDowntime, windowStart } from '../../core/market'
 import { isFailure } from '../../core/types'
@@ -192,7 +192,10 @@ async function trendOf(inv: Invocation, parsed: ParsedQuery, range: TrendRange, 
     return
   }
   const days = TREND_DAYS[range]
-  const history = await within(inv.core.history.get(place.regionId, subject.typeIds, days), QUERY_DEADLINE_MS + DEADLINE_GUARD_MS)
+  const { theme, trendStyle, upColor } = inv.commands.settings.render
+  // K 线的均线要窗口前面的历史热身：同一次请求多取 59 天（ESI 给的有多少用多少）
+  const fetchDays = trendStyle === 'kline' ? days + TREND_MA_WARMUP : days
+  const history = await within(inv.core.history.get(place.regionId, subject.typeIds, fetchDays), QUERY_DEADLINE_MS + DEADLINE_GUARD_MS)
   if (!history || isFailure(history)) return historyFailure(inv, history, { named: parsed.market, subject, place, range })
   // 窗口最后一天是今天（UTC 日，和 HistoryService 的窗口一致）
   const series: TrendSeries = { points: history.points, days, end: windowStart(inv.commands.clock.now(), 1) }
@@ -208,27 +211,27 @@ async function trendOf(inv: Invocation, parsed: ParsedQuery, range: TrendRange, 
     end: series.end,
     points: series.points,
     ...history.missing.length ? { note: `缺 ${history.missing.length} 件` } : {},
-  }, { formatter: inv.core.format }))
+  }, { formatter: inv.core.format, trendStyle, theme, upColor }), `${trendStyle}/${theme}/${upColor}`)
   if (image === 'closed') return
   const shown = image ? await inv.reply.image(image.data, image.mime) : false
   await sendCard(inv, trendCard(inv, { market: parsed.market, subject, place, range, stats, history, spark: shown ? null : sparkline(series) }))
 }
 
 /**
- * 出图：缓存里有就直接用（puppeteer 后来停用了也照样发）；第一次渲染超过 SLOW_HINT_MS 发一次慢提示。
+ * 出图（variant：样式 / 配色 / 涨跌色，进缓存键）：缓存里有就直接用（puppeteer 后来停用了也照样发）；第一次渲染超过 SLOW_HINT_MS 发一次慢提示。
  * 没有 puppeteer、渲染失败（写日志）时 null；出图时插件停用了返回 'closed'（什么都不再发）
  */
-async function chartImage(inv: Invocation, build: () => string): Promise<RenderedImage | null | 'closed'> {
+async function chartImage(inv: Invocation, build: () => string, variant: string): Promise<RenderedImage | null | 'closed'> {
   const media = inv.commands.media
   if (!media) return null
   const svg = build()
-  const hit = media.charts.cached(svg)
+  const hit = media.charts.cached(svg, variant)
   if (hit) return hit
   if (!media.renderer.available()) return null
   // 慢提示只为第一次渲染；提示后面还要发图和卡片
   const hint = startSlowHint(inv, 2, () => TREND.hint)
   try {
-    return await media.charts.get(svg)
+    return await media.charts.get(svg, { variant })
   } catch (e) {
     // 出图时没有传 signal：取消只可能是插件停用
     if (isRenderError(e, 'aborted')) return 'closed'

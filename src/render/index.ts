@@ -6,8 +6,10 @@ export type {
   HtmlShotOptions, ImageMime, LoadEvent, PageFactory, PageKind, PageRequest, PageTaskOptions, RenderErrorKind,
   RenderPage, RenderedImage, Renderer, RendererOptions, ShotClip, ShotOptions,
 } from './renderer'
-export { DEFAULT_PALETTE, chartSvg, enoughData, escapeXml, roundVolume, sparkline, textWidth, trendStats } from './chart-svg'
-export type { ChartInput, ChartOptions, ChartPalette, TrendSeries, TrendStats } from './chart-svg'
+export {
+  DEFAULT_PALETTE, candles, chartPalette, chartSvg, enoughData, escapeXml, extremes, movingAverages, roundVolume, sparkline, textWidth, trendStats,
+} from './chart-svg'
+export type { Candle, CandleDirection, ChartInput, ChartOptions, ChartPalette, MovingAverage, TrendSeries, TrendStats } from './chart-svg'
 export { chartKey, chartPage, createChartImages, renderChart } from './chart-page'
 export type { ChartImages, ChartPageOptions, ChartShotOptions } from './chart-page'
 export * from './br'

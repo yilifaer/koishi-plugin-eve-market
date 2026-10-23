@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { SHOT_SEGMENT_HEIGHT } from '../../src/constants'
 import type { Logger, Scheduler } from '../../src/core/ports'
 import type { ShotProfile } from '../../src/core/sites'
-import { SiteScreenshotter } from '../../src/render/site-shot'
+import { SiteScreenshotter, shotKey } from '../../src/render/site-shot'
 import type { ShotOutcome, ShotTarget, ShotTicket, SiteScreenshotterOptions } from '../../src/render/site-shot'
 import { createRenderer } from '../../src/render/renderer'
 import type { PageFactory, PageRequest, RenderPage, ShotOptions } from '../../src/render/renderer'
@@ -44,6 +44,8 @@ interface Behavior {
   hidden?: number[]
   /** 第几次找同意框按钮才找到（1 = 第一次就有；不写 = 一直没有） */
   dismissOnPoll?: number
+  /** 页面亮度（不写 = 0.1，深色） */
+  luminance?: number
   /** goto 一直不返回 */
   hangGoto?: boolean
   /** waitForNetworkIdle 一直不返回 */
@@ -75,6 +77,21 @@ class FakePage implements RenderPage {
   async setRequestInterception() {}
   on(_event: 'request', _handler: (request: PageRequest) => void) { return this }
   async setContent() {}
+  readonly media: Array<Array<{ name: string; value: string }>> = []
+  readonly scripts: string[] = []
+  readonly cookies: Array<{ name: string; value: string; url: string }> = []
+  async emulateMediaFeatures(features: Array<{ name: string; value: string }>) {
+    this.calls.push('media')
+    this.media.push(features)
+  }
+  async evaluateOnNewDocument(script: string) {
+    this.calls.push('newDoc')
+    this.scripts.push(script)
+  }
+  async setCookie(...cookies: Array<{ name: string; value: string; url: string }>) {
+    this.calls.push('cookie')
+    this.cookies.push(...cookies)
+  }
 
   async goto(url: string, options?: { timeout?: number; waitUntil?: string }) {
     this.calls.push('goto')
@@ -97,6 +114,7 @@ class FakePage implements RenderPage {
 
   async evaluate(expression: string) {
     this.expressions.push(expression)
+    if (expression.includes('elementsFromPoint')) return this.b.luminance ?? 0.1
     if (expression.includes("'fixed'")) {
       this.calls.push('hideFixed')
       return 0
@@ -617,5 +635,77 @@ describe('SiteScreenshotter hideFixedTexts', () => {
     const { shots } = shooter(source)
     shotOf(await outcomeOf(shots.request(target('janice'))))
     expect(pages[0].calls).not.toContain('hideFixed')
+  })
+})
+
+describe('SiteScreenshotter theme', () => {
+  const run = async (profile: Partial<ShotProfile>, theme?: 'dark' | 'light', b: Behavior = {}) => {
+    const { source, pages } = fakeSource(() => new FakePage(b))
+    const { shots } = shooter(source)
+    const shot = shotOf(await outcomeOf(shots.request({ ...target('dotlan', profile), ...(theme ? { theme } : {}) })))
+    return { page: pages[0], shot }
+  }
+
+  it('asks for dark by default and for light when the setting says so, before goto', async () => {
+    const dark = await run({})
+    expect(dark.page.media).toEqual([[{ name: 'prefers-color-scheme', value: 'dark' }]])
+    expect(dark.page.calls.indexOf('media')).toBeLessThan(dark.page.calls.indexOf('goto'))
+    expect(dark.shot.diag.theme).toBe('dark')
+    const light = await run({}, 'light')
+    expect(light.page.media).toEqual([[{ name: 'prefers-color-scheme', value: 'light' }]])
+    expect(light.shot.diag.theme).toBe('light')
+  })
+
+  it('a theme that cannot be applied does not fail the screenshot', async () => {
+    const { source, pages } = fakeSource(() => {
+      const page = new FakePage({})
+      page.emulateMediaFeatures = async () => { throw new Error('not supported') }
+      return page
+    })
+    const { shots } = shooter(source)
+    const shot = shotOf(await outcomeOf(shots.request(target('dotlan', {}))))
+    expect(shot.images.length).toBeGreaterThan(0)
+    expect(pages[0].calls).toContain('goto')
+  })
+
+  it('writes the localStorage and cookie of darkMode before the page loads, per theme', async () => {
+    const darkMode = {
+      localStorage: { 'site.theme': 'dark' }, cookies: { t: 'dark' },
+      light: { localStorage: { 'site.theme': 'light' }, cookies: { t: 'default' } },
+    }
+    const dark = await run({ darkMode })
+    expect(dark.page.scripts).toHaveLength(1)
+    expect(dark.page.scripts[0]).toContain('localStorage.setItem("site.theme", "dark")')
+    expect(dark.page.cookies).toEqual([{ name: 't', value: 'dark', url: 'https://dotlan.example.com/p' }])
+    expect(dark.page.calls.indexOf('newDoc')).toBeLessThan(dark.page.calls.indexOf('goto'))
+    expect(dark.page.calls.indexOf('cookie')).toBeLessThan(dark.page.calls.indexOf('goto'))
+    const light = await run({ darkMode }, 'light')
+    expect(light.page.scripts[0]).toContain('"light"')
+    expect(light.page.cookies[0]).toMatchObject({ name: 't', value: 'default' })
+  })
+
+  it('writes nothing for sites without darkMode (custom sites only get the media query)', async () => {
+    const { page } = await run({})
+    expect(page.scripts).toEqual([])
+    expect(page.cookies).toEqual([])
+  })
+
+  it('reports the measured luminance in the diag', async () => {
+    expect((await run({}, 'dark', { luminance: 0.02 })).shot.diag.luminance).toBe(0.02)
+  })
+
+  it('keeps one cache entry per theme', async () => {
+    const { source, pages } = fakeSource()
+    const { shots } = shooter(source)
+    const first = shotOf(await outcomeOf(shots.request(target('janice'))))
+    expect(shots.cached('https://janice.example.com/p', 'dark')).toBe(first)
+    expect(shots.cached('https://janice.example.com/p')).toBe(first)
+    expect(shots.cached('https://janice.example.com/p', 'light')).toBeUndefined()
+    expect(shots.request({ ...target('janice'), theme: 'dark' }).status).toBe('cached')
+    // 切到浅色：不吃深色的缓存，重新截
+    const light = pending(shots.request({ ...target('janice'), theme: 'light' }))
+    expect(shotOf(await light.done)).not.toBe(first)
+    expect(pages).toHaveLength(2)
+    expect(shotKey('https://a.example.com/', 'light')).not.toBe(shotKey('https://a.example.com/', 'dark'))
   })
 })

@@ -3,6 +3,17 @@
 export type BuiltinSiteId = 'br' | 'warbeacon' | 'janice' | 'dotlan'
 export type SiteKind = 'battle-report' | 'appraisal' | 'map' | 'custom'
 
+/** 一种配色要写进页面的值：localStorage 在页面脚本跑之前写，cookie 在打开前设到网站上 */
+export interface SiteThemeValues {
+  localStorage?: Record<string, string>
+  cookies?: Record<string, string>
+}
+
+export interface SiteThemeStorage extends SiteThemeValues {
+  /** 要浅色时写的值（不写 = 什么都不写） */
+  light?: SiteThemeValues
+}
+
 export interface ShotProfile {
   viewportWidth: number
   viewportHeight: number
@@ -23,6 +34,11 @@ export interface ShotProfile {
   hideFixedTexts?: readonly string[]
   /** 页面上的同意框：找到文字完全等于其中之一的按钮就点一下（写「拒绝」一类的，不要写同意），只给内置网站用 */
   dismissTexts?: readonly string[]
+  /**
+   * 网站自己的配色开关（只给内置网站用）：页面加载前写进去，深色 / 浅色各一份；
+   * 不用颜色反转，网站没有深色模式的就不写
+   */
+  darkMode?: SiteThemeStorage
   /** 1–3，来自控制台；最高高度 = maxImages × 每张的高度 */
   maxImages: number
   /** 单次截图最长等多少秒（30–180，来自控制台；包含打开、等待和截图，不含排队） */

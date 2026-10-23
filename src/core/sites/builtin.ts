@@ -55,6 +55,7 @@ export const BUILTIN_SITES: readonly BuiltinSite[] = [
     name: 'Warbeacon 战报',
     host: 'warbeacon.net',
     badLinkHint: '只支持关联战报和单场战报页',
+    // BR 工具和 Warbeacon 本来就只有深色（实测不看系统配色，也没有切换开关），不写 darkMode
     // 右上的拖放提示框是 naive-ui 的气泡，挂在 body 下的 .v-binder-follower-container 里，截图前整个藏起来
     profile: { ...VIEWPORT, idleMs: 6000, settleMs: 8000, readyScroll: true, growViewport: true, hideSelectors: ['.v-binder-follower-container'] },
     // 页面脚本很重（慢机器上要 50 秒才出内容）
@@ -72,7 +73,8 @@ export const BUILTIN_SITES: readonly BuiltinSite[] = [
     name: 'Janice 估价结果',
     host: JANICE_HOST,
     badLinkHint: '只支持估价结果页',
-    profile: { ...VIEWPORT, idleMs: 4000, settleMs: 5000 },
+    // 配色存在 localStorage 的 stylemanager.theme（dark / light），2026-10 实测
+    profile: { ...VIEWPORT, idleMs: 4000, settleMs: 5000, darkMode: { localStorage: { 'stylemanager.theme': 'dark' }, light: { localStorage: { 'stylemanager.theme': 'light' } } } },
     waitSec: SHOT_WAIT_DEFAULT_SEC,
     path: (path) => {
       const m = JANICE.exec(path)
@@ -90,6 +92,8 @@ export const BUILTIN_SITES: readonly BuiltinSite[] = [
       ...VIEWPORT, idleMs: 5000, settleMs: 5000, dismissTexts: ['I decline'],
       hideSelectors: DOTLAN_HIDE,
       hideFixedTexts: ['EveMaps subscription'],
+      // 配色是 cookie t（dark / default；网站的 /theme/dark 就是设这个），打开前设好页面就直接用深色样式表
+      darkMode: { cookies: { t: 'dark' }, light: { cookies: { t: 'default' } } },
     },
     waitSec: SHOT_WAIT_DEFAULT_SEC,
     path: (path) => {

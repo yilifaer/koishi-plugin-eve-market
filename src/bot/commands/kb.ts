@@ -125,11 +125,12 @@ async function render(inv: Invocation, profile: PilotProfile): Promise<RenderedI
   if (!media?.renderer.available()) return null
   try {
     const now = clock.now()
+    const theme = inv.commands.settings.render.theme
     // 缓存里有成图就不再下载图片
-    const hit = media.kbCards.cached({ profile, images: NO_IMAGES, now })
+    const hit = media.kbCards.cached({ profile, images: NO_IMAGES, now, theme })
     if (hit) return hit
     const images = await inv.core.pilots.images.forProfile(profile)
-    return await media.kbCards.get({ profile, images, now })
+    return await media.kbCards.get({ profile, images, now, theme })
   } catch (e) {
     logger.warn(`KB 人物卡出图失败（人物 ${profile.id}）：${e instanceof Error ? e.message : String(e)}`)
     return null

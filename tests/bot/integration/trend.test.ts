@@ -6,7 +6,7 @@ import fs from 'node:fs'
 import type { Browser } from 'puppeteer-core'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { PRESET_MARKETS } from '../../../src/config/presets'
-import { SLOW_HINT_MS } from '../../../src/constants'
+import { CHART_COLORS, CHART_COLORS_LIGHT, SLOW_HINT_MS } from '../../../src/constants'
 import { imageSize } from '../../../src/render'
 import { parseTrendArgs } from '../../../src/bot/commands/trend'
 import type { RawHistory } from '../../fakes/fake-esi'
@@ -206,6 +206,53 @@ describe('走势: image and card', () => {
     const e = await start({ esi: (fake) => addOrders(fake, 10000043, jitaOrders(RAVEN, 250_000_000, null, { location_id: 60008494 })) })
     const sent = await e.h.group('查价 Amarr 乌鸦级')
     expect(buttonRows(sent)[0].slice(0, 2)).toEqual(['月度走势=>走势 Amarr 乌鸦级 月', '季度走势=>走势 Amarr 乌鸦级 季'])
+  })
+})
+
+describe('走势: console image settings', () => {
+  /** 用这个渲染设置出一张 30 天的图，返回出图页面的 HTML 和图片字节；用完就停 */
+  async function shot(render: Record<string, unknown>, text = '走势 乌鸦级'): Promise<{ html: string; data: Buffer; env: PluginEnv }> {
+    const browser = new FakeBrowser()
+    const e = await start({ config: { render }, esi: (fake) => fake.history.set(`${THE_FORGE}:${RAVEN}`, ravenHistory(200, '2026-03-20')), puppeteer: browser })
+    const sent = await e.h.group(text)
+    expect(sent).toHaveLength(2)
+    return { html: browser.pages[0].html ?? "", data: imageOf(sent[0]).data, env: e }
+  }
+
+  it('defaults to the dark K line, red for up', async () => {
+    const { html, env: e } = await shot({})
+    expect(html).toContain(`fill="${CHART_COLORS.background}"`)
+    expect(html).toContain('>MA5 ')
+    expect(html).toMatch(new RegExp(`fill="${CHART_COLORS.red}" font-weight="600">▲`))
+    // 历史有 200 天：窗口前面的历史给均线热身，MA60 从第一天就有
+    expect(html).not.toContain('>MA60 —<')
+    // 同一次请求多取 59 天，不多发请求
+    expect(e.fake.count(/^\/markets\/10000002\/history$/)).toBe(1)
+  })
+
+  it('the console settings change the image: line style, light theme, green for up', async () => {
+    const line = await shot({ trendStyle: 'line' })
+    expect(line.html).toContain('>日均价<')
+    expect(line.html).not.toContain('>MA5 ')
+    const light = await shot({ theme: 'light' })
+    expect(light.html).toContain(`fill="${CHART_COLORS_LIGHT.background}"`)
+    const green = await shot({ upColor: 'green' })
+    expect(green.html).toMatch(new RegExp(`fill="${CHART_COLORS.green}" font-weight="600">▲`))
+    expect(new Set([line.html, light.html, green.html]).size).toBe(3)
+  })
+
+  it('the cache key carries style, theme and up colour: another setting is a new chart, the same one is cached', async () => {
+    const browser = new FakeBrowser()
+    const e = await start({ esi: (fake) => fake.history.set(`${THE_FORGE}:${RAVEN}`, ravenHistory(200, '2026-03-20')), puppeteer: browser })
+    await e.h.group('走势 乌鸦级')
+    await e.h.group('走势 乌鸦级')
+    expect(browser.pages).toHaveLength(1)
+    // 同一个插件实例里设置不变；换设置要重载插件，缓存随之清空，所以新设置的第一次请求一定重新出图
+    const other = new FakeBrowser()
+    const second = await start({ config: { render: { theme: 'light' } }, esi: (fake) => fake.history.set(`${THE_FORGE}:${RAVEN}`, ravenHistory(200, '2026-03-20')), puppeteer: other })
+    await second.h.group('走势 乌鸦级')
+    expect(other.pages).toHaveLength(1)
+    expect(other.pages[0].html).not.toBe(browser.pages[0].html)
   })
 })
 

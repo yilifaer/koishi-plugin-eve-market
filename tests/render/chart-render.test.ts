@@ -42,6 +42,9 @@ describe.skipIf(!hasChrome)('rendering in a real Chromium', () => {
     await browser?.close()
   })
 
+  /** 各种样式 / 配色出的图，互相都不一样 */
+  const seen = new Map<string, string>()
+
   const openPages = async () => (await browser.pages()).length
 
   it('a 30-day chart becomes a 1600×900 PNG Buffer and the page is closed', async () => {
@@ -58,6 +61,25 @@ describe.skipIf(!hasChrome)('rendering in a real Chromium', () => {
     expect(image.data.length).toBeGreaterThan(20_000)
     expect(image.data.length).toBeLessThan(1_000_000)
     expect(await openPages()).toBe(before)
+  })
+
+  it.each([
+    ['kline', 'dark', 'red'],
+    ['kline', 'light', 'red'],
+    ['kline', 'dark', 'green'],
+    ['line', 'dark', 'red'],
+    ['line', 'light', 'green'],
+  ] as const)('%s chart, %s theme, %s up: a 1600×900 PNG that differs from the others', async (trendStyle, theme, upColor) => {
+    const renderer = createRenderer({ pages: () => factory })
+    const svg = chartSvg(
+      { item: '乌鸦级 Raven', place: '伏尔戈（Jita）', days: 30, end: '2026-10-09', points: points() },
+      { formatter, trendStyle, theme, upColor },
+    )
+    const image = await renderChart(renderer, svg)
+    expect(imageSize(image.data)).toEqual({ width: 1600, height: 900 })
+    expect(image.data.length).toBeGreaterThan(20_000)
+    seen.set(`${trendStyle}/${theme}/${upColor}`, image.data.toString('base64'))
+    expect(new Set(seen.values()).size).toBe(seen.size)
   })
 
   it('runs no page scripts and blocks every outside request', async () => {

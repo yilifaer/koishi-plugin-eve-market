@@ -1,8 +1,7 @@
 // 人物卡里的小图：12 个月柱状图、24 小时作息条、占比条，以及图片下载失败时的剪影（头像、舰船、军团和联盟图标）。
 // 全部输出内联的 SVG / HTML 片段，不带 xmlns、不引用任何外部资源。数字都是算出来的，不含用户文字。
 
-const INK = '#1B1A17'
-const RED = '#B3261E'
+import type { KbPalette } from './kb-theme'
 
 /** 保留 1 位小数，输出稳定 */
 function n(value: number): string {
@@ -16,7 +15,7 @@ export interface MonthBar {
 }
 
 /** 近 12 个月：击毁在基线上方（墨色），损失在下方（红色）；两个方向共用同一个比例。全 0 时返回 null */
-export function monthsSvg(months: readonly MonthBar[]): string | null {
+export function monthsSvg(months: readonly MonthBar[], pal: KbPalette): string | null {
   const max = Math.max(0, ...months.map((m) => Math.max(m.kills, m.losses)))
   if (max <= 0) return null
   const step = 25
@@ -25,18 +24,18 @@ export function monthsSvg(months: readonly MonthBar[]): string | null {
     const x = i * step + 2
     const up = m.kills > 0 ? Math.max(1, Math.round((m.kills / max) * half)) : 0
     const down = m.losses > 0 ? Math.max(1, Math.round((m.losses / max) * half)) : 0
-    return (up ? `<rect x="${x}" y="${60 - up}" width="19" height="${up}" fill="${INK}"/>` : '')
-      + (down ? `<rect x="${x}" y="62" width="19" height="${down}" fill="${RED}"/>` : '')
+    return (up ? `<rect x="${x}" y="${60 - up}" width="19" height="${up}" fill="${pal.ink}"/>` : '')
+      + (down ? `<rect x="${x}" y="62" width="19" height="${down}" fill="${pal.red}"/>` : '')
   }).join('')
   const width = Math.max(1, months.length) * step
-  return `<svg viewBox="0 0 ${width} 124" width="100%" style="display:block"><line x1="0" x2="${width}" y1="61" y2="61" stroke="${INK}"/>${bars}</svg>`
+  return `<svg viewBox="0 0 ${width} 124" width="100%" style="display:block"><line x1="0" x2="${width}" y1="61" y2="61" stroke="${pal.rule}"/>${bars}</svg>`
 }
 
 /** 24 小时作息条：每小时一格，墨色深浅表示次数。没有次数时返回 null */
-export function hoursStrip(hours: readonly number[]): string | null {
+export function hoursStrip(hours: readonly number[], pal: KbPalette): string | null {
   const max = Math.max(0, ...hours)
   if (max <= 0) return null
-  return hours.map((v) => `<i style="background:rgba(27,26,23,${(0.08 + (0.92 * Math.max(0, v)) / max).toFixed(2)})"></i>`).join('')
+  return hours.map((v) => `<i style="background:rgba(${pal.inkRgb},${(0.08 + (0.92 * Math.max(0, v)) / max).toFixed(2)})"></i>`).join('')
 }
 
 /** 占比条宽度（CSS 像素）：占比 × 3.2，至少 2 */
@@ -50,8 +49,8 @@ export function portraitSilhouette(): string {
 }
 
 /** 舰船剪影（没下载到舰船图时用） */
-export function shipSilhouette(): string {
-  return `<svg viewBox="0 0 64 64" width="100%" height="100%"><path d="M32 6l8 18 18 6-12 8 2 18-16-8-16 8 2-18-12-8 18-6z" fill="#8c8678" stroke="${INK}" stroke-width="2.5" stroke-linejoin="round"/><circle cx="32" cy="30" r="4" fill="${INK}"/></svg>`
+export function shipSilhouette(pal: KbPalette): string {
+  return `<svg viewBox="0 0 64 64" width="100%" height="100%"><path d="M32 6l8 18 18 6-12 8 2 18-16-8-16 8 2-18-12-8 18-6z" fill="${pal.shipFill}" stroke="${pal.ink}" stroke-width="2.5" stroke-linejoin="round"/><circle cx="32" cy="30" r="4" fill="${pal.ink}"/></svg>`
 }
 
 /** 军团 / 联盟图标剪影 */

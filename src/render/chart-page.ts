@@ -1,7 +1,7 @@
 // 走势图出图：SVG 包成一个完全自包含的 HTML 页面（不引用任何外部资源，内容安全策略也禁止加载），
 // 交给 Renderer 截成 PNG（800×450 CSS 像素、2 倍分辨率 → 1600×900）。
-// 出好的图放进内存 LRU（CHART_LRU_SIZE 张，用到一次就算最近用过），键是 SVG 本身的摘要：
-// 图上的标题、地点、窗口、每一个点都一样才算同一张图（换了市场、过了 UTC 零点、历史更新了都会重新出图）。
+// 出好的图放进内存 LRU（CHART_LRU_SIZE 张，用到一次就算最近用过），键是 SVG 本身的摘要加一个变体标记（样式 / 配色 / 涨跌色）：
+// 图上的标题、地点、窗口、每一个点都一样才算同一张图（换了市场、过了 UTC 零点、历史更新了、控制台改了图片设置都会重新出图）。
 // 同一张图正在出的时候，后来的请求共用这一次。
 
 import { createHash } from 'node:crypto'
@@ -41,6 +41,8 @@ export interface ChartShotOptions {
   timeoutMs?: number
   signal?: AbortSignal
   background?: string
+  /** 进缓存键的变体标记：样式、配色、涨跌色（SVG 里本来就有，这里再写明，改设置一定重新出图） */
+  variant?: string
 }
 
 /** 截一张走势图（PNG）。失败时抛 RenderError */
@@ -55,18 +57,18 @@ export function renderChart(renderer: Renderer, svg: string, options: ChartShotO
   })
 }
 
-/** 缓存键：SVG 的摘要（SVG 完全决定了截出来的图） */
-export function chartKey(svg: string): string {
-  return createHash('sha256').update(svg).digest('base64url')
+/** 缓存键：SVG 的摘要（SVG 完全决定了截出来的图），加变体标记 */
+export function chartKey(svg: string, variant = ''): string {
+  return createHash('sha256').update(variant).update('\0').update(svg).digest('base64url')
 }
 
 export interface ChartImages {
   /** 缓存里有就直接给（记为最近用过），没有就出图 */
   get(svg: string, options?: ChartShotOptions): Promise<RenderedImage>
   /** 只看缓存：有就给（记为最近用过），没有时 undefined，不出图 */
-  cached(svg: string): RenderedImage | undefined
+  cached(svg: string, variant?: string): RenderedImage | undefined
   /** 这张图正在出 */
-  rendering(svg: string): boolean
+  rendering(svg: string, variant?: string): boolean
   clear(): void
 }
 
@@ -75,7 +77,7 @@ export function createChartImages(renderer: Renderer, max = CHART_LRU_SIZE): Cha
   const flights = new SingleFlight<string, RenderedImage>()
   return {
     get(svg, options) {
-      const key = chartKey(svg)
+      const key = chartKey(svg, options?.variant)
       const hit = cache.get(key)
       if (hit) return Promise.resolve(hit)
       return flights.run(key, async () => {
@@ -84,8 +86,8 @@ export function createChartImages(renderer: Renderer, max = CHART_LRU_SIZE): Cha
         return image
       })
     },
-    cached: (svg) => cache.get(chartKey(svg)),
-    rendering: (svg) => flights.has(chartKey(svg)),
+    cached: (svg, variant) => cache.get(chartKey(svg, variant)),
+    rendering: (svg, variant) => flights.has(chartKey(svg, variant)),
     clear: () => cache.clear(),
   }
 }

@@ -109,7 +109,7 @@ describe('HistoryService', () => {
 
   it('rejects bad arguments without asking ESI', async () => {
     const { api, history } = setup()
-    for (const [region, ids, days] of [[0, [RAVEN], 30], [THE_FORGE, [], 30], [THE_FORGE, [RAVEN], 0], [THE_FORGE, [RAVEN], 401], [THE_FORGE, [RAVEN], 1.5], [THE_FORGE, [-1], 30]] as const) {
+    for (const [region, ids, days] of [[0, [RAVEN], 30], [THE_FORGE, [], 30], [THE_FORGE, [RAVEN], 0], [THE_FORGE, [RAVEN], 431], [THE_FORGE, [RAVEN], 1.5], [THE_FORGE, [-1], 30]] as const) {
       expect(await history.get(region, [...ids], days)).toMatchObject({ ok: false, code: 'BAD_ARGUMENT' })
     }
     expect(api.calls).toEqual([])

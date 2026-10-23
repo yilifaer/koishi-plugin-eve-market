@@ -29,6 +29,8 @@ export interface FakeSite {
   title?: string
   /** 页面像验证页 */
   challenge?: boolean
+  /** 页面亮度（0 黑 – 1 白）；不写 = 量不出来 */
+  luminance?: number
   /** 打开时页面被重定向到这个地址（发给守卫的主框架请求）；被拦下时 goto 报错 */
   redirect?: string
 }
@@ -143,6 +145,7 @@ export class FakePage implements RenderPage {
     // 内部滚动框：第一次读有内容（readyScroll 立刻满足），之后没有藏着的高度
     if (expression.includes('overflowY')) return this.hiddenReads++ === 0 ? 300 : 0
     const site = this.url ? this.browser.sites.get(this.url) : undefined
+    if (expression.includes('elementsFromPoint')) return site?.luminance
     if (site?.title !== undefined || site?.challenge) return [site.height ?? 2000, true, site.challenge === true, site.title ?? '']
     return [site?.height ?? 2000, true]
   }

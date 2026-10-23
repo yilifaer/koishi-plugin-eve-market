@@ -19,8 +19,8 @@ export interface HistoryServiceOptions {
   clock: Clock
 }
 
-/** ESI 给大约 13 个月 */
-export const MAX_HISTORY_DAYS = 400
+/** ESI 给大约 13 个月；走势 K 线的均线再往前多取 59 天，所以留到 430 */
+export const MAX_HISTORY_DAYS = 430
 
 function failure(code: CoreFailure['code'], message: string): CoreFailure {
   return { ok: false, code, message }

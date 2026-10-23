@@ -52,6 +52,12 @@ export interface RenderPage {
   goto(url: string, options?: { timeout?: number; waitUntil?: LoadEvent }): Promise<{ status(): number } | null>
   /** 等网络安静（没有请求，或不超过 concurrency 个请求）idleTime 毫秒；超过 timeout 抛错。假页面可以不写 */
   waitForNetworkIdle?(options: { idleTime?: number; concurrency?: number; timeout?: number }): Promise<void>
+  /** 模拟媒体特性（prefers-color-scheme）；假页面可以不写 */
+  emulateMediaFeatures?(features: Array<{ name: string; value: string }>): Promise<void>
+  /** 每个新文档（含 goto）的脚本跑之前先执行这段脚本；假页面可以不写 */
+  evaluateOnNewDocument?(script: string): Promise<unknown>
+  /** 给网站设 cookie（打开前）；假页面可以不写 */
+  setCookie?(...cookies: Array<{ name: string; value: string; url: string }>): Promise<void>
   /** 在页面里求一个表达式的值 */
   evaluate(expression: string): Promise<unknown>
   /** 新版 puppeteer 返回 Uint8Array，旧版返回 Buffer；指定 base64 时是字符串 */

@@ -52,7 +52,8 @@ function input(days: number, points: HistoryPoint[], extra: Partial<ChartInput> 
   return { item: '乌鸦级 Raven', place: '伏尔戈（Jita）', days, end: END, points, ...extra }
 }
 
-const svg = (i: ChartInput) => chartSvg(i, { formatter })
+// 这一组测的是折线样式（0.0.9 的样子）：浅色、绿涨红跌，和当时的文件快照一样
+const svg = (i: ChartInput) => chartSvg(i, { formatter, trendStyle: 'line', theme: 'light', upColor: 'green' })
 
 describe('chartSvg snapshots', () => {
   it('30 days with missing days, band outliers and one huge volume day', async () => {
@@ -87,7 +88,6 @@ describe('chartSvg', () => {
     expect(out.startsWith('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450" viewBox="0 0 800 450"')).toBe(true)
     expect(out.endsWith('</svg>')).toBe(true)
     expect(out).toContain(`fill="${CHART_COLORS_LIGHT.background}"`)
-    expect(DEFAULT_PALETTE).toBe(CHART_COLORS_LIGHT)
     expect(out.replace('http://www.w3.org/2000/svg', '')).not.toMatch(/https?:|href|<image|<script|@import|url\((?!#plot\))/)
     // 同样的输入，同样的输出
     expect(svg(input(30, base))).toBe(out)
@@ -112,7 +112,7 @@ describe('chartSvg', () => {
       { now: () => 0 },
     )
     const cheap = series(30, 12_000, { drift: 0.01 })
-    const cheapLabels = [...chartSvg(input(30, cheap), { formatter: thousands }).matchAll(/text-anchor="end">([^<]+)</g)].map((m) => m[1])
+    const cheapLabels = [...chartSvg(input(30, cheap), { formatter: thousands, trendStyle: 'line' }).matchAll(/text-anchor="end">([^<]+)</g)].map((m) => m[1])
     expect(cheapLabels.slice(0, -2)).toEqual(['12K', '13K', '14K', '15K'])
   })
 
@@ -156,9 +156,9 @@ describe('chartSvg', () => {
 
   it('marks the change in the stats row with an arrow and the up/down colour', () => {
     const up = svg(input(30, series(30, 100_000_000, { drift: 0.01 })))
-    expect(up).toMatch(new RegExp(`fill="${CHART_COLORS_LIGHT.up}" font-weight="600">▲2\\d\\.\\d%<`))
+    expect(up).toMatch(new RegExp(`fill="${CHART_COLORS_LIGHT.green}" font-weight="600">▲2\\d\\.\\d%<`))
     const down = svg(input(30, series(30, 100_000_000, { drift: -0.01 })))
-    expect(down).toMatch(new RegExp(`fill="${CHART_COLORS_LIGHT.down}" font-weight="600">▼2\\d\\.\\d%<`))
+    expect(down).toMatch(new RegExp(`fill="${CHART_COLORS_LIGHT.red}" font-weight="600">▼2\\d\\.\\d%<`))
   })
 
   it('shrinks and then shortens a very long title, and escapes names', () => {
@@ -186,9 +186,10 @@ describe('chartSvg', () => {
   })
 
   it('accepts the dark palette', () => {
-    const out = chartSvg(input(30, base), { formatter, palette: CHART_COLORS })
+    const out = chartSvg(input(30, base), { formatter, trendStyle: 'line', theme: 'dark' })
     expect(out).toContain(`fill="${CHART_COLORS.background}"`)
     expect(out).toContain(`fill="${CHART_COLORS.panel}"`)
+    expect(chartSvg(input(30, base), { formatter, trendStyle: 'line', palette: DEFAULT_PALETTE })).toBe(chartSvg(input(30, base), { formatter, trendStyle: 'line', theme: 'dark', upColor: 'red' }))
   })
 
   it('rejects a broken window', () => {

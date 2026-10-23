@@ -486,8 +486,23 @@ describe('normalizeConfig: sso, render, advanced', () => {
 
   it('map URLs', () => {
     const { settings, lines } = run({ render: { influenceMapUrl: 'ftp://x', coalitionMapUrl: '', brAuto: false } })
-    expect(settings.render).toEqual({ influenceMapUrl: 'https://www.verite.space/maps/influence/influence.png', coalitionMapUrl: '', brAuto: false })
+    expect(settings.render).toEqual({
+      influenceMapUrl: 'https://www.verite.space/maps/influence/influence.png', coalitionMapUrl: '', brAuto: false,
+      theme: 'dark', trendStyle: 'kline', upColor: 'red',
+    })
     expect(lines).toEqual(['图片与截图：「势力图地址」不是 http:// 或 https:// 开头的网址，已改用默认地址'])
+  })
+
+  it('image theme, trend style and up color: defaults, valid values, unknown values reported', () => {
+    expect(run({}).settings.render).toMatchObject({ theme: 'dark', trendStyle: 'kline', upColor: 'red' })
+    expect(run({ render: { theme: 'light', trendStyle: 'line', upColor: 'green' } }).settings.render).toMatchObject({ theme: 'light', trendStyle: 'line', upColor: 'green' })
+    const { settings, lines } = run({ render: { theme: 'pink', trendStyle: 'bars', upColor: 'blue' } })
+    expect(settings.render).toMatchObject({ theme: 'dark', trendStyle: 'kline', upColor: 'red' })
+    expect(lines).toEqual([
+      '图片与截图：「图片配色」写的「pink」不认识，已改用默认值',
+      '图片与截图：「走势图样式」写的「bars」不认识，已改用默认值',
+      '图片与截图：「涨跌颜色」写的「blue」不认识，已改用默认值',
+    ])
   })
 
   it('URL lists and the ESI contact', () => {

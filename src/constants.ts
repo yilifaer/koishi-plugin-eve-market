@@ -376,18 +376,22 @@ export const CHART_HEIGHT = 450
 export const CHART_SCALE = 2
 export const CHART_FONT = '"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif'
 export const TREND_DAYS = { month: 30, quarter: 90, year: 365 } as const
-/** 深色主题 */
+/** 深色主题（红 / 绿是涨跌色，哪个算涨由「涨跌颜色」设置决定） */
 export const CHART_COLORS = {
-  background: '#14171c',
-  panel: '#1b1f26',
-  grid: '#2a2f38',
-  text: '#d7dce3',
-  muted: '#8a93a0',
+  background: '#0e131b',
+  panel: '#131a24',
+  grid: '#222c3b',
+  text: '#e6ebf2',
+  muted: '#8c98aa',
   line: '#4aa3ff',
   band: 'rgba(74, 163, 255, 0.18)',
-  volume: '#3b4452',
-  up: '#36c46b',
-  down: '#ef5350',
+  volume: '#3a4658',
+  red: '#f6465d',
+  green: '#2ebd85',
+  flat: '#8c98aa',
+  ma5: '#f5c542',
+  ma20: '#b78cff',
+  ma60: '#34d3e0',
 } as const
 /** 成交日少于这么多天时不画图 */
 export const TREND_MIN_DAYS = 3
@@ -406,11 +410,18 @@ export const CHART_COLORS_LIGHT = {
   line: '#2a78d6',
   band: 'rgba(42, 120, 214, 0.12)',
   volume: '#86b6ef',
-  up: '#006300',
-  down: '#d03b3b',
+  red: '#d03b3b',
+  green: '#006300',
+  flat: '#6f6e6a',
+  ma5: '#d98200',
+  ma20: '#8447d1',
+  ma60: '#0b8a9c',
 } as const
-/** 走势图用哪套配色（深色那套是 CHART_COLORS） */
-export const CHART_THEME: 'light' | 'dark' = 'light'
+/** K 线的均线（按有成交的天数算）；为了从第一天就画出最长的那条，多取这么多天更早的历史 */
+export const TREND_MA_PERIODS = [5, 20, 60] as const
+export const TREND_MA_WARMUP = 59
+/** K 线上下多留一点，放最高最低的标注 */
+export const KLINE_PADDING = 0.1
 /** 走势图单次渲染最多多久（不算排队），超时就只发文字卡片 */
 export const CHART_RENDER_TIMEOUT_MS = 20000
 

@@ -359,6 +359,23 @@ describe('截图测试', () => {
     expect(text).not.toContain('卡在')
   })
 
+  it.each([
+    ['dark', 0.02, '配色：要深色 · 页面是深色'],
+    ['dark', 0.95, '配色：要深色 · 网站没有深色模式'],
+    ['light', 0.95, '配色：要浅色 · 页面是浅色'],
+    ['light', 0.02, '配色：要浅色 · 网站只有深色'],
+  ])('the card has one colour line: asked %s, page luminance %s', async (theme, luminance, line) => {
+    const e = await start({ puppeteer: browserWith({ [JANICE]: { height: 1000, luminance } }), config: { ...admins, render: { theme } } })
+    const text = card(await e.h.group(`截图测试 ${JANICE}`))
+    expect(text).toContain(line)
+    expect(text.match(/配色：/g)).toHaveLength(1)
+  })
+
+  it('the colour line is left out when the page brightness could not be measured', async () => {
+    const e = await start({ puppeteer: browserWith({ [JANICE]: { height: 1000 } }), config: admins })
+    expect(card(await e.h.group(`截图测试 ${JANICE}`))).not.toContain('配色')
+  })
+
   it('a timeout in goto says which step it was stuck in', async () => {
     const e = await start({ puppeteer: browserWith({ [JANICE]: { timeout: true } }), config: admins })
     const sent = await e.h.group(`截图测试 ${JANICE}`)

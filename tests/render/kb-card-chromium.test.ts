@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import type { Browser } from 'puppeteer-core'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { KB_CARD_MIN_HEIGHT, KB_CARD_SCALE, KB_CARD_WIDTH } from '../../src/constants'
-import { createKbCards, createRenderer, imageSize } from '../../src/render'
+import { createKbCards, createRenderer, imageSize, kbCardHtml } from '../../src/render'
 import type { PageFactory } from '../../src/render'
 import { NOW_MS, emptyImages, ghost, images, soloHunter } from './kb-fixtures'
 
@@ -43,5 +43,25 @@ describe.skipIf(!hasChrome)('KB card in a real Chromium', () => {
     const sparse = await cards.get({ profile: bare, images: emptyImages(), now: NOW_MS })
     expect(imageSize(sparse.data)).toEqual({ width: KB_CARD_WIDTH * KB_CARD_SCALE, height: KB_CARD_MIN_HEIGHT * KB_CARD_SCALE })
     expect((await browser.pages()).length).toBe(before)
+  }, 60_000)
+
+  it('renders both themes; the night card is dark and the day card is light', async () => {
+    const cards = createKbCards(createRenderer({ pages: () => factory }), { now: () => NOW_MS })
+    const dark = await cards.get({ profile: soloHunter(), images: images(), now: NOW_MS, theme: 'dark' })
+    const light = await cards.get({ profile: soloHunter(), images: images(), now: NOW_MS, theme: 'light' })
+    expect(dark.data.equals(light.data)).toBe(false)
+    expect(imageSize(dark.data)).toEqual(imageSize(light.data))
+    // 取页面背景色：夜间版暗、日间版亮
+    const bg = async (theme: 'dark' | 'light') => {
+      const page = await browser.newPage()
+      try {
+        await page.setContent(kbCardHtml({ profile: soloHunter(), images: images(), now: NOW_MS, theme }))
+        return await page.evaluate(() => getComputedStyle(document.body).backgroundColor)
+      } finally {
+        await page.close()
+      }
+    }
+    expect(await bg('dark')).toBe('rgb(43, 42, 39)')
+    expect(await bg('light')).toBe('rgb(239, 230, 210)')
   }, 60_000)
 })

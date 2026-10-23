@@ -3,18 +3,28 @@
 // - 主线是每天的 average；最高–最低的阴影带裁到窗口内 average 中位数的 [0.5×, 2×]（每天的极值里常有手滑和骗局成交）；
 // - 纵轴只按 average 缩放，上下留 3%；成交量里个别特别大的日子封顶画，换成深色；
 // - 价格、数量都用 core 的 PriceFormatter，写法和卡片一致。
+// 走势图样式有两种：K 线（默认）和折线（上面说的这种）；配色分深色 / 浅色，涨跌色可以红涨绿跌或绿涨红跌。
+// K 线：每个有成交的日子一根蜡烛，实体从前一个有成交日的均价到当天均价（ESI 没有开盘 / 收盘），影线是当天最高 / 最低（同样裁掉离谱成交），
+// 叠 5 / 20 / 60 日均线（用窗口前最多 59 个有成交的日子热身），标出区间最高 / 最低，下面的成交量柱跟着当天涨跌上色。
 // 另有没有图时用的文字走势条（sparkline）和统计数字（trendStats），卡片也用它们，数字和图上一致。
 
 import {
-  CHART_COLORS, CHART_COLORS_LIGHT, CHART_FONT, CHART_HEIGHT, CHART_THEME, CHART_WIDTH, DAY_MS, SPARKLINE_SEGMENTS,
-  TREND_BAND_CLAMP, TREND_MIN_DAYS, TREND_PADDING,
+  CHART_COLORS, CHART_COLORS_LIGHT, CHART_FONT, CHART_HEIGHT, CHART_WIDTH, DAY_MS, KLINE_PADDING, SPARKLINE_SEGMENTS,
+  TREND_BAND_CLAMP, TREND_MA_PERIODS, TREND_MA_WARMUP, TREND_MIN_DAYS, TREND_PADDING,
 } from '../constants'
 import { formatChange } from '../core/format'
-import type { HistoryPoint, PriceFormatter } from '../core/types'
+import type { HistoryPoint, ImageTheme, PriceFormatter, TrendStyle, UpColor } from '../core/types'
 
-export type ChartPalette = { readonly [K in keyof typeof CHART_COLORS]: string }
+type BaseColors = { readonly [K in keyof typeof CHART_COLORS]: string }
+export type ChartPalette = { readonly [K in Exclude<keyof BaseColors, 'red' | 'green'> | 'up' | 'down']: string }
 
-export const DEFAULT_PALETTE: ChartPalette = CHART_THEME === 'dark' ? CHART_COLORS : CHART_COLORS_LIGHT
+/** 主题 + 涨跌色 → 一套配色：red 是红涨绿跌时的涨色 */
+export function chartPalette(theme: ImageTheme = 'dark', upColor: UpColor = 'red'): ChartPalette {
+  const { red, green, ...rest } = (theme === 'light' ? CHART_COLORS_LIGHT : CHART_COLORS) as BaseColors
+  return { ...rest, up: upColor === 'red' ? red : green, down: upColor === 'red' ? green : red }
+}
+
+export const DEFAULT_PALETTE: ChartPalette = chartPalette()
 
 /** 一段窗口里的历史 */
 export interface TrendSeries {
@@ -39,6 +49,11 @@ export interface ChartInput extends TrendSeries {
 
 export interface ChartOptions {
   formatter: PriceFormatter
+  /** 样式，默认 K 线 */
+  trendStyle?: TrendStyle
+  /** 配色，默认深色；写了 palette 时以 palette 为准 */
+  theme?: ImageTheme
+  upColor?: UpColor
   palette?: ChartPalette
   font?: string
 }
@@ -82,6 +97,8 @@ interface Window {
   start: number
   days: number
   points: Slotted[]
+  /** 窗口前面最多 TREND_MA_WARMUP 个有成交的日子（slot 为负），只给 K 线的开盘价和均线用 */
+  prior: Slotted[]
 }
 
 function windowOf(series: TrendSeries): Window {
@@ -93,7 +110,7 @@ function windowOf(series: TrendSeries): Window {
   const bySlot = new Map<number, Slotted>()
   for (const p of series.points) {
     const slot = dayNumber(p.date) - start
-    if (!(slot >= 0 && slot < days) || !Number.isFinite(p.average) || p.average <= 0) continue
+    if (!(slot < days) || !Number.isFinite(p.average) || p.average <= 0) continue
     const finite = (v: number) => (Number.isFinite(v) ? v : p.average)
     bySlot.set(slot, {
       ...p,
@@ -103,7 +120,9 @@ function windowOf(series: TrendSeries): Window {
       slot,
     })
   }
-  return { start, days, points: [...bySlot.values()].sort((a, b) => a.slot - b.slot) }
+  const all = [...bySlot.values()].sort((a, b) => a.slot - b.slot)
+  const prior = all.filter((p) => p.slot < 0)
+  return { start, days, points: all.filter((p) => p.slot >= 0), prior: prior.slice(Math.max(0, prior.length - TREND_MA_WARMUP)) }
 }
 
 /** 有成交的天数够不够画图（少于 TREND_MIN_DAYS 天时回答「成交太少，无法绘图」） */
@@ -153,6 +172,105 @@ export function roundVolume(avg: number): number {
 /** 统计行的数字；窗口里一天成交都没有时返回 null */
 export function trendStats(series: TrendSeries): TrendStats | null {
   return statsOf(windowOf(series))
+}
+
+// ------------------------------------------------------------------ K 线
+
+export type CandleDirection = 'up' | 'down' | 'flat'
+
+export interface Candle {
+  slot: number
+  date: string
+  /** 前一个有成交日的均价；第一天（前面没有历史）等于 close，画成一条横线 */
+  open: number
+  /** 当天均价 */
+  close: number
+  /** 影线：当天最高 / 最低，裁到窗口里均价中位数的 [0.5×, 2×] 和「实体范围外再多半个实体范围」以内，且不进实体 */
+  high: number
+  low: number
+  /** 影线被裁掉了 */
+  clippedHigh: boolean
+  clippedLow: boolean
+  volume: number
+  direction: CandleDirection
+}
+
+export interface MovingAverage {
+  period: number
+  /** 每个有成交的窗口日一个点；前面不够 period 个有成交日的没有 */
+  points: Array<{ slot: number; value: number }>
+  /** 最后一天的值；一个点都没有时 null */
+  latest: number | null
+}
+
+/** 每个有成交的日子一根蜡烛 */
+export function candles(series: TrendSeries): Candle[] {
+  return candlesOf(windowOf(series))
+}
+
+function candlesOf(w: Window): Candle[] {
+  if (!w.points.length) return []
+  const med = median(w.points.map((p) => p.average))
+  let previous = w.prior.length ? w.prior[w.prior.length - 1].average : null
+  const bodies = w.points.map((p) => {
+    const open = previous ?? p.average
+    previous = p.average
+    return { open, close: p.average }
+  })
+  // 影线的上下限：均价中位数的 [0.5×, 2×]；再收到实体范围外加半个范围（至少 5%），一两个离谱成交不把整张图压扁
+  const bodyHi = Math.max(...bodies.map((b) => Math.max(b.open, b.close)))
+  const bodyLo = Math.min(...bodies.map((b) => Math.min(b.open, b.close)))
+  const room = Math.max((bodyHi - bodyLo) * WICK_ROOM, med * WICK_MIN_ROOM)
+  const bandHi = Math.min(med * TREND_BAND_CLAMP.max, bodyHi + room)
+  const bandLo = Math.max(med * TREND_BAND_CLAMP.min, bodyLo - room)
+  return w.points.map((p, i) => {
+    const { open, close } = bodies[i]
+    const bodyTop = Math.max(open, close)
+    const bodyBottom = Math.min(open, close)
+    return {
+      slot: p.slot,
+      date: p.date,
+      open,
+      close,
+      high: Math.max(Math.min(p.highest, bandHi), bodyTop),
+      low: Math.min(Math.max(p.lowest, bandLo), bodyBottom),
+      clippedHigh: p.highest > bandHi && bandHi >= bodyTop,
+      clippedLow: p.lowest < bandLo && bandLo <= bodyBottom,
+      volume: p.volume,
+      direction: close > open ? 'up' : close < open ? 'down' : 'flat',
+    }
+  })
+}
+
+/** 均价的简单移动平均（按有成交的天数数，不是日历天）；窗口前面的历史用来热身 */
+export function movingAverages(series: TrendSeries, periods: readonly number[] = TREND_MA_PERIODS): MovingAverage[] {
+  return movingAveragesOf(windowOf(series), periods)
+}
+
+function movingAveragesOf(w: Window, periods: readonly number[]): MovingAverage[] {
+  const all = [...w.prior, ...w.points]
+  return periods.map((period) => {
+    const points: MovingAverage['points'] = []
+    let sum = 0
+    all.forEach((p, i) => {
+      sum += p.average
+      if (i >= period) sum -= all[i - period].average
+      if (i >= period - 1 && p.slot >= 0) points.push({ slot: p.slot, value: sum / period })
+    })
+    return { period, points, latest: points.length ? points[points.length - 1].value : null }
+  })
+}
+
+/** 区间最高 / 最低的那根蜡烛（同高取靠前的）；被裁掉的影线端点不算（那不是真的价格），全被裁掉时才用 */
+export function extremes(list: readonly Candle[]): { high: Candle; low: Candle } | null {
+  if (!list.length) return null
+  const pick = (pool: readonly Candle[], better: (a: Candle, b: Candle) => boolean) => pool.reduce((best, c) => (better(c, best) ? c : best))
+  const highPool = list.filter((c) => !c.clippedHigh)
+  const lowPool = list.filter((c) => !c.clippedLow)
+  return {
+    high: pick(highPool.length ? highPool : list, (a, b) => a.high > b.high),
+    low: pick(lowPool.length ? lowPool : list, (a, b) => a.low < b.low),
+  }
 }
 
 const SPARK_LEVELS = '▁▂▃▄▅▆▇█'
@@ -362,6 +480,14 @@ const FOOTER_Y = 436
 const FOOTER_SIZE = 13
 const LINE_WIDTH = 2.5
 const MAX_BAR = 24
+const MA_LEGEND_Y = 119
+const MA_LEGEND_SIZE = 12
+const MAX_CANDLE = 14
+/** 影线在实体范围外最多多出多少（占实体范围的比例，至少占中位数的比例） */
+const WICK_ROOM = 0.5
+const WICK_MIN_ROOM = 0.05
+const CLIP_NOTE = '影线截掉了离谱成交'
+const LABEL_SIZE = 12
 
 /** 标题：物品名加粗，后面的地点、天数用次要颜色；太长时先缩字号，再截短物品名 */
 function titleSvg(input: ChartInput, p: ChartPalette): string {
@@ -439,27 +565,124 @@ function legendSvg(p: ChartPalette): string {
   return out.join('')
 }
 
+/** K 线页脚右边的图例：涨、跌 */
+function candleLegendSvg(p: ChartPalette): string {
+  let right = W - PAD_X
+  const out: string[] = []
+  for (const [label, fill] of [['跌', p.down], ['涨', p.up]] as const) {
+    const textX = right - textWidth(label, FOOTER_SIZE)
+    out.unshift(`<rect x="${n(textX - 16)}" y="${n(FOOTER_Y - 11)}" width="10" height="12" rx="1.5" fill="${fill}"/>` + text(label, { x: textX, y: FOOTER_Y, size: FOOTER_SIZE, fill: p.muted }))
+    right = textX - 16 - 14
+  }
+  return out.join('')
+}
+
+/** 标题和统计线下面一行：每条均线的颜色和最新值 */
+function maLegendSvg(mas: MovingAverage[], f: PriceFormatter, p: ChartPalette, x0: number): string {
+  const colors: Record<number, string> = { 5: p.ma5, 20: p.ma20, 60: p.ma60 }
+  let x = x0
+  const out: string[] = []
+  for (const ma of mas) {
+    const label = `MA${ma.period} ${ma.latest === null ? '—' : f.compact(ma.latest)}`
+    const color = colors[ma.period] ?? p.line
+    out.push(`<line x1="${n(x)}" y1="${MA_LEGEND_Y - 4}" x2="${n(x + 14)}" y2="${MA_LEGEND_Y - 4}" stroke="${color}" stroke-width="2.5" stroke-linecap="round"/>`)
+    out.push(text(label, { x: x + 19, y: MA_LEGEND_Y, size: MA_LEGEND_SIZE, fill: p.muted }))
+    x += 19 + textWidth(label, MA_LEGEND_SIZE) + 16
+  }
+  return out.join('')
+}
+
+interface KlineLayout {
+  p: ChartPalette
+  f: PriceFormatter
+  xOf: (slot: number) => number
+  yOf: (price: number) => number
+  bodyWidth: number
+  slotWidth: number
+  left: number
+  right: number
+}
+
+/** 价格区的 K 线：均线图例、均线、影线、实体、被裁影线的小帽、区间最高 / 最低标注 */
+function klineSvg(list: Candle[], mas: MovingAverage[], l: KlineLayout): string[] {
+  const { p, f, xOf, yOf } = l
+  const out: string[] = []
+  out.push(maLegendSvg(mas, f, p, l.left))
+
+  const wicks: Record<CandleDirection, string[]> = { up: [], down: [], flat: [] }
+  const bodies: Record<CandleDirection, string[]> = { up: [], down: [], flat: [] }
+  const caps: string[] = []
+  const capHalf = Math.max(2.5, Math.min(l.bodyWidth, 8) / 2)
+  for (const c of list) {
+    const x = xOf(c.slot)
+    wicks[c.direction].push(`M${n(x)} ${n(yOf(c.high))}V${n(yOf(c.low))}`)
+    // 实体至少 1 像素高，持平的画成一条横线
+    const top = yOf(Math.max(c.open, c.close))
+    const bottom = yOf(Math.min(c.open, c.close))
+    const height = Math.max(1, bottom - top)
+    const y = top - (height - (bottom - top)) / 2
+    bodies[c.direction].push(`M${n(x - l.bodyWidth / 2)} ${n(y)}h${n(l.bodyWidth)}v${n(height)}h${n(-l.bodyWidth)}Z`)
+    if (c.clippedHigh) caps.push(`M${n(x - capHalf)} ${n(yOf(c.high))}H${n(x + capHalf)}`)
+    if (c.clippedLow) caps.push(`M${n(x - capHalf)} ${n(yOf(c.low))}H${n(x + capHalf)}`)
+  }
+  const wickWidth = l.slotWidth < 3 ? 1 : 1.3
+  const maColors = [p.ma5, p.ma20, p.ma60]
+  // 均线在蜡烛下面，别盖住实体
+  mas.forEach((ma, i) => {
+    if (ma.points.length < 2) return
+    const d = `M${ma.points.map((pt) => `${n(xOf(pt.slot))} ${n(yOf(pt.value))}`).join('L')}`
+    out.push(`<path d="${d}" fill="none" stroke="${maColors[i] ?? p.line}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" clip-path="url(#plot)"/>`)
+  })
+  for (const d of ['up', 'down', 'flat'] as const) {
+    const color = d === 'up' ? p.up : d === 'down' ? p.down : p.flat
+    if (wicks[d].length) out.push(`<path d="${wicks[d].join('')}" fill="none" stroke="${color}" stroke-width="${wickWidth}" clip-path="url(#plot)"/>`)
+    if (bodies[d].length) out.push(`<path d="${bodies[d].join('')}" fill="${color}" clip-path="url(#plot)"/>`)
+  }
+  if (caps.length) out.push(`<path d="${caps.join('')}" fill="none" stroke="${p.muted}" stroke-width="1.5" clip-path="url(#plot)"/>`)
+
+  // 区间最高 / 最低：标在影线端点外侧，水平方向收在绘图区里
+  const ext = extremes(list)
+  if (ext) {
+    const label = (content: string, slot: number, y: number) => {
+      const half = textWidth(content, LABEL_SIZE) / 2
+      const cx = Math.min(Math.max(xOf(slot), l.left + half + 2), l.right - half - 2)
+      return text(content, { x: cx, y, size: LABEL_SIZE, fill: p.text, anchor: 'middle' })
+    }
+    out.push(label(`高 ${f.compact(ext.high.high)}`, ext.high.slot, yOf(ext.high.high) - 5))
+    // 暴跌时纵轴下限压得很低，「低」不要掉出价格区
+    out.push(label(`低 ${f.compact(ext.low.low)}`, ext.low.slot, Math.min(yOf(ext.low.low) + LABEL_SIZE + 1, PRICE_BOTTOM - 2)))
+  }
+  return out
+}
+
 /** 走势图的 SVG（800×450）。有成交的天数少于 TREND_MIN_DAYS 时也能画，但调用方应该先用 enoughData 判断 */
 export function chartSvg(input: ChartInput, options: ChartOptions): string {
-  const p = options.palette ?? DEFAULT_PALETTE
+  const p = options.palette ?? (options.theme || options.upColor ? chartPalette(options.theme, options.upColor) : DEFAULT_PALETTE)
+  const kline = (options.trendStyle ?? 'kline') === 'kline'
   const f = options.formatter
   const font = options.font ?? CHART_FONT
   const w = windowOf(input)
   const pts = w.points
   const stats = statsOf(w)
+  const candleList = kline ? candlesOf(w) : []
+  const mas = kline ? movingAveragesOf(w, TREND_MA_PERIODS) : []
 
-  // 纵轴：只按 average，上下留 TREND_PADDING
+  // 纵轴：折线只按 average；K 线按裁过的影线和均线；上下留一点
   const averages = pts.map((pt) => pt.average)
-  let lo = averages.length ? Math.min(...averages) : 0
-  let hi = averages.length ? Math.max(...averages) : 1
+  const scaled = kline
+    ? [...candleList.flatMap((c) => [c.high, c.low]), ...mas.flatMap((m) => m.points.map((pt) => pt.value))]
+    : averages
+  let lo = scaled.length ? Math.min(...scaled) : 0
+  let hi = scaled.length ? Math.max(...scaled) : 1
   const span = hi - lo
   if (span <= Math.abs(hi) * 1e-6) {
     const half = Math.max(Math.abs(hi) * 0.02, 0.01)
     lo -= half
     hi += half
   } else {
-    lo -= span * TREND_PADDING
-    hi += span * TREND_PADDING
+    const pad = kline ? KLINE_PADDING : TREND_PADDING
+    lo -= span * pad
+    hi += span * pad
   }
   lo = Math.max(0, lo)
   const { step, ticks } = niceTicks(lo, hi, 4.5)
@@ -505,7 +728,12 @@ export function chartSvg(input: ChartInput, options: ChartOptions): string {
     else runs.push([pt])
   }
 
-  if (pts.length) {
+  const colorOf = (d: CandleDirection) => (d === 'up' ? p.up : d === 'down' ? p.down : p.flat)
+  const barWidth = Math.max(1, Math.min(MAX_BAR, slotWidth * 0.6))
+  const bodyWidth = Math.max(1, Math.min(MAX_CANDLE, slotWidth * (slotWidth < 4 ? 0.85 : 0.7)))
+  if (pts.length && kline) {
+    out.push(...klineSvg(candleList, mas, { p, f, xOf, yOf, bodyWidth, slotWidth, left, right }))
+  } else if (pts.length) {
     const median_ = median(averages)
     const bandLo = median_ * TREND_BAND_CLAMP.min
     const bandHi = median_ * TREND_BAND_CLAMP.max
@@ -557,18 +785,28 @@ export function chartSvg(input: ChartInput, options: ChartOptions): string {
   out.push(text(capLabel, { x: left - 10, y: VOLUME_TOP + AXIS_SIZE * 0.35, size: AXIS_SIZE, fill: p.muted, anchor: 'end' }))
   out.push(text(VOLUME_CAPTION, { x: left - 10, y: VOLUME_TOP + 22, size: CAPTION_SIZE, fill: p.muted, anchor: 'end' }))
   out.push(`<line x1="${left}" y1="${VOLUME_TOP}" x2="${right}" y2="${VOLUME_TOP}" stroke="${p.grid}" stroke-width="1"/>`)
-  const barWidth = Math.max(1, Math.min(MAX_BAR, slotWidth * 0.6))
   const normal: string[] = []
   const peaks: string[] = []
+  // K 线的成交量柱按当天涨跌上色（封顶的那几天颜色更实）
+  const volumeColor = new Map(candleList.map((c) => [c.slot, c.direction]))
+  const byDirection: Record<CandleDirection, { normal: string[]; peaks: string[] }> = {
+    up: { normal: [], peaks: [] }, down: { normal: [], peaks: [] }, flat: { normal: [], peaks: [] },
+  }
   for (const pt of pts) {
     if (!(pt.volume > 0)) continue
     const height = Math.max(1, Math.min(1, pt.volume / cap) * volHeight)
     const path = barPath(xOf(pt.slot) - barWidth / 2, VOLUME_BOTTOM - height, barWidth, VOLUME_BOTTOM)
-    if (pt.volume > cap) peaks.push(path)
+    if (kline) byDirection[volumeColor.get(pt.slot) ?? 'flat'][pt.volume > cap ? 'peaks' : 'normal'].push(path)
+    else if (pt.volume > cap) peaks.push(path)
     else normal.push(path)
   }
   if (normal.length) out.push(`<path d="${normal.join('')}" fill="${p.volume}"/>`)
   if (peaks.length) out.push(`<path d="${peaks.join('')}" fill="${p.line}"/>`)
+  for (const d of ['up', 'down', 'flat'] as const) {
+    const { normal: a, peaks: b } = byDirection[d]
+    if (a.length) out.push(`<path d="${a.join('')}" fill="${colorOf(d)}" fill-opacity="0.6"/>`)
+    if (b.length) out.push(`<path d="${b.join('')}" fill="${colorOf(d)}"/>`)
+  }
   out.push(`<line x1="${left}" y1="${VOLUME_BOTTOM}" x2="${right}" y2="${VOLUME_BOTTOM}" stroke="${p.muted}" stroke-width="1"/>`)
 
   // 横轴日期
@@ -582,8 +820,9 @@ export function chartSvg(input: ChartInput, options: ChartOptions): string {
 
   // 页脚
   const asOf = input.asOf ?? (pts.length ? pts[pts.length - 1].date : input.end)
-  out.push(text(`ESI 市场历史（星域）· 截至 ${asOf}`, { x: PAD_X, y: FOOTER_Y, size: FOOTER_SIZE, fill: p.muted }))
-  out.push(legendSvg(p))
+  const clipped = candleList.some((c) => c.clippedHigh || c.clippedLow)
+  out.push(text(`ESI 市场历史（星域）· 截至 ${asOf}${clipped ? ` · ${CLIP_NOTE}` : ''}`, { x: PAD_X, y: FOOTER_Y, size: FOOTER_SIZE, fill: p.muted }))
+  out.push(kline ? candleLegendSvg(p) : legendSvg(p))
   out.push('</svg>')
   return out.join('\n')
 }

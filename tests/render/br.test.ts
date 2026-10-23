@@ -218,8 +218,8 @@ describe('BrScreenshotter with fake pages', () => {
     const { br } = shooter(source, { settleMs: 8000, settlePollMs: 250, scheduler: instant })
     const shot = shotOf(await outcomeOf(br.request(link(1))))
     expect(shot.pageHeight).toBe(5200)
-    // 900 平台期不算稳定；5200 稳定 1500 毫秒（6 次读取）就开始截，不把 8 秒用完：5 + 4500 + 5200 + 6
-    expect(pages[0].calls.filter((c) => c === 'evaluate').length).toBe(5 + 1 + 1 + 6)
+    // 900 平台期不算稳定；5200 稳定 1500 毫秒（6 次读取）就开始截，不把 8 秒用完：5 + 4500 + 5200 + 6，再加截图前量一次页面亮度
+    expect(pages[0].calls.filter((c) => c === 'evaluate').length).toBe(5 + 1 + 1 + 6 + 1)
   })
 
   it('does not open anything for links outside the site', async () => {

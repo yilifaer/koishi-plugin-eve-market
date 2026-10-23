@@ -8,9 +8,9 @@ import { BUILTIN_SITES, checkConfigHost, hostMatches } from '../core/sites'
 import type {
   AccessSettings, AdvancedSettings, AppraisalSettings, ConfigIssue, ConfigSection, DefaultQuantitySetting, DisplaySettings, JaniceSettings,
   FreightRoute, IndustryActivity, IndustryLocationSetting, IndustrySettings, IndustryStructureSetting, ItemAliasSetting,
-  KbScope, KbSettings, KbToneMode,
+  ImageTheme, KbScope, KbSettings, KbToneMode,
   MarketRefField, MarketRefSetting, MarketSetting, MarketType, NoticeSetting, PriceSide, RenderSettings, ScreenshotSettings, Settings, ShotSiteSetting,
-  SsoSettings, StructurePurpose, Visibility,
+  SsoSettings, StructurePurpose, TrendStyle, UpColor, Visibility,
 } from '../core/types'
 import {
   DEFAULT_BASE_MARKET, DEFAULT_CALLBACK_URL, DEFAULT_COALITION_MAP_URL, DEFAULT_EXTRA_FEE_LABEL, DEFAULT_GLOSSARY_URL,
@@ -735,6 +735,9 @@ function normalizeRender(raw: Raw, issues: IssueList): RenderSettings {
     influenceMapUrl: urlField(issues, 'render', 'influenceMapUrl', '势力图地址', o.influenceMapUrl, DEFAULT_INFLUENCE_MAP_URL),
     coalitionMapUrl: urlField(issues, 'render', 'coalitionMapUrl', '联盟势力图地址', o.coalitionMapUrl, DEFAULT_COALITION_MAP_URL),
     brAuto: bool(o.brAuto, true),
+    theme: pick<ImageTheme>(issues, 'render', '图片配色', o.theme, ['dark', 'light'], 'dark', { field: 'theme' }),
+    trendStyle: pick<TrendStyle>(issues, 'render', '走势图样式', o.trendStyle, ['kline', 'line'], 'kline', { field: 'trendStyle' }),
+    upColor: pick<UpColor>(issues, 'render', '涨跌颜色', o.upColor, ['red', 'green'], 'red', { field: 'upColor' }),
   }
 }
 

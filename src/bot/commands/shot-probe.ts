@@ -52,6 +52,17 @@ async function runProbe(inv: Invocation, text: string): Promise<void> {
   })
 }
 
+/** 页面亮度低于这个就算深色 */
+const DARK_LUMINANCE = 0.25
+
+/** 配色一行：要什么、页面实际是什么（没量到就不写） */
+function colorLine(diag: Partial<ShotDiag>): string | null {
+  if (diag.theme === undefined || diag.luminance === undefined) return null
+  const dark = diag.luminance < DARK_LUMINANCE
+  if (diag.theme === 'dark') return `配色：要深色 · ${dark ? '页面是深色' : '网站没有深色模式'}`
+  return `配色：要浅色 · ${dark ? '网站只有深色' : '页面是浅色'}`
+}
+
 function probeCard(site: SiteInfo, outcome: ShotOutcome): Card {
   const diag: Partial<ShotDiag> = outcome.ok ? outcome.shot.diag : outcome.diag ?? {}
   const lines: Line[] = [
@@ -65,6 +76,8 @@ function probeCard(site: SiteInfo, outcome: ShotOutcome): Card {
     lines.push({ text: `页面高度：${shot.pageHeight} 像素` })
     lines.push({ text: `截图：${shot.images.length} 张（最多 ${site.profile.maxImages} 张）${shot.truncated ? '，页面过长，后面截掉了' : ''}` })
   }
+  const color = colorLine(diag)
+  if (color) lines.push({ text: color })
   if (diag.elapsedMs !== undefined) lines.push({ text: `总用时：${seconds(diag.elapsedMs)}（最长等 ${site.profile.maxWaitSec} 秒）` })
   if (diag.steps?.length) lines.push({ text: `各步用时：${diag.steps.map((s) => `${STAGE_NAMES[s.stage]} ${seconds(s.ms)}`).join('、')}` })
   if (!outcome.ok && diag.stage) lines.push({ text: `卡在：${STAGE_NAMES[diag.stage]}` })
