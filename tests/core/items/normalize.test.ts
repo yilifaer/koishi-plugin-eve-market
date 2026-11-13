@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { caseKey, hanChars, letterCount, nameKey, normalizeName, romanToDigit, stripNote, tokensOf } from '../../../src/core/items/normalize'
 import { editDistance } from '../../../src/core/items/fuzzy'
-import { hullNames, withoutJi, expandBlueprintWords } from '../../../src/core/items/variants'
+import { hullNames, withoutJi, expandBlueprintWords, oldBlueprintName } from '../../../src/core/items/variants'
 import { loadFixtureData } from '../../fixtures/data/load'
 
 describe('normalizeName', () => {
@@ -15,6 +15,14 @@ describe('normalizeName', () => {
     expect(normalizeName("'Firewall' Signal Amplifier")).toBe('firewall signal amplifier')
     expect(normalizeName('「"莫罗"铁壁」')).toBe('莫罗铁壁')
     expect(normalizeName('『测试』“引号”‘单引号’')).toBe('测试引号单引号')
+  })
+
+  it('drops the trailing * that the game setting 高亮重要名字 adds', () => {
+    expect(normalizeName('散热槽 II*')).toBe('散热槽 ii')
+    expect(normalizeName('Heat Sink II **')).toBe('heat sink ii')
+    expect(normalizeName('乌鸦级＊')).toBe('乌鸦级')
+    expect(normalizeName('*Sneaks in a classic*')).toBe('*sneaks in a classic')
+    expect(nameKey('散热槽 II*')).toBe(nameKey('散热槽 II'))
   })
 
   it('turns middle dots into spaces and removes zero-width characters', () => {
@@ -89,6 +97,23 @@ describe('small helpers', () => {
     expect(editDistance('rvaen', 'raven', 2)).toBe(1)
     expect(editDistance('abc', 'xyz', 1)).toBe(2)
     expect(editDistance('a', 'abcd', 1)).toBe(2)
+  })
+})
+
+describe('old blueprint names', () => {
+  it('moves the size or tech level back behind 蓝图', () => {
+    expect(oldBlueprintName('灼烧 S 蓝图')).toBe('灼烧蓝图 S')
+    expect(oldBlueprintName('散热槽 II 蓝图')).toBe('散热槽蓝图 II')
+    expect(oldBlueprintName('采矿器I蓝图')).toBe('采矿器蓝图 I')
+    expect(oldBlueprintName('超光速粒子集束激光器 XL 蓝图')).toBe('超光速粒子集束激光器蓝图 XL')
+    expect(oldBlueprintName('磁力ECM I 蓝图')).toBe('磁力ECM蓝图 I')
+  })
+
+  it('leaves other names alone', () => {
+    expect(oldBlueprintName('乌鸦级蓝图')).toBeNull()
+    expect(oldBlueprintName('灼烧蓝图 S')).toBeNull()
+    expect(oldBlueprintName('XML蓝图')).toBeNull()
+    expect(oldBlueprintName('电容注电器装料 25 蓝图')).toBeNull()
   })
 })
 

@@ -33,9 +33,9 @@ interface CachedLookup {
   item: ItemInfo | null
 }
 
-/** 看起来像一个完整的名字：2–100 个字、不含 *、不是纯数字、至少有一个字母或汉字 */
+/** 看起来像一个完整的名字：2–100 个字、不含 *（末尾「高亮重要名字」的 * 先去掉）、不是纯数字、至少有一个字母或汉字 */
 export function looksLikeFullName(query: string): boolean {
-  const text = query.normalize('NFKC').replace(/\s+/g, ' ').trim()
+  const text = query.normalize('NFKC').replace(/\s+/g, ' ').trim().replace(/\s*\*+$/, '')
   const length = [...text].length
   if (length < REMOTE_QUERY_MIN_CHARS || length > REMOTE_QUERY_MAX_CHARS) return false
   return !text.includes('*') && !/^[#\d\s]+$/.test(text) && /\p{L}/u.test(text)

@@ -16,16 +16,18 @@ const HAN = /\p{Script=Han}/u
 const HAN_ALL = /\p{Script=Han}/gu
 const TOKEN = /\p{Script=Han}|\d+|(?:(?!\p{Script=Han})\p{L})+/gu
 const ROMAN_TAIL = /(?<=[\s\p{Script=Han}])(III|II|I)$/u
+/** 游戏设置「高亮重要名字」给物品名末尾加的 *（复制出来也带着） */
+const HIGHLIGHT_STAR = /\s*\*+$/
 
 function clean(text: string, lower: boolean): string {
   let s = text.normalize('NFKC')
   if (lower) s = s.toLowerCase()
   s = s.replace(STRIP, '')
   if (NON_ASCII.test(s)) s = s.replace(DASHES, '-').replace(DOTS, ' ')
-  return s.replace(SPACES, ' ').trim()
+  return s.replace(SPACES, ' ').trim().replace(HIGHLIGHT_STAR, '')
 }
 
-/** NFKC、小写、破折号统一、去引号、间隔号变空格、合并空白 */
+/** NFKC、小写、破折号统一、去引号、间隔号变空格、合并空白、去掉末尾的 *（「高亮重要名字」） */
 export function normalizeName(text: string): string {
   return clean(text, true)
 }

@@ -23,6 +23,7 @@ describe('looksLikeFullName', () => {
     expect(looksLikeFullName('龟甲')).toBe(true)
     expect(looksLikeFullName('x')).toBe(false)
     expect(looksLikeFullName('Raven*10')).toBe(false)
+    expect(looksLikeFullName('Testudo Navy Issue*')).toBe(true)
     expect(looksLikeFullName('12345')).toBe(false)
     expect(looksLikeFullName('#123')).toBe(false)
     expect(looksLikeFullName('--')).toBe(false)

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { categoryPenalty, metaRank, rankRows } from '../../../src/core/items/rank'
+import { loadFixtureData } from '../../fixtures/data/load'
 import { ens, fixtureResolver, listOf, uniqueOf } from './helpers'
 
 const items = fixtureResolver()
@@ -205,6 +206,25 @@ describe('scopes', () => {
     expect(uniqueOf(industry('#2489')).item.en).toBe('Warrior II')
     expect(industry('Tritanium')).toMatchObject({ kind: 'out-of-scope', scope: 'industry', item: { en: 'Tritanium' } })
     expect(industry('Tungsten Carbide')).toMatchObject({ kind: 'out-of-scope', scope: 'industry' })
+  })
+
+  it('finds blueprints by the old way of writing them (2026-11 rename)', () => {
+    // 快照里还是旧写法；把一张蓝图改成新写法，旧写法要当作生成的写法唯一命中
+    const data = loadFixtureData()
+    const row = data.types.id.indexOf(2049)
+    const zh = [...data.types.zh]
+    zh[row] = '损伤控制 II 蓝图'
+    const types = Object.assign(Object.create(Object.getPrototypeOf(data.types)), data.types, { zh })
+    const renamed = fixtureResolver({ data: { ...data, types } })
+    const industry = (q: string) => renamed.resolve(q, { scope: 'industry' })
+    expect(uniqueOf(industry('损伤控制 II 蓝图')).item.en).toBe('Damage Control II')
+    expect(uniqueOf(industry('损伤控制蓝图 II')).item.en).toBe('Damage Control II')
+    expect(uniqueOf(industry('损伤控制蓝图II')).item.en).toBe('Damage Control II')
+  })
+
+  it('ignores the trailing * of 高亮重要名字', () => {
+    expect(uniqueOf(market('Raven*'))).toMatchObject({ tier: 'exact', item: { typeId: 638 } })
+    expect(uniqueOf(market('乌鸦级 *'))).toMatchObject({ tier: 'exact', item: { typeId: 638 } })
   })
 
   it('maps reaction formulas to their products for reactions', () => {
