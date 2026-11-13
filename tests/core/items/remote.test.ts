@@ -23,6 +23,7 @@ describe('looksLikeFullName', () => {
     expect(looksLikeFullName('龟甲')).toBe(true)
     expect(looksLikeFullName('x')).toBe(false)
     expect(looksLikeFullName('Raven*10')).toBe(false)
+    expect(looksLikeFullName('Testudo Navy Issue*')).toBe(true)
     expect(looksLikeFullName('12345')).toBe(false)
     expect(looksLikeFullName('#123')).toBe(false)
     expect(looksLikeFullName('--')).toBe(false)
@@ -40,6 +41,13 @@ describe('resolveRemote', () => {
       volume: 486000, packagedVolume: 50000, portionSize: 1, capacity: 800,
     })
     expect(esi.calls).toEqual(['ids en testudo navy issue', 'type 990001'])
+  })
+
+  it('drops the trailing * of 高亮重要名字 before asking, so the plain name is not poisoned', async () => {
+    const { esi, items } = setup()
+    expect(await items.resolveRemote('Testudo Navy Issue*')).toMatchObject({ typeId: 990001 })
+    expect(esi.calls[0]).toBe('ids en Testudo Navy Issue')
+    expect(await items.resolveRemote('Testudo Navy Issue')).toMatchObject({ typeId: 990001 })
   })
 
   it('asks in Chinese first for a Chinese name and keeps the Chinese name', async () => {

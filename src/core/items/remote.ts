@@ -9,7 +9,7 @@ import type { BlobCache, Clock, Logger } from '../ports'
 import { NO_ID } from '../types'
 import type { DataSet, ItemInfo } from '../types'
 import { describeError, LruCache, SingleFlight } from '../util'
-import { hasHan, nameKey } from './normalize'
+import { hasHan, nameKey, stripHighlightStar } from './normalize'
 
 /** 用到的两个 ESI 路由（core/esi 的封装，测试里换成假的） */
 export type RemoteEsi = Pick<EsiApi, 'ids' | 'type'>
@@ -33,9 +33,14 @@ interface CachedLookup {
   item: ItemInfo | null
 }
 
-/** 看起来像一个完整的名字：2–100 个字、不含 *、不是纯数字、至少有一个字母或汉字 */
+/** 发给 ESI 的名字：NFKC、合并空白、去掉末尾「高亮重要名字」的 * */
+function cleanQuery(query: string): string {
+  return stripHighlightStar(query.normalize('NFKC').replace(/\s+/g, ' ').trim())
+}
+
+/** 看起来像一个完整的名字：2–100 个字、不含 *（末尾「高亮重要名字」的 * 先去掉）、不是纯数字、至少有一个字母或汉字 */
 export function looksLikeFullName(query: string): boolean {
-  const text = query.normalize('NFKC').replace(/\s+/g, ' ').trim()
+  const text = cleanQuery(query)
   const length = [...text].length
   if (length < REMOTE_QUERY_MIN_CHARS || length > REMOTE_QUERY_MAX_CHARS) return false
   return !text.includes('*') && !/^[#\d\s]+$/.test(text) && /\p{L}/u.test(text)
@@ -69,7 +74,7 @@ export class RemoteItems {
   /** 查不到、不能上市场、或者 ESI 出错都返回 null（出错不缓存，下次再试） */
   lookup(query: string): Promise<ItemInfo | null> {
     if (!looksLikeFullName(query)) return Promise.resolve(null)
-    const name = query.normalize('NFKC').replace(/\s+/g, ' ').trim()
+    const name = cleanQuery(query)
     const key = nameKey(name)
     if (this.memory.has(key)) return Promise.resolve(this.memory.get(key) ?? null)
     return this.flights.run(key, () => this.load(name, key))
